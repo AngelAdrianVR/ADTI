@@ -69,7 +69,8 @@ const options = [
             <!-- Decorations  -->
             <figure>
                 <img class="absolute top-40 left-0" src="@/../../public/Images/home_decoration1.png" alt="">
-                <img class="absolute top-20 left-0" src="@/../../public/Images/home_decoration2.png" alt="">
+                <img class="hidden md:block absolute top-20 left-0" src="@/../../public/Images/home_decoration2.png" alt="">
+                <img class="absolute top-20 right-0" src="@/../../public/Images/home_decoration3.png" alt="">
             </figure>
             <!-- ------------ -->
 
