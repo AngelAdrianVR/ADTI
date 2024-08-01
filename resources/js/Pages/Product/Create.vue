@@ -23,7 +23,7 @@
                             <i class="fa-solid fa-circle-plus text-primary mr-2"></i>
                         </button>
                     </div>
-                    <el-select class="w-1/2" filterable v-model="form.category_id" clearable placeholder="Seleccione"
+                    <el-select @change="fetchSubcategories()" class="w-1/2" filterable v-model="form.category_id" clearable placeholder="Seleccione"
                         no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
                             <el-option v-for="category in categories" :key="category" :label="category.name"
                             :value="category.id">
@@ -36,7 +36,7 @@
                     <InputError :message="form.errors.category_id" />
                 </div>
 
-                <div class="mt-3">
+                <!-- <div class="mt-3">
                     <div class="flex items-center justify-between">
                         <InputLabel value="Subcategoría*" class="ml-3 mb-1" />
                         <button @click="showSubcategoryFormModal = true" type="button"
@@ -55,7 +55,7 @@
                         </el-option>
                     </el-select>
                     <InputError :message="form.errors.subcategory" />
-                </div>
+                </div> -->
 
                 <div class="mt-3 col-span-full">
                     <InputLabel value="Descripción del producto" class="ml-3 mb-1 text-sm" />
@@ -235,9 +235,11 @@ data() {
         categoryForm,
         subcategoryForm,
 
-        //Otros
+        //General
         showCategoryFormModal: false,
         showSubcategoryFormModal: false,
+        categoryInfo: null, //Información recuperada de categoría incluye subcategorías.
+        loading: false, //estado de carga (fetchCategory).
     }
 },
 components:{
@@ -252,7 +254,6 @@ components:{
 },
 props:{
     categories: Array,
-    subcategories: Array
 },
 methods:{
     async store() {
@@ -312,6 +313,19 @@ methods:{
             }
         } catch (error) {
             console.log(error)
+        }
+    },
+    async fetchSubcategories() {
+        this.loading = true;
+        try {
+            const response = await axios.get(route('categories.fetch-subcategories', this.form.category_id));
+            if ( response.status === 200 ) {
+                this.categoryInfo = response.data.category;
+            }
+        } catch (error) {
+            console.log(error);
+        } finally {
+            this.loading = false;
         }
     },
     saveImage(image) {

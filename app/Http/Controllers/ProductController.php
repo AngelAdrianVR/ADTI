@@ -28,9 +28,9 @@ class ProductController extends Controller
     public function create()
     {
         $categories = Category::all();
-        $subcategories = Subcategory::all();
 
-        return inertia('Product/Create', compact('categories', 'subcategories'));
+        // return $categories;
+        return inertia('Product/Create', compact('categories'));
     }
 
     
