@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Category;
 use App\Models\Product;
+use App\Models\Subcategory;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
@@ -17,13 +19,18 @@ class ProductController extends Controller
 
     public function index()
     {
-        return inertia('Product/Index');
+        $products = Product::all(['id', 'name']);
+
+        return inertia('Product/Index', compact('products'));
     }
 
     
     public function create()
     {
-        //
+        $categories = Category::all();
+
+        // return $categories;
+        return inertia('Product/Create', compact('categories'));
     }
 
     
