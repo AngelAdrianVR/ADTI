@@ -17,6 +17,7 @@ class Subcategory extends Model
         'level',
         'features',
         'category_id',
+        'subcategory_id',
     ];
 
     protected $casts = [

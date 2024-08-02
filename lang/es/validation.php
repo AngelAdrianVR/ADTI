@@ -138,5 +138,10 @@ return [
     ],
     'attributes' => [
         'name' => 'nombre',
+        'key' => 'clave',
+        'level' => 'nivel',
+        'category_id' => 'categoría',
+        'subcategory_id' => 'subcategoría',
+        'part_number' => 'número de parte',
     ],
 ];

@@ -39,10 +39,20 @@
                     <el-table-column type="selection" width="30" />
                     <el-table-column prop="part_number" label="Num de parte" width="200" />
                     <el-table-column prop="name" label="Nombre" width="200" />
-                    <el-table-column prop="cost.number_format" label="Categoría" width="150" />
-                    <el-table-column prop="description" label="Subcategorías" width="150" />
-                    <el-table-column prop="description" label="Ubicación en almacén" />
-                    <el-table-column align="right">
+                    <el-table-column prop="subcategory.category.name" label="Categoría" width="150" />
+                    <el-table-column prop="description" label="Subcategorías" width="150">
+                        <template #default="scope">
+                            <div class="flex flex-col">
+                                <p class="flex items-center space-x-2">
+                                    <i class="fa-solid fa-caret-right"></i>
+                                    <span>{{ scope.row.subcategory.name }}</span>
+                                </p>
+                            </div>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="description" label="Descripción" width="200" />
+                    <el-table-column prop="location" label="Ubicación en almacén" />
+                    <!-- <el-table-column align="right">
                         <template #default="scope">
                             <el-dropdown trigger="click" @command="handleCommand">
                                 <button @click.stop
@@ -62,7 +72,7 @@
                                 </template>
                             </el-dropdown>
                         </template>
-                    </el-table-column>
+                    </el-table-column> -->
                 </el-table>
             </div>
             <!-- tabla ends -->

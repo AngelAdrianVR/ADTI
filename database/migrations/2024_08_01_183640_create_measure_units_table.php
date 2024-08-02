@@ -11,14 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('subcategories', function (Blueprint $table) {
+        Schema::create('measure_units', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->string('key');
-            $table->unsignedSmallInteger('level');
-            $table->json('features')->nullable();
-            $table->foreignId('category_id')->constrained()->cascadeOnDelete();
-            $table->unsignedSmallInteger('subcategory_id')->nullable();
             $table->timestamps();
         });
     }
@@ -28,6 +23,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('subcategories');
+        Schema::dropIfExists('measure_units');
     }
 };
