@@ -47,9 +47,14 @@ class ProductController extends Controller
 
         $product = Product::create($request->except(['imageCover', 'subcategory_id']) + ['subcategory_id' => collect($request->subcategory_id)->last()]);
 
-        // Guardar el archivo en la colección 'imageCover'
+        // Guardar la imagen de portada del producto en la colección 'imageCover'
         if ($request->hasFile('imageCover')) {
             $product->addMediaFromRequest('imageCover')->toMediaCollection('imageCover');
+        }
+
+        // Guardar los archivos descargables si existen
+        if ($request->hasFile('media')) {
+            $product->addAllMediaFromRequest('media')->each(fn ($file) => $file->toMediaCollection('files'));
         }
     }
     
