@@ -78,7 +78,7 @@
                                 </template>
                             </el-dropdown>
                         </template>
-                    </el-table-column>
+                    </el-table-column> -->
                 </el-table>
             </div>
             <!-- tabla ends -->
