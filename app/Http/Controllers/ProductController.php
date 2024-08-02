@@ -20,7 +20,7 @@ class ProductController extends Controller
 
     public function index()
     {
-        $products = Product::with(['subcategory:id,name,category_id' => ['category:id,name']])->get(['id', 'name', 'description', 'part_number', 'location', 'subcategory_id']);
+        $products = Product::with(['subcategory:id,name,category_id,prev_subcategory_id' => ['category:id,name']])->get(['id', 'name', 'description', 'part_number', 'location', 'subcategory_id', 'bread_crumbles']);
 
         // return $products;
         return inertia('Product/Index', compact('products'));
@@ -57,12 +57,12 @@ class ProductController extends Controller
     
     public function show(Product $product)
     {
-        //
+        return inertia('Product/Show', compact('product'));
     }
     
     public function edit(Product $product)
     {
-        //
+        return inertia('Product/Edit', compact('product'));
     }
 
     public function update(Request $request, Product $product)
@@ -119,5 +119,13 @@ class ProductController extends Controller
     public function destroy(Product $product)
     {
         //
+    }
+
+    public function massiveDelete(Request $request)
+    {
+        foreach ($request->items_ids as $id) {
+                $item = Product::find($id);
+                $item?->delete();
+        }
     }
 }

@@ -10,14 +10,12 @@
             <div class="flex items-center justify-center mt-7">
                 <Link v-if="small" :href="route('dashboard')">
                 <figure>
-                    A
-                    <!-- <img class="w-16 px-2 mb-[52px]" src="@/../../public/images/isologo.png" alt="logo"> -->
+                    <img class="w-16 px-2 mb-[52px]" src="@/../../public/images/isologo.png" alt="logo">
                 </figure>
                 </Link>
                 <Link v-else :href="route('dashboard')">
                 <figure>
-                    A
-                    <!-- <img class="w-32 px-2 mb-8" src="@/../../public/images/logo_colors.webp" alt="logo"> -->
+                    <img class="w-32 px-2 mb-8" src="@/../../public/images/logo_colors.webp" alt="logo">
                 </figure>
                 </Link>
             </div>

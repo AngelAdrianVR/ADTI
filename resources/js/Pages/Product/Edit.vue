@@ -1,5 +1,5 @@
 <template>
-    <AppLayout title="Nuevo producto">
+    <AppLayout :title="'Edición - ' + product.name">
         <div class="px-3 md:px-16 py-8">
             <Back :to="route('products.index')" />
 
@@ -248,7 +248,6 @@
                 </div>
             </template>
         </DialogModal>
-
     </AppLayout>
 </template>
 
@@ -267,6 +266,7 @@ import axios from 'axios';
 
 export default {
 data() {
+
     const form = useForm({
             name: null,
             category_id: null,
@@ -296,8 +296,8 @@ data() {
         const measureUnitForm = useForm({
             name: null,
         });
-
     return {
+
         //formularios
         form,
         categoryForm,
@@ -325,8 +325,9 @@ components:{
     Back,
 },
 props:{
-    categories: Array,
     measure_units: Array,
+    categories: Array,
+    product: Object
 },
 methods:{
     store() {

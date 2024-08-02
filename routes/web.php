@@ -41,6 +41,7 @@ Route::post('users/massive-delete', [UserController::class, 'massiveDelete'])->n
 //-------------------------------------------------------------------------------------------------
 Route::resource('products', ProductController::class)->middleware('auth');
 Route::post('products/update-with-media/{product}', [ProductController::class, 'updateWithMedia'])->name('products.update-with-media')->middleware('auth');
+Route::post('products/massive-delete', [ProductController::class, 'massiveDelete'])->name('products.massive-delete');
 
 
 //Category routes----------------------------------------------------------------------------------
