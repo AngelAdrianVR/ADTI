@@ -3,6 +3,7 @@
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\MeasureUnitController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SubcategoryController;
 use App\Http\Controllers\UserController;
 use Illuminate\Foundation\Application;
@@ -59,3 +60,14 @@ Route::post('subcategories/update-with-media/{subcategory}', [SubcategoryControl
 //measure unit routes----------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------
 Route::resource('measure_units', MeasureUnitController::class)->middleware('auth');
+
+
+//settings routes----------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::resource('settings', SettingController::class)->middleware('auth');
+Route::put('role-permission/{role}/edit-role', [SettingController::class, 'updateRole'])->middleware('auth')->name('settings.role-permission.update-role');
+Route::post('role-permission/store-role', [SettingController::class, 'storeRole'])->middleware('auth')->name('settings.role-permission.store-role');
+Route::delete('role-permission/{role}/destroy-role', [SettingController::class, 'deleteRole'])->middleware('auth')->name('settings.role-permission.delete-role');
+Route::put('role-permission/{permission}/edit-permission', [SettingController::class, 'updatePermission'])->middleware('auth')->name('settings.role-permission.update-permission');
+Route::post('role-permission/store-permission', [SettingController::class, 'storePermission'])->middleware('auth')->name('settings.role-permission.store-permission');
+Route::delete('role-permission/{permission}/destroy-permission', [SettingController::class, 'deletePermission'])->middleware('auth')->name('settings.role-permission.delete-permission');

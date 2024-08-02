@@ -33,6 +33,14 @@ class PermissionSeeder extends Seeder
                 'Editar productos',
                 'Eliminar productos',
             ],
+            'CONFIGURACIONES' => [
+                'Crear roles',
+                'Editar roles',
+                'Eliminar roles',
+                'Crear permisos',
+                'Editar permisos',
+                'Eliminar permisos',
+            ],
         ];
 
         $roles = [

@@ -143,5 +143,6 @@ return [
         'category_id' => 'categoría',
         'subcategory_id' => 'subcategoría',
         'part_number' => 'número de parte',
+        'permissions' => 'permisos',
     ],
 ];
