@@ -21,6 +21,7 @@ class MeasureUnitController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:100',
+            'abreviation' => 'required|string|max:10',
         ]);
 
         MeasureUnit::create($request->all());

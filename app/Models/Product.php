@@ -18,11 +18,13 @@ class Product extends Model implements HasMedia
         'part_number',
         'location',
         'features',
-        'subcategory_id',
+        'bread_crumbles', //guarda todos los nombres de las subcategorias que sigue
+        'subcategory_id', //última subcategoría. traza el camino completo
     ];
 
     protected $casts = [
-        'features' => 'array'
+        'features' => 'array',
+        'bread_crumbles' => 'array'
     ];
 
     //relationships ---------------------
