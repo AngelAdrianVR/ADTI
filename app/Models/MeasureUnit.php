@@ -10,7 +10,8 @@ class MeasureUnit extends Model
     use HasFactory;
 
     protected $fillable = [
-        'name'
+        'name',
+        'abreviation'
     ];
 
 }

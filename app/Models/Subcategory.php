@@ -17,7 +17,7 @@ class Subcategory extends Model
         'level',
         'features',
         'category_id',
-        'subcategory_id',
+        'prev_subcategory_id', //guarda el id de la subcategoria previa. (si es nulo el anterior ya es la categoría)
     ];
 
     protected $casts = [

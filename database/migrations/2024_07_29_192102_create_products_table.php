@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('part_number');
             $table->string('location')->nullable();
             $table->json('features')->nullable();
+            $table->json('bread_crumbles')->nullable();
             $table->foreignId('subcategory_id')->constrained()->cascadeOnDelete();
             $table->timestamps();
         });
