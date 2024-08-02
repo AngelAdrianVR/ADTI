@@ -56,7 +56,10 @@ class ProductController extends Controller
     }
     
     public function show(Product $product)
-    {
+    {   
+        $product->load('media');
+
+        // return $product;
         return inertia('Product/Show', compact('product'));
     }
     
@@ -127,5 +130,21 @@ class ProductController extends Controller
                 $item = Product::find($id);
                 $item?->delete();
         }
+    }
+
+    //busca productos por nombre o numero de parte
+    //ultilizado en barra buscadora de show de productos
+    public function searchProduct(Request $request)
+    {
+        $query = $request->input('query');
+
+        // Realiza la búsqueda en la base de datos
+        $products = Product::where(function ($q) use ($query) {
+                $q->where('name', 'like', "%$query%")
+                    ->orWhere('part_number', 'like', "%$query%");
+            })
+            ->get();
+
+        return response()->json(['items' => $products]);
     }
 }

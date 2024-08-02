@@ -86,7 +86,7 @@
                 <div class="mt-3 col-span-full">
                     <div class="flex justify-between items-center">
                         <InputLabel value="Características del producto" class="ml-3 mb-1 text-sm" />
-                        <ThirthButton v-if="Object.keys(form.features).length" @click="showMeasureUnitFormModal = true" class="!py-0">Crear unidad de medida</ThirthButton>
+                        <ThirthButton type="button" v-if="Object.keys(form.features).length" @click="showMeasureUnitFormModal = true" class="!py-0">Crear unidad de medida</ThirthButton>
                     </div>
                     <p v-if="Object.keys(form.features).length" class="text-gray99 text-sm mb-2">Si algún campo no es necesario, puedes dejarlo en blanco. Este campo no será visible para los usuarios.</p>
                     <div v-if="form.features.length" class="grid grid-cols-2 gap-5">
@@ -100,7 +100,13 @@
                                 <InputLabel value="Unidad de medida" class="ml-3 mb-1 text-sm" />
                                 <el-select class="w-1/2" filterable v-model="feature.measure_unity" placeholder="Seleccione"
                                 no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
-                                    <el-option v-for="unit in measure_units" :key="unit" :label="unit.name" :value="unit.name" />
+                                    <!-- <el-option v-for="unit in measure_units" :key="unit" :label="unit.name" :value="unit.name" /> -->
+                                    <el-option v-for="unit in measure_units" :key="unit" :label="unit.name" :value="unit.name">
+                                        <p class="flex items-center justify-between">
+                                            <span>{{ unit.name }}</span>
+                                            <span v-if="unit.abreviation" class="text-[10px] text-gray99">({{ unit.abreviation }})</span>
+                                        </p>
+                                    </el-option>
                                 </el-select>
                             </div>
                         </div>
@@ -144,9 +150,15 @@
                 <form @submit.prevent="storeMeasureUnit" class="grid grid-cols-2 gap-3">
                     <div>
                         <InputLabel value="Nombre de la unidad de medida*" class="ml-3 mb-1" />
-                        <el-input v-model="measureUnitForm.name" placeholder="Escribe el nombre de la unidad de medida"
+                        <el-input v-model="measureUnitForm.name" placeholder="Ej. Centímetro"
                             :maxlength="100" required clearable />
                         <InputError :message="measureUnitForm.errors.name" />
+                    </div>
+                    <div>
+                        <InputLabel value="Abreviación*" class="ml-3 mb-1" />
+                        <el-input v-model="measureUnitForm.abreviation" placeholder="Ej. cm"
+                            :maxlength="100" required clearable />
+                        <InputError :message="measureUnitForm.errors.abreviation" />
                     </div>
                 </form>
             </template>
@@ -295,6 +307,7 @@ data() {
 
         const measureUnitForm = useForm({
             name: null,
+            abreviation: null,
         });
 
     return {
