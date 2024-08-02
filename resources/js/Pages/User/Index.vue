@@ -8,28 +8,30 @@
                         placeholder="Buscar por nombre o número de parte" type="search" ref="searchInput" />
                     <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
                 </div>
-                <div class="my-4 lg:my-0 flex items-center justify-end space-x-3">
-                    <PrimaryButton v-if="$page.props.auth.user.permissions?.includes('Crear usuarios')"
-                        @click="$inertia.get(route('users.create'))">Crear usuario</PrimaryButton>
+                <!-- buttons -->
+                <div class="flex items-center space-x-1">
+                    <div v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios') && !disableMassiveActions"
+                        class="mt-2 lg:mt-0">
+                        <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#6D6E72"
+                            title="¿Continuar?" @confirm="deleteSelections">
+                            <template #reference>
+                                <PrimaryButton class="!bg-red-600 focus:!ring-red-600">Eliminar</PrimaryButton>
+                            </template>
+                        </el-popconfirm>
+                    </div>
+                    <div class="my-4 lg:my-0 flex items-center justify-end space-x-3">
+                        <PrimaryButton v-if="$page.props.auth.user.permissions?.includes('Crear usuarios')"
+                            @click="$inertia.get(route('users.create'))">Crear usuario</PrimaryButton>
+                    </div>
                 </div>
             </section>
 
-            <div class="w-[95%] lg:w-5/6 mx-auto mt-6">
+            <div class="mx-2 lg:mx-10 mt-6">
                 <div class="lg:flex justify-between mb-2">
                     <!-- pagination -->
                     <div>
                         <el-pagination @current-change="handlePagination" layout="prev, pager, next"
                             :total="users.length" />
-                    </div>
-                    <!-- buttons -->
-                    <div v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')" class="mt-2 lg:mt-0">
-                        <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
-                            title="¿Continuar?" @confirm="deleteSelections">
-                            <template #reference>
-                                <el-button type="danger" plain class="mb-3"
-                                    :disabled="disableMassiveActions">Eliminar</el-button>
-                            </template>
-                        </el-popconfirm>
                     </div>
                 </div>
                 <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 100%"
@@ -44,7 +46,7 @@
                         <template #default="scope">
                             <el-dropdown trigger="click" @command="handleCommand">
                                 <button @click.stop
-                                    class="el-dropdown-link mr-3 justify-center items-center size-8 rounded-full text-primary hover:bg-gray2 transition-all duration-200 ease-in-out">
+                                    class="el-dropdown-link mr-3 justify-center items-center size-8 rounded-full text-primary hover:bg-grayED transition-all duration-200 ease-in-out">
                                     <i class="fa-solid fa-ellipsis-vertical"></i>
                                 </button>
                                 <template #dropdown>
@@ -99,23 +101,6 @@ export default {
         users: Array
     },
     methods: {
-        // handleScroll() {
-        //     const container = this.$refs.scrollContainer;
-        //     // const scrollHeight = container.scrollHeight;
-        //     const scrollTop = container.scrollTop;
-        //     // const clientHeight = container.clientHeight;
-
-        //     // Determinar si has llegado al final de la vista
-        //     if (scrollTop > 500) {
-        //         this.showScrollButton = true;
-        //     } else {
-        //         this.showScrollButton = false;
-        //     }
-        // },
-        // scrollToTop() {
-        //     const section = document.getElementById('start');
-        //     section.scrollIntoView({ behavior: 'smooth' });
-        // },
         closedTag() {
             this.localUsers = this.users;
             this.searchedWord = null;
@@ -125,8 +110,8 @@ export default {
                 this.$refs.searchInput.focus();
             });
         },
-        handleSearch(search) {
-            this.search = search;
+        handleSearch() {
+            this.search = this.searchQuery;
         },
         handleSelectionChange(val) {
             this.$refs.multipleTableRef.value = val;
@@ -159,21 +144,22 @@ export default {
         },
         async deleteSelections() {
             try {
-                const response = await axios.post(route('catalog-users.massive-delete', {
-                    catalog_users: this.$refs.multipleTableRef.value
+                const items_ids = this.$refs.multipleTableRef.value.map(item => item.id);
+                const response = await axios.post(route('users.massive-delete', {
+                    items_ids
                 }));
 
-                if (response.status == 200) {
+                if (response.status === 200) {
                     this.$notify({
-                        title: 'Éxito',
-                        message: response.data.message,
+                        title: 'Correcto',
+                        message: '',
                         type: 'success'
                     });
 
                     // update list of quotes
                     let deletedIndexes = [];
-                    this.catalog_users.forEach((catalog_product, index) => {
-                        if (this.$refs.multipleTableRef.value.includes(catalog_product)) {
+                    this.users.forEach((user, index) => {
+                        if (items_ids.includes(user.id) && user.id != this.$page.props.auth.user.id) {
                             deletedIndexes.push(index);
                         }
                     });
@@ -183,21 +169,13 @@ export default {
 
                     // Eliminar cotizaciones por índice
                     for (const index of deletedIndexes) {
-                        this.catalog_users.splice(index, 1);
+                        this.users.splice(index, 1);
                     }
-
-                } else {
-                    this.$notify({
-                        title: 'Algo salió mal',
-                        message: response.data.message,
-                        type: 'error'
-                    });
                 }
-
             } catch (err) {
                 this.$notify({
-                    title: 'Algo salió mal',
-                    message: err.message,
+                    title: 'No se pudo completar la solicitud',
+                    message: '',
                     type: 'error'
                 });
                 console.log(err);
@@ -210,9 +188,9 @@ export default {
                 return this.users.filter((item, index) => index >= this.start && index < this.end);
             } else {
                 return this.users.filter(
-                    (product) =>
-                        product.name.toLowerCase().includes(this.search.toLowerCase()) ||
-                        product.part_number.toLowerCase().includes(this.search.toLowerCase())
+                    (user) =>
+                        user.name.toLowerCase().includes(this.search.toLowerCase()) ||
+                        user.org_props.position.toLowerCase().includes(this.search.toLowerCase())
                 )
             }
         }

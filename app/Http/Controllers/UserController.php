@@ -9,7 +9,6 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
-   
     public function index()
     {
         $users = User::latest()->get();
@@ -60,7 +59,9 @@ class UserController extends Controller
 
     public function show(User $user)
     {
-        return inertia('User/Show', compact('user'));
+        $users = User::get(['id', 'name']);
+
+        return inertia('User/Show', compact('user', 'users'));
     }
 
     public function update(Request $request, User $user)
@@ -132,6 +133,22 @@ class UserController extends Controller
             $user->update([
                 'profile_photo_path' => null,
             ]);
+        }
+    }
+
+    public function resetPassword(User $user)
+    {
+        $user->update(['password' => bcrypt('123456')]);
+    }
+
+    public function massiveDelete(Request $request)
+    {
+        foreach ($request->items_ids as $id) {
+            // evitar eliminar al usuario autenticado
+            if ($id != auth()->id()) {
+                $item = User::find($id);
+                $item?->delete();
+            }
         }
     }
 }

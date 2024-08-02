@@ -21,11 +21,17 @@ class PermissionSeeder extends Seeder
                 'Crear usuarios',
                 'Editar usuarios',
                 'Eliminar usuarios',
+                'Resetear contraseñas',
             ],
             'CATEGORIAS' => [
                 'Crear categorias',
                 'Editar categorias',
                 'Eliminar categorias',
+            ],
+            'PRODUCTOS' => [
+                'Crear productos',
+                'Editar productos',
+                'Eliminar productos',
             ],
         ];
 
