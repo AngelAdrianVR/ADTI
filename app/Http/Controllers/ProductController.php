@@ -22,7 +22,6 @@ class ProductController extends Controller
     {
         $products = Product::with(['subcategory:id,name,category_id,prev_subcategory_id' => ['category:id,name']])->get(['id', 'name', 'description', 'part_number', 'location', 'subcategory_id', 'bread_crumbles']);
 
-        // return $products;
         return inertia('Product/Index', compact('products'));
     }
     
@@ -31,7 +30,6 @@ class ProductController extends Controller
         $categories = Category::all();
         $measure_units = MeasureUnit::all();
 
-        // return $categories;
         return inertia('Product/Create', compact('categories', 'measure_units'));
     }
     
@@ -49,18 +47,22 @@ class ProductController extends Controller
 
         $product = Product::create($request->except(['imageCover', 'subcategory_id']) + ['subcategory_id' => collect($request->subcategory_id)->last()]);
 
-        // Guardar el archivo en la colección 'imageCover'
+        // Guardar la imagen de portada del producto en la colección 'imageCover'
         if ($request->hasFile('imageCover')) {
             $product->addMediaFromRequest('imageCover')->toMediaCollection('imageCover');
+        }
+
+        // Guardar los archivos descargables si existen
+        if ($request->hasFile('media')) {
+            $product->addAllMediaFromRequest('media')->each(fn ($file) => $file->toMediaCollection('files'));
         }
     }
     
     public function show(Product $product)
 
     {   
-        $product->load('media');
+        $product->load(['media', 'subcategory:id,name,category_id,prev_subcategory_id' => ['category:id,name']]);
 
-        // return $product;
         return inertia('Product/Show', compact('product'));
     }
     

@@ -1,19 +1,76 @@
 <template>
-    <main class="border">
-        <div class="flex">
+    <main>
+        <div class="flex mt-2">
             <p class="text-[#6D6E72] w-48">Fecha de alta:</p>
             <p class="text-black">{{ formatDate(product.created_at) }}</p>
         </div>
+
+        <div class="flex mt-2">
+            <p class="text-[#6D6E72] w-48">Número de parte:</p>
+            <p class="text-black">{{ product.part_number }}</p>
+        </div>
+
+        <div class="flex mt-2">
+            <p class="text-[#6D6E72] w-48">Nombre del producto:</p>
+            <p class="text-black font-bold">{{ product.name }}</p>
+        </div>
+
+        <div class="flex mt-2">
+            <p class="text-[#6D6E72] w-48">Categoría:</p>
+            <p class="text-black">{{ product.subcategory?.category?.name }}</p>
+        </div>
+
+        <div class="flex mt-2">
+            <p class="text-[#6D6E72] w-48">Subcategorías:</p>
+            <ul class="flex flex-col" v-for="(subcategory, index) in product.bread_crumbles" :key="subcategory">
+                <li>{{ (index + 1) + '. ' + subcategory }}</li>
+            </ul>
+        </div>
+
+        <div class="flex mt-2">
+            <p class="text-[#6D6E72] w-48">Descripción:</p>
+            <p class="text-black">{{ product.description }}</p>
+        </div>
+
+        <div class="flex mt-2">
+            <p class="text-[#6D6E72] w-48">Ubicación en almacén:</p>
+            <p class="text-black">{{ product.location }}</p>
+        </div>
+
+        <div class="flex mt-5">
+            <p class="text-[#6D6E72] w-48">Características:</p>
+            <!-- tabla de caracteristicas -->
+            <div class="border border-gray-300 rounded overflow-hidden">
+                <div v-for="(feature, index) in product.features" :key="index" class="grid grid-cols-2 *:py-1 *:px-4" :class="{ 'bg-gray-200': index % 2 != 0 }">
+                    <template v-for="(value, key) in feature" :key="key">
+                        <div v-if="key !== 'measure_unit'" class="border-r border-gray-300 font-medium">{{ key }}</div>
+                        <div v-if="key !== 'measure_unit'">
+                            {{ value }} <span class="text-sm" v-if="feature.measure_unit">{{ feature.measure_unit }}</span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex mt-5">
+            <p class="text-[#6D6E72] w-48">Descargables:</p>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2" v-if="product.media.filter(media => media.collection_name === 'media')?.length > 0">
+                <FileView v-for="file in product.media.filter(media => media.collection_name === 'media')" :key="file" :file="file" />
+            </div>
+            <p v-else class=" text-gray-400 mx-4 text-xs mt-1">No hay archivos adjuntos</p>
+        </div>
+
     </main>
 </template>
 
 <script>
+import FileView from '@/Components/MyComponents/FileView.vue';
 import { format, parseISO } from 'date-fns';
 import es from 'date-fns/locale/es';
 
 export default {
-components:{
-
+components:{    
+    FileView
 },
 props:{
     product: Object

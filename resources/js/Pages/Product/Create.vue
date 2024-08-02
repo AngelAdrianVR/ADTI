@@ -51,7 +51,7 @@
                         <!-- Cuando es la primera subcategoría (no contiene un subcategory_id) -->
                         <el-select v-if="index == 0" @change="saveFeatures((index + 1))" class="w-1/2" filterable v-model="form.subcategory_id[index]" clearable placeholder="Seleccione"
                             no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
-                            <el-option @click.stop="form.bread_crumbles[index] = subcategory.name" v-for="subcategory in categoryInfo.subcategories.filter(sub => sub.level == (index + 1))" :key="subcategory" :label="subcategory.name :value="subcategory.id">
+                            <el-option @click.stop="form.bread_crumbles[index] = subcategory.name" v-for="subcategory in categoryInfo.subcategories.filter(sub => sub.level == (index + 1))" :key="subcategory" :label="subcategory.name" :value="subcategory.id">
                                 <p class="flex items-center justify-between">
                                     <span>{{ subcategory.name }}</span>
                                     <span class="text-[10px] text-gray99">({{ subcategory.key}})</span>
@@ -61,7 +61,7 @@
 
                         <!-- Cuando no es la primera subcategoría -->
                         <el-select v-else @change="saveFeatures((index + 1))" class="w-1/2" filterable v-model="form.subcategory_id[index]" clearable placeholder="Seleccione"
-                            no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
+                            no-data-text="No hay opciones registradas" no-match-text="Primero seleccione el nivel anterior">
                             <el-option @click.stop="form.bread_crumbles[index] = subcategory.name" v-for="subcategory in categoryInfo.subcategories.filter(sub => sub.prev_subcategory_id === form.subcategory_id[index - 1] && sub.level === (index + 1))" :key="subcategory" :label="subcategory.name"
                                 :value="subcategory.id">
                                 <p class="flex items-center justify-between">
@@ -97,9 +97,8 @@
 
                             <div class="w-1/2">
                                 <InputLabel value="Unidad de medida" class="ml-3 mb-1 text-sm" />
-                                <el-select class="w-1/2" filterable v-model="feature.measure_unity" placeholder="Seleccione"
+                                <el-select class="w-1/2" filterable v-model="feature.measure_unit" placeholder="Seleccione"
                                 no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
-                                    <!-- <el-option v-for="unit in measure_units" :key="unit" :label="unit.name" :value="unit.name" /> -->
                                     <el-option v-for="unit in measure_units" :key="unit" :label="unit.name" :value="unit.name">
                                         <p class="flex items-center justify-between">
                                             <span>{{ unit.name }}</span>
@@ -130,6 +129,10 @@
                     <InputLabel value="Ubicación en almacén" class="ml-3 mb-1" />
                     <el-input v-model="form.location" placeholder="Ej. S-4763" :maxlength="100" clearable />
                     <InputError :message="form.errors.location" />
+                </div>
+
+                <div class="ml-2 mt-3 col-span-full">
+                    <FileUploader @files-selected="this.form.media = $event" />
                 </div>
 
                 <div class="col-span-full space-x-4 text-right mt-7">
@@ -271,6 +274,7 @@ import CancelButton from "@/Components/MyComponents/CancelButton.vue";
 import InputLabel from "@/Components/InputLabel.vue";
 import InputError from "@/Components/InputError.vue";
 import InputFilePreview from "@/Components/MyComponents/InputFilePreview.vue";
+import FileUploader from "@/Components/MyComponents/FileUploader.vue";
 import DialogModal from "@/Components/DialogModal.vue";
 import Back from "@/Components/MyComponents/Back.vue";
 import { useForm } from "@inertiajs/vue3";
@@ -284,7 +288,8 @@ data() {
             subcategory_id: [], //se guarda un arreglo de los ids de subcategorías de forma secuencial
             description: null,
             features: [],
-            imageCover: null,
+            imageCover: null, //imagen del producto
+            media: null, //archivos del producto (descargables)
             part_number: null,
             location: null,
             bread_crumbles: [], //nombres de todas las subcategorías.
@@ -329,6 +334,7 @@ components:{
     AppLayout,
     InputFilePreview,
     PrimaryButton,
+    FileUploader,
     ThirthButton,
     CancelButton,
     DialogModal,
@@ -428,7 +434,7 @@ methods:{
                 // Crear un array de objetos con las características y unidad de medida asignando null a cada una
                 this.form.features = highestLevelSubcategory.features.map(feature => ({
                     [feature]: null,
-                    measure_unity: null
+                    measure_unit: null
                 }));
             } else {
                 // Si no hay características, inicializar features como un array vacío
