@@ -22,7 +22,6 @@ class ProductController extends Controller
     {
         $products = Product::with(['subcategory:id,name,category_id,prev_subcategory_id' => ['category:id,name']])->get(['id', 'name', 'description', 'part_number', 'location', 'subcategory_id', 'bread_crumbles']);
 
-        // return $products;
         return inertia('Product/Index', compact('products'));
     }
     
@@ -31,7 +30,6 @@ class ProductController extends Controller
         $categories = Category::all();
         $measure_units = MeasureUnit::all();
 
-        // return $categories;
         return inertia('Product/Create', compact('categories', 'measure_units'));
     }
     
@@ -58,9 +56,8 @@ class ProductController extends Controller
     public function show(Product $product)
 
     {   
-        $product->load('media');
+        $product->load(['media', 'subcategory:id,name,category_id,prev_subcategory_id' => ['category:id,name']]);
 
-        // return $product;
         return inertia('Product/Show', compact('product'));
     }
     

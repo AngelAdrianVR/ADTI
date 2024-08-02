@@ -5,9 +5,6 @@
             <div class="lg:flex justify-between items-center mx-3">
                 <h1 class="font-bold text-lg">Detalles del producto</h1>
                 <div class="flex items-center space-x-2 my-2 lg:my-0">
-                    <ThirthButton v-if="isInventoryOn" @click="openEntryModal">
-                        Entrada de producto
-                    </ThirthButton>
                     <PrimaryButton @click="$inertia.get(route('products.edit', product.id))">
                         <p class="flex items-center space-x-2">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4 mr-1">
@@ -146,6 +143,11 @@ methods:{
         } finally {
             this.searchLoading = false;
         }
+    },
+    updateURL(tab) {
+        const params = new URLSearchParams(window.location.search);
+        params.set('tab', tab.props.name);
+        window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
     },
 }
 }
