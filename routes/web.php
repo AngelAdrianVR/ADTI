@@ -3,6 +3,7 @@
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\MeasureUnitController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SubcategoryController;
 use App\Http\Controllers\UserController;
 use Illuminate\Foundation\Application;
@@ -59,3 +60,8 @@ Route::post('subcategories/update-with-media/{subcategory}', [SubcategoryControl
 //measure unit routes----------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------
 Route::resource('measure_units', MeasureUnitController::class)->middleware('auth');
+
+
+//measure unit routes----------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::resource('settings', SettingController::class)->middleware('auth');
