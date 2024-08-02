@@ -27,6 +27,7 @@ export default {
                 gray99: '#999999',
                 gray9A: '#9A9A9A',
                 grayF2: '#F2F2F2',
+                grayED: '#EDEDED',
                 gray66: '#666666',
                 gray77: '#777777',
                 gray37: '#373737',
