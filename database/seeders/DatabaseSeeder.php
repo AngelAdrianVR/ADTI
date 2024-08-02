@@ -24,6 +24,14 @@ class DatabaseSeeder extends Seeder
             'password' => Hash::make('321321321')
         ]);
 
+        User::factory()->create([
+            'name' => 'Angel V',
+            'email' => 'angel@gmail.com',
+            'phone' => '3333034718',
+            'org_props' => ['position' => 'Desarrollador'],
+            'password' => Hash::make('321321321')
+        ]);
+
         // ejecutar seeders
         $this->call([
             PermissionSeeder::class,
