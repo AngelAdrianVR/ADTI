@@ -51,8 +51,7 @@
                         <!-- Cuando es la primera subcategoría (no contiene un subcategory_id) -->
                         <el-select v-if="index == 0" @change="saveFeatures((index + 1))" class="w-1/2" filterable v-model="form.subcategory_id[index]" clearable placeholder="Seleccione"
                             no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
-                            <el-option @click.stop="form.bread_crumbles[index] = subcategory.name" v-for="subcategory in categoryInfo.subcategories.filter(sub => sub.level == (index + 1))" :key="subcategory" :label="subcategory.name"
-                                :value="subcategory.id">
+                            <el-option @click.stop="form.bread_crumbles[index] = subcategory.name" v-for="subcategory in categoryInfo.subcategories.filter(sub => sub.level == (index + 1))" :key="subcategory" :label="subcategory.name :value="subcategory.id">
                                 <p class="flex items-center justify-between">
                                     <span>{{ subcategory.name }}</span>
                                     <span class="text-[10px] text-gray99">({{ subcategory.key}})</span>
