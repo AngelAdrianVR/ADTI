@@ -19,7 +19,12 @@ class CategoryController extends Controller
 
     public function store(Request $request)
     {
-        //
+        $request->validate([
+            'name' => 'required|string|max:100',
+            'key' => 'required|string|max:10',
+        ]);
+
+        Category::create($request->all());
     }
 
     public function show(Category $category)

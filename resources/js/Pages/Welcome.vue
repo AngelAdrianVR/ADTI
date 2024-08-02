@@ -17,42 +17,68 @@ const handleChange = (value) => {
 
 const options = [
   {
-    value: 'guide',
-    label: 'Guide',
+    value: 'Automatización',
+    label: 'Automatización',
     children: [
       {
-        value: 'disciplines',
-        label: 'Disciplines',
+        value: 'Movimiento lineal',
+        label: 'Movimiento lineal',
         children: [
           {
-            value: 'consistency',
-            label: 'Consistency',
+            value: 'Guías de bolas',
+            label: 'Guías de bolas',
           },
           {
-            value: 'feedback',
-            label: 'Feedback',
-          },
-          {
-            value: 'efficiency',
-            label: 'Efficiency',
-          },
-          {
-            value: 'controllability',
-            label: 'Controllability',
+            value: 'Guías lineales',
+            label: 'Guías lineales',
           },
         ],
       },
       {
-        value: 'navigation',
-        label: 'Navigation',
+        value: 'Movimiento radial',
+        label: 'Movimiento radial',
         children: [
           {
-            value: 'side nav',
-            label: 'Side Navigation',
+            value: 'Guias radiales',
+            label: 'Guias radiales',
           },
           {
-            value: 'top nav',
-            label: 'Top Navigation',
+            value: 'Gupias uniformes',
+            label: 'Gupias uniformes',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    value: 'Sujetadores y tornillos',
+    label: 'Sujetadores y tornillos',
+    children: [
+      {
+        value: 'Tornillos y pernos',
+        label: 'Tornillos y pernos',
+        children: [
+          {
+            value: 'cabeza cuadrada',
+            label: 'cabeza cuadrada',
+          },
+          {
+            value: 'Cabeza redonda',
+            label: 'Cabeza redonda',
+          },
+        ],
+      },
+      {
+        value: 'Tornillos de cruz',
+        label: 'Tornillos de cruz',
+        children: [
+          {
+            value: 'Hallen',
+            label: 'Hallen',
+          },
+          {
+            value: 'Phillips',
+            label: 'Phillips',
           },
         ],
       },
