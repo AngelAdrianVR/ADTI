@@ -1,6 +1,6 @@
 <template>
     <AppLayout title="Productos">
-        <main class="px-2 lg:px-10 py-7">
+        <main class="px-2 lg:px-10 pt-1 pb-16">
             <h1 class="font-bold my-3 ml-4 text-lg">Productos</h1>
             <section class="md:flex justify-between items-center">
                 <div class="lg:w-1/3 relative">
@@ -17,23 +17,23 @@
             <div class="w-[95%] lg:w-5/6 mx-auto mt-6">
                 <div class="lg:flex justify-between mb-2">
                     <!-- pagination -->
-                    <div>
+                    <div class="flex space-x-5 items-center">
                         <el-pagination @current-change="handlePagination" layout="prev, pager, next"
                             :total="products.length" />
-                    </div>
-                    <!-- buttons -->
-                    <div v-if="$page.props.auth.user.permissions?.includes('Eliminar productos') || true"
-                        class="mt-2 lg:mt-0">
-                        <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
-                            title="¿Continuar?" @confirm="deleteSelections">
-                            <template #reference>
-                                <el-button type="danger" plain class="mb-3"
-                                    :disabled="disableMassiveActions">Eliminar</el-button>
-                            </template>
-                        </el-popconfirm>
+                        <!-- buttons -->
+                        <div v-if="$page.props.auth.user.permissions?.includes('Eliminar productos') || true"
+                            class="mt-2 lg:mt-0">
+                            <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
+                                title="¿Continuar?" @confirm="deleteSelections">
+                                <template #reference>
+                                    <el-button type="danger" plain class="mb-3"
+                                        :disabled="disableMassiveActions">Eliminar</el-button>
+                                </template>
+                            </el-popconfirm>
+                        </div>
                     </div>
                 </div>
-                <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 100%"
+                <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="700" style="width: 100%"
                     @selection-change="handleSelectionChange" ref="multipleTableRef"
                     :row-class-name="tableRowClassName">
                     <el-table-column type="selection" width="30" />
@@ -78,7 +78,7 @@
                                 </template>
                             </el-dropdown>
                         </template>
-                    </el-table-column> -->
+                    </el-table-column> 
                 </el-table>
             </div>
             <!-- tabla ends -->
