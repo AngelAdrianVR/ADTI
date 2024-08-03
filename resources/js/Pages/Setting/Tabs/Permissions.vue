@@ -73,7 +73,6 @@ import DialogModal from "@/Components/DialogModal.vue";
 import InputLabel from "@/Components/InputLabel.vue";
 import InputError from "@/Components/InputError.vue";
 import { useForm } from "@inertiajs/vue3";
-import axios from "axios";
 
 export default {
     data() {

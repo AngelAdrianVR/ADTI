@@ -15,7 +15,10 @@ class SettingController extends Controller
             return $data->category;
         });
 
-        return inertia('Setting/Index', compact('roles', 'permissions'));
+        // mandar el unmero de tab por defecto desde la url
+        $currentTab = request('currentTab');
+
+        return inertia('Setting/Index', compact('roles', 'permissions', 'currentTab'));
     }
 
     public function storeRole(Request $request)
