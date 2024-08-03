@@ -21,7 +21,7 @@
                         <el-pagination @current-change="handlePagination" layout="prev, pager, next"
                             :total="products.length" />
                         <!-- buttons -->
-                        <div v-if="$page.props.auth.user.permissions?.includes('Eliminar productos') || true"
+                        <div v-if="$page.props.auth.user.permissions?.includes('Eliminar productos')"
                             class="mt-2 lg:mt-0">
                             <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
                                 title="¿Continuar?" @confirm="deleteSelections">
