@@ -23,7 +23,7 @@
         <div class="flex mt-2">
             <p class="text-[#6D6E72] w-48">Subcategorías:</p>
             <ul class="flex flex-col" v-for="(subcategory, index) in product.bread_crumbles" :key="subcategory">
-                <li>{{ (index + 1) + '. ' + subcategory }}</li>
+                <li><i v-if="index !==0" class="fa-solid fa-arrow-right text-sm mx-1"></i>{{ subcategory }}</li>
             </ul>
         </div>
 

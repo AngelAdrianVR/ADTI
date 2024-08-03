@@ -141,6 +141,16 @@
                         <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
                         Crear producto
                     </PrimaryButton>
+                    <!-- Boton multi accion -->
+                    <!-- <el-dropdown split-button type="primary" @click="store('crear')">
+                        Crear producto
+                        <template #dropdown>
+                            <el-dropdown-menu>
+                            <el-dropdown-item @click="store('seguir')">Crear y seguir creando</el-dropdown-item>
+                            <el-dropdown-item @click="store('mostrar')">Crear y mostrar</el-dropdown-item>
+                            </el-dropdown-menu>
+                        </template>
+                    </el-dropdown> -->
                 </div>
             </form>
         </div>
@@ -347,6 +357,41 @@ props:{
     measure_units: Array,
 },
 methods:{
+    // store(action) {
+    //   axios.post(route("products.store"), this.form)
+    //     .then(response => {
+    //         // toast
+    //         this.$notify({
+    //             title: "Correcto",
+    //             message: "",
+    //             type: "success",
+    //             position: "bottom-right",
+    //         });
+
+    //         const productId = response.data.id; // Obtén el ID del producto creado
+
+    //         switch (action) {
+    //             case 'crear':
+    //                 this.$inertia.get(route('products.index'));
+    //                 break;
+    //             case 'mostrar':
+    //                 this.$inertia.get(route('products.show', productId));
+    //                 break;
+    //             case 'seguir':
+    //                 this.form.reset();
+    //                 break;
+    //         }
+    //     })
+    //     .catch(error => {
+    //       console.error(error);
+    //       this.$notify({
+    //             title: "Error",
+    //             message: error.response.data.message,
+    //             type: "error",
+    //             position: "bottom-right",
+    //         });
+    //     });
+    // },
     store() {
         this.form.post(route("products.store"), {
             onSuccess: () => {
@@ -385,6 +430,7 @@ methods:{
                     position: "bottom-right",
                 });
                 this.showSubcategoryFormModal = false;
+                location.reload();
             },
         });
     },
