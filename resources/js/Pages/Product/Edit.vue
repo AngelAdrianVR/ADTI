@@ -3,10 +3,10 @@
         <div class="px-3 md:px-16 py-8">
             <Back :to="route('products.index')" />
 
-            <form @submit.prevent="store"
+            <form @submit.prevent="update"
                 class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-1/2 mx-auto mt-2 lg:grid lg:grid-cols-2 gap-x-3">
 
-                <h1 class="font-bold ml-2 col-span-full">Crear producto</h1>
+                <h1 class="font-bold ml-2 col-span-full">Editar producto</h1>
 
                 <div class="mt-3">
                     <InputLabel value="Nombre del producto*" class="ml-3 mb-1" />
@@ -51,8 +51,7 @@
                         <!-- Cuando es la primera subcategoría (no contiene un subcategory_id) -->
                         <el-select v-if="index == 0" @change="saveFeatures((index + 1))" class="w-1/2" filterable v-model="form.subcategory_id[index]" clearable placeholder="Seleccione"
                             no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
-                            <el-option @click.stop="form.bread_crumbles[index] = subcategory.name" v-for="subcategory in categoryInfo.subcategories.filter(sub => sub.level == (index + 1))" :key="subcategory" :label="subcategory.name"
-                                :value="subcategory.id">
+                            <el-option @click.stop="form.bread_crumbles[index] = subcategory.name" v-for="subcategory in categoryInfo.subcategories.filter(sub => sub.level == (index + 1))" :key="subcategory" :label="subcategory.name" :value="subcategory.id">
                                 <p class="flex items-center justify-between">
                                     <span>{{ subcategory.name }}</span>
                                     <span class="text-[10px] text-gray99">({{ subcategory.key}})</span>
@@ -62,7 +61,7 @@
 
                         <!-- Cuando no es la primera subcategoría -->
                         <el-select v-else @change="saveFeatures((index + 1))" class="w-1/2" filterable v-model="form.subcategory_id[index]" clearable placeholder="Seleccione"
-                            no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
+                            no-data-text="No hay opciones registradas" no-match-text="Primero seleccione el nivel anterior">
                             <el-option @click.stop="form.bread_crumbles[index] = subcategory.name" v-for="subcategory in categoryInfo.subcategories.filter(sub => sub.prev_subcategory_id === form.subcategory_id[index - 1] && sub.level === (index + 1))" :key="subcategory" :label="subcategory.name"
                                 :value="subcategory.id">
                                 <p class="flex items-center justify-between">
@@ -86,7 +85,7 @@
                 <div class="mt-3 col-span-full">
                     <div class="flex justify-between items-center">
                         <InputLabel value="Características del producto" class="ml-3 mb-1 text-sm" />
-                        <ThirthButton v-if="Object.keys(form.features).length" @click="showMeasureUnitFormModal = true" class="!py-0">Crear unidad de medida</ThirthButton>
+                        <ThirthButton type="button" v-if="Object.keys(form.features).length" @click="showMeasureUnitFormModal = true" class="!py-0">Crear unidad de medida</ThirthButton>
                     </div>
                     <p v-if="Object.keys(form.features).length" class="text-gray99 text-sm mb-2">Si algún campo no es necesario, puedes dejarlo en blanco. Este campo no será visible para los usuarios.</p>
                     <div v-if="form.features.length" class="grid grid-cols-2 gap-5">
@@ -98,9 +97,14 @@
 
                             <div class="w-1/2">
                                 <InputLabel value="Unidad de medida" class="ml-3 mb-1 text-sm" />
-                                <el-select class="w-1/2" filterable v-model="feature.measure_unity" placeholder="Seleccione"
+                                <el-select class="w-1/2" filterable v-model="feature.measure_unit" placeholder="Seleccione"
                                 no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
-                                    <el-option v-for="unit in measure_units" :key="unit" :label="unit.name" :value="unit.name" />
+                                    <el-option v-for="unit in measure_units" :key="unit" :label="unit.name" :value="unit.name">
+                                        <p class="flex items-center justify-between">
+                                            <span>{{ unit.name }}</span>
+                                            <span v-if="unit.abreviation" class="text-[10px] text-gray99">({{ unit.abreviation }})</span>
+                                        </p>
+                                    </el-option>
                                 </el-select>
                             </div>
                         </div>
@@ -112,7 +116,9 @@
 
                 <div class="col-span-full">
                     <InputLabel value="Imagen del producto" class="ml-3 mb-1" />
-                    <InputFilePreview @imagen="saveImage" @cleared="form.imageCover = null" />
+                    <InputFilePreview @imagen="saveImage($event); form.imageCoverCleared = false"
+                        @cleared="form.imageCover = null; form.imageCoverCleared = true"
+                        :imageUrl="product.media?.find(img => img.collection_name === 'imageCover')?.original_url" />
                 </div>
 
                 <div class="mt-3">
@@ -127,11 +133,28 @@
                     <InputError :message="form.errors.location" />
                 </div>
 
+                <div class="mt-5 col-span-full">
+                    <p class="text-[#6D6E72] mb-2 text-sm">Archivos adjuntos al producto</p>
+                    <section v-if="product.media?.filter(media => media.collection_name === 'media')?.length > 0">
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                            <FileView v-for="file in product.media?.filter(media => media.collection_name === 'media')" :key="file" :file="file" />
+                        </div>
+                        <div class="flex justify-between items-center mt-2">
+                            <el-checkbox v-model="form.deleteMedia" label="Eliminar archivos existentes" />
+                        </div>
+                    </section>
+                    <p v-else class=" text-gray-400 mx-4 text-xs mt-1">No hay archivos adjuntos</p>
+                </div>
+
+                <div class="ml-2 mt-3 col-span-full">
+                    <FileUploader @files-selected="this.form.media = $event" />
+                </div>
+
                 <div class="col-span-full space-x-4 text-right mt-7">
                     <ThirthButton :disabled="!form.category_id || form.subcategory_id.length < 2" type="button" @click="generatePartNumber()">Generar número de parte</ThirthButton>
                     <PrimaryButton class="!rounded-full" :disabled="form.processing">
                         <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
-                        Crear producto
+                        Guardar cambios
                     </PrimaryButton>
                 </div>
             </form>
@@ -144,9 +167,15 @@
                 <form @submit.prevent="storeMeasureUnit" class="grid grid-cols-2 gap-3">
                     <div>
                         <InputLabel value="Nombre de la unidad de medida*" class="ml-3 mb-1" />
-                        <el-input v-model="measureUnitForm.name" placeholder="Escribe el nombre de la unidad de medida"
+                        <el-input v-model="measureUnitForm.name" placeholder="Ej. Centímetro"
                             :maxlength="100" required clearable />
                         <InputError :message="measureUnitForm.errors.name" />
+                    </div>
+                    <div>
+                        <InputLabel value="Abreviación*" class="ml-3 mb-1" />
+                        <el-input v-model="measureUnitForm.abreviation" placeholder="Ej. cm"
+                            :maxlength="100" required clearable />
+                        <InputError :message="measureUnitForm.errors.abreviation" />
                     </div>
                 </form>
             </template>
@@ -248,6 +277,7 @@
                 </div>
             </template>
         </DialogModal>
+
     </AppLayout>
 </template>
 
@@ -259,6 +289,8 @@ import CancelButton from "@/Components/MyComponents/CancelButton.vue";
 import InputLabel from "@/Components/InputLabel.vue";
 import InputError from "@/Components/InputError.vue";
 import InputFilePreview from "@/Components/MyComponents/InputFilePreview.vue";
+import FileUploader from "@/Components/MyComponents/FileUploader.vue";
+import FileView from '@/Components/MyComponents/FileView.vue';
 import DialogModal from "@/Components/DialogModal.vue";
 import Back from "@/Components/MyComponents/Back.vue";
 import { useForm } from "@inertiajs/vue3";
@@ -268,15 +300,18 @@ export default {
 data() {
 
     const form = useForm({
-            name: null,
-            category_id: null,
+            name: this.product.name,
+            category_id: this.product.subcategory?.category_id,
             subcategory_id: [], //se guarda un arreglo de los ids de subcategorías de forma secuencial
-            description: null,
-            features: [],
+            description: this.product.description,
+            features: this.product.features,
             imageCover: null,
-            part_number: null,
-            location: null,
-            bread_crumbles: [], //nombres de todas las subcategorías.
+            imageCoverCleared: false, //bandera para saber si se eliminó la imagen
+            part_number: this.product.part_number,
+            location: this.product.location,
+            bread_crumbles: this.product.bread_crumbles, //nombres de todas las subcategorías.
+            media: null, //archivos del producto (descargables)
+            deleteMedia: false, //elimina todos los archivos existentes
         });
 
         const categoryForm = useForm({
@@ -318,10 +353,12 @@ components:{
     InputFilePreview,
     PrimaryButton,
     ThirthButton,
+    FileUploader,
     CancelButton,
     DialogModal,
     InputLabel,
     InputError,
+    FileView,
     Back,
 },
 props:{
@@ -330,18 +367,33 @@ props:{
     product: Object
 },
 methods:{
-    store() {
-        this.form.post(route("products.store"), {
-            onSuccess: () => {
-                // toast
-                this.$notify({
-                    title: "Correcto",
-                    message: "",
-                    type: "success",
-                    position: "bottom-right",
-                });
-            },
-        });
+    update() {
+        if (this.form.imageCover || this.form.media) {
+            this.form.post(route("products.update-with-media", this.product.id), {
+                method: '_put',
+                onSuccess: () => {
+                    // toast
+                    this.$notify({
+                        title: "Correcto",
+                        message: "",
+                        type: "success",
+                        position: "bottom-right",
+                    });
+                },
+            });
+        } else {
+            this.form.put(route("products.update", this.product.id), {
+                onSuccess: () => {
+                    // toast
+                    this.$notify({
+                        title: "Correcto",
+                        message: "",
+                        type: "success",
+                        position: "bottom-right",
+                    });
+                },
+            });
+        }
     },
     storeCategory() {
         this.categoryForm.post(route("categories.store"), {
@@ -368,6 +420,7 @@ methods:{
                     position: "bottom-right",
                 });
                 this.showSubcategoryFormModal = false;
+                location.reload();
             },
         });
     },
@@ -417,7 +470,7 @@ methods:{
                 // Crear un array de objetos con las características y unidad de medida asignando null a cada una
                 this.form.features = highestLevelSubcategory.features.map(feature => ({
                     [feature]: null,
-                    measure_unity: null
+                    measure_unit: null
                 }));
             } else {
                 // Si no hay características, inicializar features como un array vacío
@@ -450,7 +503,36 @@ methods:{
         if ( index > 0 ) {
             this.subcategoryForm.subcategory_id = this.form.subcategory_id[index - 1];
         } 
-    }
+    },
+    //metodo que trae las subcategorias de la categoria seleccionada desde el mount para no borrar otras variables
+    async fetchSubcategoriesMounted() {
+        try {
+            const response = await axios.get(route('categories.fetch-subcategories', this.form.category_id));
+            if ( response.status === 200 ) {
+                this.categoryInfo = response.data.category;
+
+                // Encontrar el nivel más alto entre las subcategorías
+                this.highestLevel = Math.max(...this.categoryInfo.subcategories.map(sub => sub.level));
+            }
+        } catch (error) {
+            console.log(error);
+        }
+    },
+    //metodo para setear los valores de subcategorias que tiene el producto
+    findSubcategoriesSelected() {
+        this.product.bread_crumbles.forEach(crumb => {
+            const found = this.categoryInfo?.subcategories.find(subcategory => subcategory.name === crumb);
+            if (found) {
+                this.form.subcategory_id.push(found.id);
+            }
+        });
+    },
+},
+created() {
+    this.fetchSubcategoriesMounted();
+    setTimeout(() => {
+      this.findSubcategoriesSelected();
+    }, 500); // Espera 500 milisegundo antes de ejecutar findSubcategoriesSelected
 }
 }
 </script>

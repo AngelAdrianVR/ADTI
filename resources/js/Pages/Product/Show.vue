@@ -5,9 +5,6 @@
             <div class="lg:flex justify-between items-center mx-3">
                 <h1 class="font-bold text-lg">Detalles del producto</h1>
                 <div class="flex items-center space-x-2 my-2 lg:my-0">
-                    <ThirthButton v-if="isInventoryOn" @click="openEntryModal">
-                        Entrada de producto
-                    </ThirthButton>
                     <PrimaryButton @click="$inertia.get(route('products.edit', product.id))">
                         <p class="flex items-center space-x-2">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4 mr-1">
@@ -16,9 +13,11 @@
                             Editar
                         </p>
                     </PrimaryButton>
-                    <PrimaryButton class="!bg-grayED !px-3" @click="$inertia.get(route('products.create'))">
-                        <i class="fa-solid fa-plus py-1  text-primary"></i>
-                    </PrimaryButton>
+                    <el-tooltip placement="top" content="Nuevo producto">
+                        <PrimaryButton class="!bg-grayED !px-3" @click="$inertia.get(route('products.create'))">
+                            <i class="fa-solid fa-plus py-1  text-primary"></i>
+                        </PrimaryButton>
+                    </el-tooltip>
                 </div>
             </div>
 
@@ -28,10 +27,10 @@
                 <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
                 <!-- Resultados de la búsqueda -->
                 <div v-if="searchFocus && searchQuery"
-                    class="absolute mt-1 bg-white border border-gray-300 rounded shadow-lg w-full max-h-40 overflow-auto">
+                    class="absolute mt-1 bg-white border border-gray-300 rounded shadow-lg w-full max-h-48 overflow-auto">
                     <Loading2 v-if="searchLoading" class="my-3" />
                     <ul v-else-if="productsFound?.length > 0">
-                        <li @click.stop="handleProductSelected(product)" v-for="(product, index) in productsFound"
+                        <li @click.stop="$inertia.get(route('products.show', product.id))" v-for="(product, index) in productsFound"
                             :key="index" class="hover:bg-gray-100 cursor-default text-sm px-5 py-2">{{
                                 product.global_product_id ? product.global_product?.name : product.name }}</li>
                     </ul>
@@ -146,6 +145,11 @@ methods:{
         } finally {
             this.searchLoading = false;
         }
+    },
+    updateURL(tab) {
+        const params = new URLSearchParams(window.location.search);
+        params.set('tab', tab.props.name);
+        window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
     },
 }
 }

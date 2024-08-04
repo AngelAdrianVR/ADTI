@@ -51,7 +51,7 @@
                         <!-- Cuando es la primera subcategoría (no contiene un subcategory_id) -->
                         <el-select v-if="index == 0" @change="saveFeatures((index + 1))" class="w-1/2" filterable v-model="form.subcategory_id[index]" clearable placeholder="Seleccione"
                             no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
-                            <el-option @click.stop="form.bread_crumbles[index] = subcategory.name" v-for="subcategory in categoryInfo.subcategories.filter(sub => sub.level == (index + 1))" :key="subcategory" :label="subcategory.name :value="subcategory.id">
+                            <el-option @click.stop="form.bread_crumbles[index] = subcategory.name" v-for="subcategory in categoryInfo.subcategories.filter(sub => sub.level == (index + 1))" :key="subcategory" :label="subcategory.name" :value="subcategory.id">
                                 <p class="flex items-center justify-between">
                                     <span>{{ subcategory.name }}</span>
                                     <span class="text-[10px] text-gray99">({{ subcategory.key}})</span>
@@ -61,7 +61,7 @@
 
                         <!-- Cuando no es la primera subcategoría -->
                         <el-select v-else @change="saveFeatures((index + 1))" class="w-1/2" filterable v-model="form.subcategory_id[index]" clearable placeholder="Seleccione"
-                            no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
+                            no-data-text="No hay opciones registradas" no-match-text="Primero seleccione el nivel anterior">
                             <el-option @click.stop="form.bread_crumbles[index] = subcategory.name" v-for="subcategory in categoryInfo.subcategories.filter(sub => sub.prev_subcategory_id === form.subcategory_id[index - 1] && sub.level === (index + 1))" :key="subcategory" :label="subcategory.name"
                                 :value="subcategory.id">
                                 <p class="flex items-center justify-between">
@@ -97,9 +97,8 @@
 
                             <div class="w-1/2">
                                 <InputLabel value="Unidad de medida" class="ml-3 mb-1 text-sm" />
-                                <el-select class="w-1/2" filterable v-model="feature.measure_unity" placeholder="Seleccione"
+                                <el-select class="w-1/2" filterable v-model="feature.measure_unit" placeholder="Seleccione"
                                 no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
-                                    <!-- <el-option v-for="unit in measure_units" :key="unit" :label="unit.name" :value="unit.name" /> -->
                                     <el-option v-for="unit in measure_units" :key="unit" :label="unit.name" :value="unit.name">
                                         <p class="flex items-center justify-between">
                                             <span>{{ unit.name }}</span>
@@ -132,12 +131,26 @@
                     <InputError :message="form.errors.location" />
                 </div>
 
+                <div class="ml-2 mt-3 col-span-full">
+                    <FileUploader @files-selected="this.form.media = $event" />
+                </div>
+
                 <div class="col-span-full space-x-4 text-right mt-7">
                     <ThirthButton :disabled="!form.category_id || form.subcategory_id.length < 2" type="button" @click="generatePartNumber()">Generar número de parte</ThirthButton>
                     <PrimaryButton class="!rounded-full" :disabled="form.processing">
                         <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
                         Crear producto
                     </PrimaryButton>
+                    <!-- Boton multi accion -->
+                    <!-- <el-dropdown split-button type="primary" @click="store('crear')">
+                        Crear producto
+                        <template #dropdown>
+                            <el-dropdown-menu>
+                            <el-dropdown-item @click="store('seguir')">Crear y seguir creando</el-dropdown-item>
+                            <el-dropdown-item @click="store('mostrar')">Crear y mostrar</el-dropdown-item>
+                            </el-dropdown-menu>
+                        </template>
+                    </el-dropdown> -->
                 </div>
             </form>
         </div>
@@ -271,6 +284,7 @@ import CancelButton from "@/Components/MyComponents/CancelButton.vue";
 import InputLabel from "@/Components/InputLabel.vue";
 import InputError from "@/Components/InputError.vue";
 import InputFilePreview from "@/Components/MyComponents/InputFilePreview.vue";
+import FileUploader from "@/Components/MyComponents/FileUploader.vue";
 import DialogModal from "@/Components/DialogModal.vue";
 import Back from "@/Components/MyComponents/Back.vue";
 import { useForm } from "@inertiajs/vue3";
@@ -284,7 +298,8 @@ data() {
             subcategory_id: [], //se guarda un arreglo de los ids de subcategorías de forma secuencial
             description: null,
             features: [],
-            imageCover: null,
+            imageCover: null, //imagen del producto
+            media: null, //archivos del producto (descargables)
             part_number: null,
             location: null,
             bread_crumbles: [], //nombres de todas las subcategorías.
@@ -329,6 +344,7 @@ components:{
     AppLayout,
     InputFilePreview,
     PrimaryButton,
+    FileUploader,
     ThirthButton,
     CancelButton,
     DialogModal,
@@ -341,6 +357,41 @@ props:{
     measure_units: Array,
 },
 methods:{
+    // store(action) {
+    //   axios.post(route("products.store"), this.form)
+    //     .then(response => {
+    //         // toast
+    //         this.$notify({
+    //             title: "Correcto",
+    //             message: "",
+    //             type: "success",
+    //             position: "bottom-right",
+    //         });
+
+    //         const productId = response.data.id; // Obtén el ID del producto creado
+
+    //         switch (action) {
+    //             case 'crear':
+    //                 this.$inertia.get(route('products.index'));
+    //                 break;
+    //             case 'mostrar':
+    //                 this.$inertia.get(route('products.show', productId));
+    //                 break;
+    //             case 'seguir':
+    //                 this.form.reset();
+    //                 break;
+    //         }
+    //     })
+    //     .catch(error => {
+    //       console.error(error);
+    //       this.$notify({
+    //             title: "Error",
+    //             message: error.response.data.message,
+    //             type: "error",
+    //             position: "bottom-right",
+    //         });
+    //     });
+    // },
     store() {
         this.form.post(route("products.store"), {
             onSuccess: () => {
@@ -379,6 +430,7 @@ methods:{
                     position: "bottom-right",
                 });
                 this.showSubcategoryFormModal = false;
+                location.reload();
             },
         });
     },
@@ -428,7 +480,7 @@ methods:{
                 // Crear un array de objetos con las características y unidad de medida asignando null a cada una
                 this.form.features = highestLevelSubcategory.features.map(feature => ({
                     [feature]: null,
-                    measure_unity: null
+                    measure_unit: null
                 }));
             } else {
                 // Si no hay características, inicializar features como un array vacío
