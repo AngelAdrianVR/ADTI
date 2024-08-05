@@ -1,11 +1,11 @@
 <template>
     <section>
         <article class="flex items-center space-x-4">
-            <InputLabel :value="getLabel" class="" />
+            <InputLabel :value="getLabel" class="w-6" />
             <el-input v-model="subCategory.name" placeholder="Ej. Movimiento lineal" :maxlength="255" clearable />
             <div class="flex items-center space-x-2">
-                <el-tooltip content="Crear secuencia/rama de subcategoría" placement="top">
-                    <button v-if="canAddSubCategory" type="button" @click="handleAddSubCategory"
+                <el-tooltip v-if="canAddSubCategory" content="Crear secuencia/rama de subcategoría" placement="top">
+                    <button type="button" @click="handleAddSubCategory"
                         class="hover:text-primary">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
                             stroke="currentColor" class="size-4">
@@ -15,7 +15,9 @@
                     </button>
                 </el-tooltip>
                 <el-tooltip content="Agregar imagen" placement="top">
-                    <button type="button" class="hover:text-primary">
+                    <button type="button" @click="openFileExplorer"
+                        class="hover:text-primary disabled:opacity-50 disabled:hover:text-black disabled:cursor-not-allowed"
+                        :disabled="imageUrl">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
                             stroke="currentColor" class="size-4">
                             <path stroke-linecap="round" stroke-linejoin="round"
@@ -23,8 +25,8 @@
                         </svg>
                     </button>
                 </el-tooltip>
-                <el-tooltip content="Agregar características a subcategorías" placement="top">
-                    <button v-if="canAddCharacteristics" type="button" class="hover:text-primary">
+                <el-tooltip v-if="canAddCharacteristics" content="Agregar características a subcategorías" placement="top">
+                    <button @click="openFeaturesModal" type="button" class="hover:text-primary">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
                             stroke="currentColor" class="size-4">
                             <path stroke-linecap="round" stroke-linejoin="round"
@@ -44,10 +46,32 @@
             </div>
         </article>
 
+        <input type="file" ref="fileInput" accept="image/*" @change="onImageChange" class="hidden" />
+
+        <section class="flex items-center space-x-2">
+            <div v-if="imageUrl" class="mt-2 ml-12">
+                <figure class="size-32 border border-grayD9 rounded-[3px] relative">
+                    <button @click="removeImage" class="absolute p-1 top-1 right-1 z-10 text-xs">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                    <img :src="imageUrl" alt="Image Preview" class="size-32 object-contain opacity-50" />
+                </figure>
+            </div>
+            <div v-if="imageUrl" class="mt-2 ml-12">
+                <figure class="size-32 border border-grayD9 rounded-[3px] relative">
+                    <button class="absolute p-1 top-1 right-1 z-10 text-xs">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                    <img :src="imageUrl" alt="Image Preview" class="size-32 object-contain opacity-50" />
+                </figure>
+            </div>
+        </section>
+
         <div v-if="subCategory.subCategories.length > 0" class="ml-4 space-y-1 mt-1">
             <SubCategory v-for="(child, idx) in subCategory.subCategories" :key="idx" :subCategory="child" :index="idx"
                 :parentIndex="getLabel" @addSubCategory="addSubCategoryToChild"
-                @removeSubCategory="removeSubCategoryFromChild" />
+                @removeSubCategory="removeSubCategoryFromChild" @imageUploaded="handleImageUploaded"
+                @openFeaturesModal="handleOpenFeaturesModal" />
         </div>
     </section>
 </template>
@@ -56,6 +80,11 @@
 import InputLabel from "@/Components/InputLabel.vue";
 
 export default {
+    data() {
+        return {
+            imageUrl: null,
+        };
+    },
     props: {
         subCategory: Object,
         index: Number,
@@ -64,7 +93,7 @@ export default {
     components: {
         InputLabel,
     },
-    emits: ['addSubCategory', 'removeSubCategory'],
+    emits: ['addSubCategory', 'removeSubCategory', 'imageUploaded', 'openFeaturesModal'],
     computed: {
         getLabel() {
             const parent = this.parentIndex ? `${this.parentIndex}.` : '';
@@ -94,7 +123,30 @@ export default {
                 ? `${this.parentIndex}.${this.index + 1}`
                 : `${this.index + 1}`;
             this.$emit('removeSubCategory', updatedPath, index);
-        }
+        },
+        openFileExplorer() {
+            this.$refs.fileInput.click();
+        },
+        onImageChange(event) {
+            const file = event.target.files[0];
+            if (file) {
+                this.imageUrl = URL.createObjectURL(file);
+                this.$emit('imageUploaded', file, this.getLabel);
+            }
+        },
+        handleImageUploaded(file, path) {
+            this.$emit('imageUploaded', file, path);
+        },
+        removeImage() {
+            this.imageUrl = null;
+            this.$emit('imageUploaded', null, this.getLabel);
+        },
+        openFeaturesModal() {
+            this.$emit('openFeaturesModal', this.getLabel);
+        },
+        handleOpenFeaturesModal(path) {
+            this.$emit('openFeaturesModal', path);
+        },
     }
 };
 </script>
