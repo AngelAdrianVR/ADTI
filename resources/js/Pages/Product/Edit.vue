@@ -87,7 +87,7 @@
                         <InputLabel value="Características del producto" class="ml-3 mb-1 text-sm" />
                         <ThirthButton type="button" v-if="Object.keys(form.features).length" @click="showMeasureUnitFormModal = true" class="!py-0">Crear unidad de medida</ThirthButton>
                     </div>
-                    <p v-if="Object.keys(form.features).length" class="text-gray99 text-sm mb-2">Si algún campo no es necesario, puedes dejarlo en blanco. Este campo no será visible para los usuarios.</p>
+                    <p v-if="Object.keys(form.features)?.length" class="text-gray99 text-sm mb-2">Si algún campo no es necesario, puedes dejarlo en blanco. Este campo no será visible para los usuarios.</p>
                     <div v-if="form.features.length" class="grid grid-cols-2 gap-5">
                         <div v-for="(feature, index) in form.features" :key="index" class="flex items-center space-x-2">
                             <div class="w-1/2">
@@ -304,7 +304,7 @@ data() {
             category_id: this.product.subcategory?.category_id,
             subcategory_id: [], //se guarda un arreglo de los ids de subcategorías de forma secuencial
             description: this.product.description,
-            features: this.product.features,
+            features: this.product.features ?? {},
             imageCover: null,
             imageCoverCleared: false, //bandera para saber si se eliminó la imagen
             part_number: this.product.part_number,

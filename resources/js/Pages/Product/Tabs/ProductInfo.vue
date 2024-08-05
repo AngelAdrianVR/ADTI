@@ -40,7 +40,7 @@
         <div class="flex mt-5">
             <p class="text-[#6D6E72] w-48">Características:</p>
             <!-- tabla de caracteristicas -->
-            <div class="border border-gray-300 rounded overflow-hidden">
+            <div v-if="product.features?.length" class="border border-gray-300 rounded overflow-hidden">
                 <div v-for="(feature, index) in product.features" :key="index" class="grid grid-cols-2 *:py-1 *:px-4" :class="{ 'bg-gray-200': index % 2 != 0 }">
                     <template v-for="(value, key) in feature" :key="key">
                         <div v-if="key !== 'measure_unit'" class="border-r border-gray-300 font-medium">{{ key }}</div>
@@ -50,12 +50,13 @@
                     </template>
                 </div>
             </div>
+            <p class="text-xs text-[#6D6E72]" v-else>No contiene características</p>
         </div>
 
         <div class="flex mt-5">
             <p class="text-[#6D6E72] w-48">Descargables:</p>
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2" v-if="product.media.filter(media => media.collection_name === 'media')?.length > 0">
-                <FileView v-for="file in product.media.filter(media => media.collection_name === 'media')" :key="file" :file="file" />
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2" v-if="product.media.filter(media => media.collection_name === 'files')?.length > 0">
+                <FileView v-for="file in product.media.filter(media => media.collection_name === 'files')" :key="file" :file="file" />
             </div>
             <p v-else class=" text-gray-400 mx-4 text-xs mt-1">No hay archivos adjuntos</p>
         </div>

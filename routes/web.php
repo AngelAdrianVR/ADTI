@@ -6,18 +6,32 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SubcategoryController;
 use App\Http\Controllers\UserController;
+use App\Models\Category;
+use App\Models\Product;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', function () {
+    $categories = Category::with('subcategories')->get();
+
     return Inertia::render('Welcome', [
-        'canLogin' => Route::has('login'),
-        'canRegister' => Route::has('register'),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
+        'categories' => $categories,
     ]);
-});
+})->name('welcome');
+
+
+//ruta para mostrar producto encontrado desde barra buscadora de inicio
+Route::get('/show-product/{product_id}', function ($product_id) {
+    $product = Product::with(['media', 'subcategory.category'])->find($product_id);
+
+    // return $product;
+    return Inertia::render('ShowProduct', [
+        'product' => $product,
+        'canLogin' => Route::has('login'),
+    ]);
+})->name('public.show-product');
+
 
 Route::middleware([
     'auth:sanctum',
@@ -43,7 +57,7 @@ Route::post('users/massive-delete', [UserController::class, 'massiveDelete'])->n
 Route::resource('products', ProductController::class)->middleware('auth');
 Route::post('products/update-with-media/{product}', [ProductController::class, 'updateWithMedia'])->name('products.update-with-media')->middleware('auth');
 Route::post('products/massive-delete', [ProductController::class, 'massiveDelete'])->name('products.massive-delete');
-Route::get('products-search', [ProductController::class, 'searchProduct'])->name('products.search')->middleware('auth');
+Route::get('products-search', [ProductController::class, 'searchProduct'])->name('products.search');
 
 
 //Category routes----------------------------------------------------------------------------------

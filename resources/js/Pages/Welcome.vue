@@ -1,13 +1,14 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
 
-defineProps({
-
+const props = defineProps({
+  categories: Array,
 });
 
-const props = {
-  expandTrigger: 'hover',
+const cascaderProps = {
+  // expandTrigger: 'hover',
   checkStrictly: true, //single selection
 }
 
@@ -15,76 +16,72 @@ const handleChange = (value) => {
   console.log(value)
 }
 
-const options = [
-  {
-    value: 'Automatización',
-    label: 'Automatización',
-    children: [
-      {
-        value: 'Movimiento lineal',
-        label: 'Movimiento lineal',
-        children: [
-          {
-            value: 'Guías de bolas',
-            label: 'Guías de bolas',
-          },
-          {
-            value: 'Guías lineales',
-            label: 'Guías lineales',
-          },
-        ],
-      },
-      {
-        value: 'Movimiento radial',
-        label: 'Movimiento radial',
-        children: [
-          {
-            value: 'Guias radiales',
-            label: 'Guias radiales',
-          },
-          {
-            value: 'Gupias uniformes',
-            label: 'Gupias uniformes',
-          },
-        ],
-      },
-    ],
-  },
-  {
-    value: 'Sujetadores y tornillos',
-    label: 'Sujetadores y tornillos',
-    children: [
-      {
-        value: 'Tornillos y pernos',
-        label: 'Tornillos y pernos',
-        children: [
-          {
-            value: 'cabeza cuadrada',
-            label: 'cabeza cuadrada',
-          },
-          {
-            value: 'Cabeza redonda',
-            label: 'Cabeza redonda',
-          },
-        ],
-      },
-      {
-        value: 'Tornillos de cruz',
-        label: 'Tornillos de cruz',
-        children: [
-          {
-            value: 'Hallen',
-            label: 'Hallen',
-          },
-          {
-            value: 'Phillips',
-            label: 'Phillips',
-          },
-        ],
-      },
-    ],
-  },
-];
+// Función para transformar categorías
+const transformCategories = (categories) => {
+  if (!categories || !Array.isArray(categories)) return []; // Asegúrate de que categories esté definido y sea un arreglo
+
+  return categories.map(category => {
+    const transformedCategory = {
+      value: category.name,
+      label: category.name,
+      children: []
+    };
+
+    // Organizar subcategorías por nivel
+    let level1 = [];
+    let level2 = [];
+    let level3 = [];
+
+    category.subcategories.forEach(subcategory => {
+      if (subcategory.level === 1) {
+        level1.push({
+          id: subcategory.id,
+          value: subcategory.name,
+          label: subcategory.name,
+          children: []
+        });
+      } else if (subcategory.level === 2) {
+        level2.push({
+          id: subcategory.id,
+          value: subcategory.name,
+          label: subcategory.name,
+          prev_sub: subcategory.prev_subcategory_id,
+          children: []
+        });
+      } else if (subcategory.level === 3) {
+        level3.push({
+          id: subcategory.id,
+          value: subcategory.name,
+          label: subcategory.name,
+          prev_sub: subcategory.prev_subcategory_id,
+          children: []
+        });
+      }
+    });
+
+    // Añadir subcategorías de nivel 2 a las correspondientes de nivel 1
+    level2.forEach(l2 => {
+      const parent = level1.find(l1 => l1.id === l2.prev_sub);
+      if (parent) parent.children.push(l2);
+    });
+
+    // Añadir subcategorías de nivel 3 a las correspondientes de nivel 2
+    level3.forEach(l3 => {
+      const parent = level2.find(l2 => l2.id === l3.prev_sub);
+      if (parent) parent.children.push(l3);
+    });
+
+    transformedCategory.children.push(...level1);
+
+    // console.log(level1);
+    // console.log(level2);
+    // console.log(level3);
+    return transformedCategory;
+  });
+};
+
+
+const options = computed(() => transformCategories(props.categories));
 
 </script>
 
@@ -108,7 +105,7 @@ const options = [
                     class="!w-full"
                     v-model="value"
                     :options="options"
-                    :props="props"
+                    :props="cascaderProps"
                     @change="handleChange"
                     placeholder="Todas las categorías"
                     />

@@ -135,7 +135,8 @@ class ProductController extends Controller
 
         // Guardar los archivos descargables si existen
         if ($request->hasFile('media')) {
-            $product->addAllMediaFromRequest('media')->each(fn ($file) => $file->toMediaCollection('files'));
+            $product->addMediaFromRequest('media')->toMediaCollection('files');
+            // $product->addAllMediaFromRequest('media')->each(fn ($file) => $file->toMediaCollection('files'));
         }
         
         return to_route('products.show', $product->id); //manda al show despues de crear el producto
