@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Category;
+use App\Models\Feature;
+use App\Models\MeasureUnit;
 use Illuminate\Http\Request;
 
 class CategoryController extends Controller
@@ -14,7 +16,10 @@ class CategoryController extends Controller
 
     public function create()
     {
-        return inertia('Category/Create');
+        $features = Feature::latest('id')->get(['id', 'name']);
+        $measure_units = MeasureUnit::latest('id')->get(['id', 'name']);
+
+        return inertia('Category/Create', compact('features', 'measure_units'));
     }
 
     public function store(Request $request)

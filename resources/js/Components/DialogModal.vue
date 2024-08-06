@@ -31,8 +31,11 @@ const close = () => {
         @close="close"
     >
         <div class="px-6 py-4">
-            <div class="text-lg font-medium text-gray-900">
+            <div class="text-lg font-medium text-gray-900 flex items-center justify-between">
                 <slot name="title" />
+                <button @click="close">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
             </div>
 
             <div class="mt-4 text-sm text-gray-600">
