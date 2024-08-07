@@ -11,7 +11,9 @@
                         <el-input v-model="form.name" placeholder="Ej. Automatización" :maxlength="255" clearable />
                         <div class="flex items-center space-x-2">
                             <el-tooltip content="Agregar imagen" placement="top">
-                                <button type="button" class="hover:text-primary">
+                                <button type="button" @click="openFileExplorer"
+                                    class="hover:text-primary disabled:opacity-50 disabled:hover:text-black disabled:cursor-not-allowed"
+                                    :disabled="imageUrl">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                         stroke-width="1.5" stroke="currentColor" class="size-4">
                                         <path stroke-linecap="round" stroke-linejoin="round"
@@ -22,6 +24,18 @@
                         </div>
                     </div>
                     <InputError :message="form.errors.name" />
+                    <!-- imagen de categoria -->
+                    <input type="file" ref="fileInput" accept="image/*" @change="onImageChange" class="hidden" />
+                    <section class="flex items-center space-x-2">
+                        <div v-if="imageUrl" class="mt-2">
+                            <figure class="size-32 border border-grayD9 rounded-[3px] relative">
+                                <button @click="removeImage" class="absolute p-1 top-1 right-1 z-10 text-xs">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                                <img :src="imageUrl" alt="Image Preview" class="size-32 object-contain opacity-50" />
+                            </figure>
+                        </div>
+                    </section>
                 </div>
 
                 <br>
@@ -33,7 +47,7 @@
                     <SubCategory v-for="(subCategory, index) in form.subCategories" :key="index"
                         :subCategory="subCategory" :index="index" :parentIndex="''" @addSubCategory="addSubCategory"
                         @removeSubCategory="removeSubCategory" @imageUploaded="handleImageUploaded"
-                        @openFeaturesModal="openFeaturesModal" />
+                        @removeFeatures="removeFeatures" @openFeaturesModal="openFeaturesModal" />
                 </div>
 
                 <br>
@@ -66,17 +80,18 @@
                             <p>Unidad de medida</p>
                         </div>
                         <div v-if="localFeatures.length" class="space-y-2">
-                            <div v-for="(item, index) in localFeatures" :key="index" class="grid grid-cols-2 gap-3 relative">
+                            <div v-for="(item, index) in localFeatures" :key="index"
+                                class="grid grid-cols-2 gap-3 relative">
                                 <el-input v-model="item.name" disabled />
                                 <el-select filterable v-model="item.measure_unit" placeholder="Selecciona"
                                     no-data-text="No hay opciones registradas"
                                     no-match-text="No se encontraron coincidencias">
-                                    <el-option label="No aplica"
-                                        value="No aplica" />
+                                    <el-option label="No aplica" value="No aplica" />
                                     <el-option v-for="mu in measure_units" :key="mu.id" :label="mu.name"
                                         :value="mu.name" />
                                 </el-select>
-                                <button @click="removeLocalFeature(index)" type="button" class="text-primary absolute top-2 -right-6">
+                                <button @click="removeLocalFeature(index)" type="button"
+                                    class="text-primary absolute top-2 -right-6">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                         stroke-width="1.5" stroke="currentColor" class="size-4">
                                         <path stroke-linecap="round" stroke-linejoin="round"
@@ -92,10 +107,11 @@
                             </p>
                         </div>
                     </article>
-                    <article class="border border-grayD9 rounded-[3px] px-3 py-3 min-h-28 max-h-56 w-[40%] flex flex-col justify-between space-y-4">
+                    <article
+                        class="border border-grayD9 rounded-[3px] px-3 py-3 min-h-28 max-h-56 w-[40%] flex flex-col justify-between space-y-4">
                         <div class="flex items-center justify-between">
                             <p class="text-black">Todas las características</p>
-                            <button @click="showNewFeatureModal = true" class="text-primary text-sm">
+                            <button type="button" @click="showNewFeatureModal = true" class="text-primary text-sm">
                                 <i class="fa-solid fa-circle-plus"></i>
                             </button>
                         </div>
@@ -108,7 +124,8 @@
                         </div>
                         <el-empty v-else description="Vacío" :image-size="80" />
                         <div>
-                            <button @click="addAllFeatures" v-if="getAvailableFeatures.length" class="text-primary underline">
+                            <button type="button" @click="addAllFeatures" v-if="getAvailableFeatures.length"
+                                class="text-primary underline">
                                 Agregar todas
                             </button>
                         </div>
@@ -142,7 +159,7 @@
                 </div>
             </template>
         </DialogModal>
-        <!-- {{ form.subCategories }} <br><br> -->
+        <!-- {{ form.image }} <br><br> -->
     </AppLayout>
 </template>
 
@@ -161,6 +178,7 @@ export default {
     data() {
         const form = useForm({
             category: null,
+            image: null,
             subCategories: [{ name: '', subCategories: [], image: null, features: [] }],
         });
 
@@ -178,6 +196,8 @@ export default {
             // caracteristicas
             elementFeaturesPath: '',
             localFeatures: [],
+            // generales
+            imageUrl: null,
 
         }
     },
@@ -213,41 +233,54 @@ export default {
                 }
             });
         },
+        openFileExplorer() {
+            this.$refs.fileInput.click();
+        },
+        onImageChange(event) {
+            const file = event.target.files[0];
+            if (file) {
+                this.imageUrl = URL.createObjectURL(file);
+                this.form.image = file;
+            }
+        },
+        removeImage() {
+            this.imageUrl = null;
+            this.form.image = null;
+        },
         addMainSubCategory() {
             this.form.subCategories.push({ name: '', subCategories: [], image: null, features: [] });
         },
-        addSubCategory(path) {
+        addSubCategory(path, data = null) {
             const indexes = path.split('.').map(i => parseInt(i) - 1);
             let subCategories = this.form.subCategories;
+            if (!data) {
+                data = {
+                    name: '',
+                    subCategories: [],
+                    image: null,
+                    features: []
+                };
+            }
 
             indexes.forEach((index, idx) => {
                 if (idx === indexes.length - 1) {
-                    subCategories[index].subCategories.push({
-                        name: '',
-                        subCategories: [],
-                        image: null,
-                        features: []
-                    });
+                    subCategories[index].subCategories.push(data);
                 } else {
                     subCategories = subCategories[index].subCategories;
                 }
             });
         },
-        removeSubCategory(parentPath, index) {
-            const indexes = parentPath ? parentPath.split('.').map(i => parseInt(i) - 1) : [];
+        removeSubCategory(path) {
+            const indexes = path.split('.').map(i => parseInt(i) - 1);
             let subCategories = this.form.subCategories;
 
-            indexes.forEach((idx, i) => {
-                if (i === indexes.length - 1) {
-                    subCategories[idx].subCategories.splice(index, 1);
+            indexes.forEach((index, idx) => {
+                if (idx === indexes.length - 1) {
+                    subCategories.splice(index, 1);
                 } else {
-                    subCategories = subCategories[idx].subCategories;
+                    subCategories = subCategories[index].subCategories;
                 }
             });
-
-            if (indexes.length === 0) {
-                this.form.subCategories.splice(index, 1);
-            }
         },
         handleImageUploaded(file, path) {
             const indexes = path.split('.').map(i => parseInt(i) - 1);
@@ -261,9 +294,36 @@ export default {
                 }
             });
         },
+        removeFeatures(path) {
+            const indexes = path.split('.').map(i => parseInt(i) - 1);
+            let subCategories = this.form.subCategories;
+
+            indexes.forEach((index, idx) => {
+                if (idx === indexes.length - 1) {
+                    subCategories[index].features = [];
+                } else {
+                    subCategories = subCategories[index].subCategories;
+                }
+            });
+        },
         // funciones de modal para agregar cracteristicas
         openFeaturesModal(path) {
-            this.localFeatures = [];
+            // buscar si la subcategoria del path ya tiene caracteristicas cargadas
+            const indexes = path.split('.').map(i => parseInt(i) - 1);
+            let subCategories = this.form.subCategories;
+
+            indexes.forEach((index, idx) => {
+                if (idx === indexes.length - 1) {
+                    if (subCategories[index].features.length) {
+                        this.localFeatures = subCategories[index].features;
+                    } else {
+                        this.localFeatures = [];
+                    }
+                } else {
+                    subCategories = subCategories[index].subCategories;
+                }
+            });
+
             this.elementFeaturesPath = path;
             this.showFeaturesModal = true;
         },
@@ -276,11 +336,13 @@ export default {
                     if (!subCategories[index].features) {
                         subCategories[index].features = [];
                     }
-                    subCategories[index].features.push(this.features);
+                    subCategories[index].features = this.localFeatures;
                 } else {
                     subCategories = subCategories[index].subCategories;
                 }
             });
+
+            this.showFeaturesModal = false;
         },
         storeFeature() {
             this.featureForm.post(route('features.store'), {
