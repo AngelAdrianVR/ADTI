@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Category;
+use App\Models\Feature;
+use App\Models\MeasureUnit;
 use Illuminate\Http\Request;
 
 class CategoryController extends Controller
@@ -14,7 +16,22 @@ class CategoryController extends Controller
 
     public function create()
     {
-        //
+        $features = Feature::latest('id')->get(['id', 'name']);
+        $measure_units = MeasureUnit::latest('id')->get(['id', 'name']);
+
+        return inertia('Category/Create', compact('features', 'measure_units'));
+    }
+
+    public function storeWithSubcategories(Request $request)
+    {
+        $validated = $request->validate([
+            'category' => 'required|string|max:255',
+            'key' => 'required|string|max:10',
+        ]);
+
+        $category = Category::create($validated);
+
+        dd($request->all());
     }
 
     public function store(Request $request)

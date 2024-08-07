@@ -5,7 +5,7 @@
             <section class="md:flex justify-between items-center">
                 <div class="lg:w-1/3 relative">
                     <input v-model="searchQuery" @keydown.enter="handleSearch" class="input w-full pl-9"
-                        placeholder="Buscar por nombre o número de parte" type="search" ref="searchInput" />
+                        placeholder="Buscar por nombre, puesto, correo o teléfono" type="search" ref="searchInput" />
                     <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
                 </div>
                 <!-- buttons -->
@@ -198,6 +198,8 @@ export default {
                 return this.users.filter(
                     (user) =>
                         user.name.toLowerCase().includes(this.search.toLowerCase()) ||
+                        user.email.toLowerCase().includes(this.search.toLowerCase()) ||
+                        user.phone.toLowerCase().includes(this.search.toLowerCase()) ||
                         user.org_props.position.toLowerCase().includes(this.search.toLowerCase())
                 )
             }
