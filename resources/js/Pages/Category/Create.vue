@@ -5,11 +5,13 @@
 
             <form @submit.prevent="store" class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-1/2 mx-auto mt-2">
                 <h1 class="font-bold ml-2 col-span-full">Crear categoría</h1>
-                <div class="my-3">
-                    <InputLabel value="Nombre de la categoría principal*" />
-                    <div class="flex items-center space-x-4">
-                        <el-input v-model="form.name" placeholder="Ej. Automatización" :maxlength="255" clearable />
-                        <div class="flex items-center space-x-2">
+
+                <section class="my-3 grid grid-cols-2 gap-3">
+                    <div>
+                        <InputLabel value="Nombre de la categoría principal*" />
+                        <div class="flex items-center space-x-3">
+                            <el-input v-model="form.category" placeholder="Ej. Automatización" :maxlength="255"
+                                clearable />
                             <el-tooltip content="Agregar imagen" placement="top">
                                 <button type="button" @click="openFileExplorer"
                                     class="hover:text-primary disabled:opacity-50 disabled:hover:text-black disabled:cursor-not-allowed"
@@ -22,11 +24,9 @@
                                 </button>
                             </el-tooltip>
                         </div>
-                    </div>
-                    <InputError :message="form.errors.name" />
-                    <!-- imagen de categoria -->
-                    <input type="file" ref="fileInput" accept="image/*" @change="onImageChange" class="hidden" />
-                    <section class="flex items-center space-x-2">
+                        <InputError :message="form.errors.category" />
+                        <!-- imagen de categoria -->
+                        <input type="file" ref="fileInput" accept="image/*" @change="onImageChange" class="hidden" />
                         <div v-if="imageUrl" class="mt-2">
                             <figure class="size-32 border border-grayD9 rounded-[3px] relative">
                                 <button @click="removeImage" class="absolute p-1 top-1 right-1 z-10 text-xs">
@@ -35,8 +35,13 @@
                                 <img :src="imageUrl" alt="Image Preview" class="size-32 object-contain opacity-50" />
                             </figure>
                         </div>
-                    </section>
-                </div>
+                    </div>
+                    <div>
+                        <InputLabel value="Clave de la categoría*" />
+                        <el-input v-model="form.key" placeholder="Ej. AUT" :maxlength="10" clearable />
+                        <InputError :message="form.errors.category" />
+                    </div>
+                </section>
 
                 <br>
                 <hr class="col-span-full border-grayD9">
@@ -178,6 +183,7 @@ export default {
     data() {
         const form = useForm({
             category: null,
+            key: null,
             image: null,
             subCategories: [{ name: '', subCategories: [], image: null, features: [] }],
         });
@@ -224,7 +230,7 @@ export default {
     },
     methods: {
         store() {
-            this.form.post(route('categories.store'), {
+            this.form.post(route('categories.store-with-subcategories'), {
                 onSuccess: () => {
                     this.form.reset();
                 },

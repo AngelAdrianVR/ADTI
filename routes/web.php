@@ -52,6 +52,7 @@ Route::get('products-search', [ProductController::class, 'searchProduct'])->name
 Route::resource('categories', CategoryController::class)->middleware('auth');
 Route::get('categories/fetch-subcategories/{category}', [CategoryController::class, 'fetchSubcategories'])->name('categories.fetch-subcategories')->middleware('auth');
 Route::post('categories/update-with-media/{category}', [CategoryController::class, 'updateWithMedia'])->name('categories.update-with-media')->middleware('auth');
+Route::post('categories/store-with-subcategories', [CategoryController::class, 'storeWithSubcategories'])->name('categories.store-with-subcategories')->middleware('auth');
 
 
 //Subcategory routes----------------------------------------------------------------------------------
