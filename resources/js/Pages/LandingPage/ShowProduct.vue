@@ -1,6 +1,7 @@
 <template>
     <PublicLayout :title="'Detalles de producto'">
         <main class="px-2 lg:p-28 xl:py-16 xl:px-48 py-7">
+            
             <!-- Decorations  -->
             <figure>
                 <img class="absolute top-40 left-0" src="@/../../public/images/home_decoration1.png" alt="">

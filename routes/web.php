@@ -9,17 +9,28 @@ use App\Http\Controllers\SubcategoryController;
 use App\Http\Controllers\UserController;
 use App\Models\Category;
 use App\Models\Product;
-use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', function () {
     $categories = Category::with('subcategories')->get();
 
+    // return $categories;
     return Inertia::render('Welcome', [
         'categories' => $categories,
     ]);
 })->name('welcome');
+
+
+//ruta para mostrar las subcategorías de categoría
+Route::get('/show-subcategories/{category_id}', function ($category_id) {
+    $category = Category::with(['media', 'subcategories.media'])->find($category_id);
+
+    // return $category;
+    return Inertia::render('LandingPage/ShowCategory', [
+        'category' => $category,
+    ]);
+})->name('public.show-category');
 
 
 //ruta para mostrar producto encontrado desde barra buscadora de inicio
@@ -27,9 +38,8 @@ Route::get('/show-product/{product_id}', function ($product_id) {
     $product = Product::with(['media', 'subcategory.category'])->find($product_id);
 
     // return $product;
-    return Inertia::render('ShowProduct', [
+    return Inertia::render('LandingPage/ShowProduct', [
         'product' => $product,
-        'canLogin' => Route::has('login'),
     ]);
 })->name('public.show-product');
 

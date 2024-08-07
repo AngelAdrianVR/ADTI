@@ -2,6 +2,7 @@
 import { Link } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
+import PublicCategoryCard from '@/Components/MyComponents/PublicLayout/PublicCategoryCard.vue';
 
 const props = defineProps({
   categories: Array,
@@ -13,7 +14,13 @@ const cascaderProps = {
 }
 
 const handleChange = (value) => {
-  console.log(value)
+  if ( value.length === 1 ) {
+    const category_id = this.categories.find(category => category.name === value[0]).id;
+    $inertia.get(route('public.show-category', category_id));
+  } else {
+    console.log('Es una subcategoría');
+  }
+    console.log(value[0]);
 }
 
 // Función para transformar categorías
@@ -80,7 +87,6 @@ const transformCategories = (categories) => {
   });
 };
 
-
 const options = computed(() => transformCategories(props.categories));
 
 </script>
@@ -98,7 +104,6 @@ const options = computed(() => transformCategories(props.categories));
             <!-- ------------ -->
 
             <body>
-
                 <!-- cascader -->
                 <div class="md:w-96">
                     <el-cascader
@@ -114,7 +119,11 @@ const options = computed(() => transformCategories(props.categories));
 
                 <!-- Vista de selección de categorías -->
                 <section class="mx-auto my-16">
-                    <h1 class="font-bold text-center">TODAS LAS CATEGORIAS</h1>
+                    <h1 class="font-bold text-center mb-5">TODAS LAS CATEGORIAS</h1>
+
+                    <div class="md:grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <PublicCategoryCard class="z-10" v-for="category in categories" :key="category" :category="category" />
+                    </div>
                 </section>
                 <!-- -------------------------------- -->
             </body>
