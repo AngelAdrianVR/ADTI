@@ -22,7 +22,15 @@ class CategoryController extends Controller
         return inertia('Category/Create', compact('features', 'measure_units'));
     }
 
-    public function storeWithSubcategories(Request $request) {
+    public function storeWithSubcategories(Request $request)
+    {
+        $validated = $request->validate([
+            'category' => 'required|string|max:255',
+            'key' => 'required|string|max:10',
+        ]);
+
+        $category = Category::create($validated);
+
         dd($request->all());
     }
 
