@@ -11,8 +11,8 @@
             subcategorías. Haz clic en “Editar” para modificar una categoría existente o en “Crear” para añadir una
             nueva categoría</p>
         <div class="text-sm mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <CategoryCard v-for="(item, index) in categories" :key="index" :category="item" />
-            <el-empty v-if="!categories.length" description="No hay categorias registradas aún" />
+            <CategoryCard v-for="(item, index) in categories" :key="index" :category="item" @deleted="fetchCategories()" />
+            <el-empty v-if="!categories.length" description="No hay categorias registradas aún" class="col-span-full" />
         </div>
     </div>
 </template>
