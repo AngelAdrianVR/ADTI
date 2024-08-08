@@ -195,7 +195,17 @@ class CategoryController extends Controller
 
     public function destroy(Category $category)
     {
-        //
+        $subcategories = $category->subcategories;
+        
+        // borrar cada subcategoria y sus productos por separado para que se elimine correctamente la imagen relacionada
+        foreach ($subcategories as $subcategory) {
+            $products = $subcategory->products;
+            $products->each(fn ($product) => $product->delete());
+            $subcategory->delete();
+        }
+
+        // finalmente borrar la categoria
+        $category->delete();
     }
 
     // API
