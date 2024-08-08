@@ -9,9 +9,11 @@ use App\Http\Controllers\SubcategoryController;
 use App\Http\Controllers\UserController;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\Subcategory;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+//muestra la página principal de la landing.
 Route::get('/', function () {
     $categories = Category::with('subcategories')->get();
 
@@ -23,7 +25,7 @@ Route::get('/', function () {
 
 
 //ruta para mostrar las subcategorías de categoría
-Route::get('/show-subcategories/{category_id}', function ($category_id) {
+Route::get('/show-category/{category_id}', function ($category_id) {
     $category = Category::with(['media', 'subcategories.media'])->find($category_id);
 
     // return $category;
@@ -31,6 +33,17 @@ Route::get('/show-subcategories/{category_id}', function ($category_id) {
         'category' => $category,
     ]);
 })->name('public.show-category');
+
+
+//ruta para mostrar las subcategorías de una subcategoría seleccionada
+Route::get('/show-subcategory/{subcategory_id}', function ($subcategory_id) {
+    $subcategory = Subcategory::with(['media', 'category'=>['subcategories.media', 'media']])->find($subcategory_id);
+
+    // return $subcategory;
+    return Inertia::render('LandingPage/ShowSubcategory', [
+        'subcategory' => $subcategory,
+    ]);
+})->name('public.show-subcategory');
 
 
 //ruta para mostrar producto encontrado desde barra buscadora de inicio

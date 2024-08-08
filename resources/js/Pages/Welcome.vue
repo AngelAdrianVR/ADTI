@@ -1,6 +1,7 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
+import { router } from '@inertiajs/vue3';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
 import PublicCategoryCard from '@/Components/MyComponents/PublicLayout/PublicCategoryCard.vue';
 
@@ -13,14 +14,20 @@ const cascaderProps = {
   checkStrictly: true, //single selection
 }
 
-const handleChange = (value) => {
+const value = ref([]);
+
+const handleChange = (value) => { //el value es un arreglo que guarda las selecciones del cascader. el index equivale al nivel de profundidad
+//si value solo tiene 1 elemento significa que es categoría, si tiene mas, es subcategoría
   if ( value.length === 1 ) {
-    const category_id = this.categories.find(category => category.name === value[0]).id;
-    $inertia.get(route('public.show-category', category_id));
+    const category_id = props.categories.find(category => category.name === value[0]).id; //obtiene el id de la categoría seleccionada 
+    router.get(route('public.show-category', category_id)); //direcciona a la ruta que muestra las subcategorías
   } else {
-    console.log('Es una subcategoría');
+    const level = value.length; //obctiene el nivel de la opcion seleccionada 0-> categoría, mayor a 0 es subcategoría.
+    const category = props.categories.find(cat => cat.name === value[0]); //se guarda la categría de la que forma parte la subcategoría seleccionada.
+    console.log(category);
+    const subcategory_id = category?.subcategories.find(sb => sb.name === value[(level - 1)]).id; //se busca el id de la subcategoría seleccionada
+    router.get(route('public.show-subcategory', subcategory_id)); //direcciona a la ruta que muestra las subcategorías
   }
-    console.log(value[0]);
 }
 
 // Función para transformar categorías
@@ -80,9 +87,6 @@ const transformCategories = (categories) => {
 
     transformedCategory.children.push(...level1);
 
-    // console.log(level1);
-    // console.log(level2);
-    // console.log(level3);
     return transformedCategory;
   });
 };

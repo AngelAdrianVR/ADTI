@@ -18,7 +18,7 @@
             <ul class="space-y-1">
                 <li class="text-sm cursor-pointer hover:text-primary"
                     v-for="subcategory in category.subcategories?.filter(sb => sb.level === 1)" :key="subcategory"
-                    @click="$inertia.get(route('/'))">
+                    @click="$inertia.get(route('public.show-subcategory', subcategory.id))">
                     {{ subcategory.name }}
                 </li>
             </ul>
