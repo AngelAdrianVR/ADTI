@@ -70,7 +70,7 @@ export default {
     },
     props: {
         roles: Array,
-        permissions: Array,
+        permissions: Object,
     },
     methods: {
         handleClick(tab) {

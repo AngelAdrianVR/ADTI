@@ -59,7 +59,7 @@
                     <button @click="removeImage" class="absolute p-1 top-1 right-1 z-10 text-xs">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
-                    <img :src="subCategory.image" alt="Image Preview" class="size-32 object-contain opacity-50" />
+                    <img :src="getImageUrl" alt="Image Preview" class="size-32 object-contain opacity-50" />
                 </figure>
             </div>
             <div v-if="subCategory.features.length" class="mt-2 ml-12">
@@ -121,7 +121,7 @@ import DialogModal from "@/Components/DialogModal.vue";
 export default {
     data() {
         return {
-            imageUrl: null,
+            // imageUrl: null,
             showFeatureInheritedConfirm: false,
         };
     },
@@ -147,7 +147,10 @@ export default {
         },
         canAddCharacteristics() {
             return this.subCategory.subCategories.length === 0;
-        }
+        },
+        getImageUrl() {
+            return URL.createObjectURL(this.subCategory.image);
+        },
     },
     methods: {
         deleteFeaturesAndCreateSubCategory() {

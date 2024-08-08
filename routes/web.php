@@ -94,6 +94,7 @@ Route::resource('categories', CategoryController::class)->middleware('auth');
 Route::get('categories/fetch-subcategories/{category}', [CategoryController::class, 'fetchSubcategories'])->name('categories.fetch-subcategories')->middleware('auth');
 Route::post('categories/update-with-media/{category}', [CategoryController::class, 'updateWithMedia'])->name('categories.update-with-media')->middleware('auth');
 Route::post('categories/store-with-subcategories', [CategoryController::class, 'storeWithSubcategories'])->name('categories.store-with-subcategories')->middleware('auth');
+Route::post('categories/update-with-subcategories/{category}', [CategoryController::class, 'updateWithSubcategories'])->name('categories.update-with-subcategories')->middleware('auth');
 Route::get('categories-get-all', [CategoryController::class, 'getAll'])->name('categories.get-all')->middleware('auth');
 
 
@@ -101,6 +102,7 @@ Route::get('categories-get-all', [CategoryController::class, 'getAll'])->name('c
 //----------------------------------------------------------------------------------------------------
 Route::resource('subcategories', SubcategoryController::class)->middleware('auth');
 Route::post('subcategories/update-with-media/{subcategory}', [SubcategoryController::class, 'updateWithMedia'])->name('subcategories.update-with-media')->middleware('auth');
+Route::get('subcategories-download-excel-template/{subcategory}', [SubcategoryController::class, 'generateExcelTemplate'])->name('subcategories.download-excel-template')->middleware('auth');
 
 
 //measure unit routes----------------------------------------------------------------------------------
