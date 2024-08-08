@@ -1,12 +1,16 @@
 <template>
     <PublicLayout :title="'Detalles de producto'">
-        <main class="px-2 lg:p-28 xl:py-16 xl:px-48 py-7">
+        <main class="px-2 lg:p-5 xl:py-2 xl:px-48 py-7 mx-auto">
+            
+            <div class="my-2 -ml-2">
+                <Back />
+            </div>
             
             <!-- Decorations  -->
             <figure>
-                <img class="absolute top-40 left-0" src="@/../../public/images/home_decoration1.png" alt="">
-                <img class="hidden md:block absolute top-20 left-0" src="@/../../public/images/home_decoration2.png" alt="">
-                <img class="absolute top-20 right-0" src="@/../../public/images/home_decoration3.png" alt="">
+                <img class="absolute top-40 left-0 z-0" src="@/../../public/images/home_decoration1.png" alt="">
+                <!-- <img class="hidden md:block absolute top-20 left-0 z-0" src="@/../../public/images/home_decoration2.png" alt=""> -->
+                <img class="absolute top-20 right-0 z-0" src="@/../../public/images/home_decoration3.png" alt="">
             </figure>
             <!-- ------------ -->
 
@@ -22,13 +26,13 @@
             </div>
 
             <!-- Info de producto -->
-            <div class="md:grid xl:grid-cols-2 gap-x-4 mx-2 md:mx-6">
+            <div class="md:grid xl:grid-cols-2 gap-x-28 mx-2 md:mx-6">
                 <!-- fotografia de producto -->
                 <section>
-                    <figure class="border h-64 md:h-[420px] md:w-[500px] border-grayD9 rounded-lg flex justify-center items-center">
+                    <figure class="border h-64 md:h-[420px] md:w-[500px] border-grayD9 rounded-lg flex justify-center items-center bg-white z-50">
                         <img v-if="product.media?.find(img => img.collection_name === 'imageCover')" class="h-52 md:h-96 mx-auto object-contain"
                             :src="product.media?.find(img => img.collection_name === 'imageCover')?.original_url" alt="product's image cover">
-                        <div v-else>
+                        <div class="bg-white z-50" v-else>
                             <i class="fa-regular fa-image text-9xl text-gray-200"></i>
                             <p class="text-sm text-gray-300">Imagen no disponible</p>
                         </div>
@@ -37,7 +41,6 @@
 
                 <!-- informacion de producto -->
                 <section class="my-3 lg:my-5">
-
                     <p class="text-primary">Número de parte: {{ product.part_number }}</p>
                     <p class="text-primary text-3xl font-bold mt-1">{{ product.name }}</p>
                     <p class="text-[#8B8B8B] my-4">UBICACIÓN ALMACÉN: {{ product.location }}</p>

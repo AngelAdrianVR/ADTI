@@ -37,7 +37,11 @@ Route::get('/show-category/{category_id}', function ($category_id) {
 
 //ruta para mostrar las subcategorías de una subcategoría seleccionada
 Route::get('/show-subcategory/{subcategory_id}', function ($subcategory_id) {
-    $subcategory = Subcategory::with(['media', 'category'=>['subcategories.media', 'media']])->find($subcategory_id);
+    $subcategory = Subcategory::with(['media', 'products' => function($query) {
+        $query->select('id', 'name', 'description', 'part_number', 'location', 'subcategory_id')
+              ->with('media'); // Asegúrate de incluir la relación 'media' dentro de 'products'
+    }, 'category.subcategories.media', 'category.media'])
+    ->find($subcategory_id);
 
     // return $subcategory;
     return Inertia::render('LandingPage/ShowSubcategory', [
