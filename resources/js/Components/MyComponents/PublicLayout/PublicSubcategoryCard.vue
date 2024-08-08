@@ -3,8 +3,8 @@
         <!-- Imagen de la subcategoría -->
         <figure @click="$inertia.get(route('public.show-subcategory', subcategory.id))" class="border border-grayD9 hover:border-primary rounded-md p-2 bg-white cursor-pointer flex flex-col justify-center items-center">
             <div class="flex justify-center items-center size-24">
-                <img v-if="subcategory.media?.length" class="mx-auto object-contain"
-                    :src="subcategory.media?.original_url" alt="subcategory's image cover">
+                <img v-if="subcategory.media?.length" class="mx-auto h-full object-contain"
+                    :src="subcategory.media[0]?.original_url" alt="subcategory's image cover">
                 <div class="text-center" v-else>
                     <i class="fa-regular fa-image text-7xl text-gray-200"></i>
                 </div>

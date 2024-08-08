@@ -1,11 +1,7 @@
 <template>
     <PublicLayout :title="'Detalles de producto'">
-        <main class="px-2 lg:p-5 xl:py-2 xl:px-48 py-7 mx-auto">
-            
-            <div class="my-2 -ml-2">
-                <Back />
-            </div>
-            
+        <main class="px-2 lg:p-8 xl:px-48 py-7 mx-auto">
+                        
             <!-- Decorations  -->
             <figure>
                 <img class="absolute top-40 left-0 z-0" src="@/../../public/images/home_decoration1.png" alt="">
@@ -16,13 +12,19 @@
 
             <!-- bread crumbles -->
             <div class="flex items-center space-x-3 text-sm text-gray99 mb-9 mx-2 md:mx-6">
-                <p>Inicio</p>
+                <p class="cursor-pointer hover:text-primary" @click="$inertia.get(route('welcome'))">Inicio</p>
+                <i class="fa-solid fa-angle-right text-xs"></i>
+                <p class="cursor-pointer hover:text-primary" @click="$inertia.get(route('public.show-category', product.subcategory?.category?.id))">{{ product.subcategory?.category?.name }}</p>
                 <i class="fa-solid fa-angle-right text-xs"></i>
                 <div class="flex items-center space-x-3" v-for="subcategory in product.bread_crumbles" :key="subcategory">
-                    <p>{{ subcategory }}</p>
+                    <p @click="getSubcategoryRoute(subcategory)" class="cursor-pointer hover:text-primary">{{ subcategory }}</p>
                     <i class="fa-solid fa-angle-right text-xs"></i>
                 </div>
-                <p>{{ product.name }}</p>
+                <p class='text-primary font-bold'>{{ product.name }}</p>
+            </div>
+
+            <div class="my-2 -ml-2">
+                <Back />
             </div>
 
             <!-- Info de producto -->
@@ -93,6 +95,11 @@ components:{
 props:{
     product: Object
 },
-
+methods:{
+    getSubcategoryRoute(subcategory) {
+        const subcategory_id = this.product.subcategory?.category?.subcategories.find(sb => sb.name === subcategory)?.id;
+        this.$inertia.get(route('public.show-subcategory', subcategory_id));
+    }
 }
+};
 </script>

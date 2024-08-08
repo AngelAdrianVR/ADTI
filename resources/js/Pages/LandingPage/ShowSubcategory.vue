@@ -1,20 +1,21 @@
 <template>
     <PublicLayout :title="subcategory.name">
-        <main class="px-2 lg:p-28 xl:py-8 xl:px-48 py-7">
+        <main class="px-2 lg:p-8 xl:px-48 py-7">
             <!-- Decorations  -->
             <figure class="*:z-0">
-                <img class="absolute top-40 left-0" src="@/../../public/images/home_decoration1.png" alt="">
-                <!-- <img class="hidden md:block absolute top-20 left-0" src="@/../../public/images/home_decoration2.png" alt=""> -->
-                <img class="absolute top-20 right-0" src="@/../../public/images/home_decoration3.png" alt="">
+                <img class="hidden lg:block absolute top-40 left-0" src="@/../../public/images/home_decoration1.png" alt="">
+                <!-- <img class="hidden lg:block absolute top-20 left-0" src="@/../../public/images/home_decoration2.png" alt=""> -->
+                <img class="hidden lg:block absolute top-20 right-0" src="@/../../public/images/home_decoration3.png" alt="">
             </figure>
             <!-- ------------ -->
 
             <!-- bread crumbles -->
             <div class="flex items-center space-x-3 text-sm text-gray99 mb-5 mx-2 md:mx-6">
-                <p>Inicio</p>
+                <p class="cursor-pointer hover:text-primary" @click="$inertia.get(route('welcome'))">Inicio</p>
                 <i class="fa-solid fa-angle-right text-xs"></i>
                 <div class="flex items-center space-x-3" v-for="(subcategory, index) in breadCrumbles" :key="subcategory">
-                    <p>{{ subcategory }}</p>
+                    <p @click="index === 0 ? $inertia.get(route('public.show-category', subcategory.id)) : $inertia.get(route('public.show-subcategory', subcategory.id))"
+                        class="cursor-pointer hover:text-primary" :class="subcategory.name === this.subcategory.name ? 'text-primary font-bold' : ''">{{ subcategory.name }}</p>
                     <i v-if="breadCrumbles.length !== (index + 1) " class="fa-solid fa-angle-right text-xs"></i>                    
                 </div>
             </div>
@@ -73,13 +74,13 @@ computed:{
         }
     }
 },
-mounted() {
+mounted() { //guarda todas las subcategorias para el breas crumbles
     let currentSubcategory = this.subcategory;
 
     // Recorre hacia atrás en los niveles de subcategorías
     while (1) {
         // Agrega el nombre de la subcategoría actual al arreglo
-        this.breadCrumbles.unshift(currentSubcategory.name);
+        this.breadCrumbles.unshift({name: currentSubcategory.name, id: currentSubcategory.id});
 
         // Verificar si la subcategoría actual es de nivel 1 o si no tiene un prev_subcategory_id
         if (currentSubcategory.level === 1 || !currentSubcategory.prev_subcategory_id) {
@@ -92,7 +93,7 @@ mounted() {
 
     // Finalmente, agrega el nombre de la categoría principal
     if (this.subcategory.category) {
-        this.breadCrumbles.unshift(this.subcategory.category.name);
+        this.breadCrumbles.unshift({name: this.subcategory.category.name, id:this.subcategory.category.id});
     }
 }
 }

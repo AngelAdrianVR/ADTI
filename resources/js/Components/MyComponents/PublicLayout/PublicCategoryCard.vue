@@ -2,9 +2,9 @@
     <main class="p-3">
         <!-- Imagen de la categoría -->
         <figure @click="$inertia.get(route('public.show-category', category.id))" 
-            class="border border-grayD9 rounded-md flex justify-center items-center p-3 bg-white cursor-pointer hover:border-primary">
-            <img v-if="category.media?.length" class="mx-auto object-contain"
-                :src="category.media?.original_url" alt="category's image cover">
+            class="border border-grayD9 rounded-md flex justify-center items-center p-3 bg-white cursor-pointer hover:border-primary h-56">
+            <img v-if="category.media?.length" class="mx-auto h-full object-contain"
+                :src="category.media[0]?.original_url" alt="category's image cover">
             <div v-else>
                 <i class="fa-regular fa-image text-9xl text-gray-200"></i>
                 <p class="text-sm text-gray-300">Imagen no disponible</p>
