@@ -3,7 +3,7 @@
         <div class="px-3 md:px-16 py-8">
             <Back :to="route('settings.index', { currentTab: 1 })" />
 
-            <form @submit.prevent="store" class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-1/2 mx-auto mt-2">
+            <form @submit.prevent="update" class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-1/2 mx-auto mt-2">
                 <h1 class="font-bold ml-2 col-span-full">Editar categoría</h1>
 
                 <section class="my-3 grid grid-cols-2 gap-3">
@@ -32,7 +32,7 @@
                                 <button @click="removeImage" class="absolute p-1 top-1 right-1 z-10 text-xs">
                                     <i class="fa-solid fa-xmark"></i>
                                 </button>
-                                <img :src="form.image" alt="Image Preview" class="size-32 object-contain opacity-50" />
+                                <img :src="getImageUrl" alt="Image Preview" class="size-32 object-contain opacity-50" />
                             </figure>
                         </div>
                     </div>
@@ -224,26 +224,49 @@ export default {
                 return !this.localFeatures.some(localFeature => localFeature.name === feature.name);
             });
         },
+        getImageUrl() {
+            return URL.createObjectURL(this.form.image);
+        }
     },
     methods: {
-        transformData(data) {
+        async urlToFile(url, filename, mimeType) {
+            const response = await fetch(url);
+            const buffer = await response.arrayBuffer();
+            return new File([buffer], filename, { type: mimeType });
+        },
+        async transformData(data) {
             // Inicializa la categoría principal
             this.form.category = data.name;
             this.form.key = data.key;
-            this.form.image = data.media.length ? data.media[0].original_url : null;
+
+            // Convertir la imagen principal si existe
+            if (data.media.length) {
+                const media = data.media[0];
+                this.form.image = await this.urlToFile(media.original_url, media.file_name, media.mime_type);
+            } else {
+                this.image = null;
+            }
 
             // Organiza las subcategorías
             const map = new Map();
 
-            data.subcategories.forEach(subcategory => {
-                map.set(subcategory.id, {
+            for (const subcategory of data.subcategories) {
+                const subCategoryData = {
                     id: subcategory.id,
                     name: subcategory.name,
                     subCategories: [],
-                    image: subcategory.media.length ? subcategory.media[0].original_url : null,
+                    image: null,
                     features: subcategory.features || [],
-                });
-            });
+                };
+
+                // Convertir la imagen de la subcategoría si existe
+                if (subcategory.media.length) {
+                    const media = subcategory.media[0];
+                    subCategoryData.image = await this.urlToFile(media.original_url, media.file_name, media.mime_type);
+                }
+
+                map.set(subcategory.id, subCategoryData);
+            }
 
             const subCategories = [];
 
@@ -261,9 +284,15 @@ export default {
             this.form.subCategories = subCategories;
         },
         update() {
-            this.form.post(route('categories.update-with-subcategories'), {
+            this.form.post(route("categories.update-with-subcategories", this.category.id), {
+                method: '_put',
                 onSuccess: () => {
-                    this.form.reset();
+                    this.$notify({
+                        title: "Correcto",
+                        message: "",
+                        type: "success",
+                    });
+
                 },
                 onError: (errors) => {
                     console.log(errors);
@@ -415,8 +444,8 @@ export default {
             this.localFeatures.splice(index, 1);
         }
     },
-    mounted() {
-        this.transformData(this.category);
+    async mounted() {
+        await this.transformData(this.category);
     }
 }
 </script>

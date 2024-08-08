@@ -34,6 +34,7 @@
                 </div>
             </figure>
             <section class="lg:mx-5 mt-4">
+                <h1 class="font-bold text-primary">{{ category.name }}</h1>
                 <el-tree :data="data" default-expand-all :expand-on-click-node="false" :props="defaultProps"
                     @node-click="handleNodeClick">
                     <template #default="{ node, data }">

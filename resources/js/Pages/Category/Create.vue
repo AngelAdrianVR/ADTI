@@ -60,7 +60,8 @@
                         @removeFeatures="removeFeatures" @openFeaturesModal="openFeaturesModal" />
                 </div>
                 <div class="col-span-full text-right mt-7">
-                    <PrimaryButton class="!rounded-full" :disabled="form.processing || subcategoryNameEmpty(form.subCategories)">
+                    <PrimaryButton class="!rounded-full"
+                        :disabled="form.processing || subcategoryNameEmpty(form.subCategories)">
                         <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
                         Crear categoría
                     </PrimaryButton>
@@ -229,7 +230,11 @@ export default {
         store() {
             this.form.post(route('categories.store-with-subcategories'), {
                 onSuccess: () => {
-                    this.form.reset();
+                    this.$notify({
+                        title: "Correcto",
+                        message: "",
+                        type: "success",
+                    });
                 },
                 onError: (errors) => {
                     console.log(errors);
