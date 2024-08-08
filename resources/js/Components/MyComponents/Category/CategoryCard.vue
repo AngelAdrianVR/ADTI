@@ -107,7 +107,8 @@ export default {
     },
     methods: {
         downloadTemplate(data) {
-            this.$inertia.visit(route('subcategories.download-excel-template', data.id))
+            const url = route('subcategories.download-excel-template', data.id);
+            window.open(url, '_blank');
         },
         handleNodeClick(data) {
             console.log(data)
