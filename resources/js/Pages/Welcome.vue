@@ -1,90 +1,97 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import { router } from '@inertiajs/vue3';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
+import PublicCategoryCard from '@/Components/MyComponents/PublicLayout/PublicCategoryCard.vue';
 
-defineProps({
-
+const props = defineProps({
+  categories: Array,
 });
 
-const props = {
-  expandTrigger: 'hover',
+const cascaderProps = {
+  // expandTrigger: 'hover',
   checkStrictly: true, //single selection
 }
 
-const handleChange = (value) => {
-  console.log(value)
+const value = ref([]);
+
+const handleChange = (value) => { //el value es un arreglo que guarda las selecciones del cascader. el index equivale al nivel de profundidad
+//si value solo tiene 1 elemento significa que es categoría, si tiene mas, es subcategoría
+  if ( value.length === 1 ) {
+    const category_id = props.categories.find(category => category.name === value[0]).id; //obtiene el id de la categoría seleccionada 
+    router.get(route('public.show-category', category_id)); //direcciona a la ruta que muestra las subcategorías
+  } else {
+    const level = value.length; //obctiene el nivel de la opcion seleccionada 0-> categoría, mayor a 0 es subcategoría.
+    const category = props.categories.find(cat => cat.name === value[0]); //se guarda la categría de la que forma parte la subcategoría seleccionada.
+    console.log(category);
+    const subcategory_id = category?.subcategories.find(sb => sb.name === value[(level - 1)]).id; //se busca el id de la subcategoría seleccionada
+    router.get(route('public.show-subcategory', subcategory_id)); //direcciona a la ruta que muestra las subcategorías
+  }
 }
 
-const options = [
-  {
-    value: 'Automatización',
-    label: 'Automatización',
-    children: [
-      {
-        value: 'Movimiento lineal',
-        label: 'Movimiento lineal',
-        children: [
-          {
-            value: 'Guías de bolas',
-            label: 'Guías de bolas',
-          },
-          {
-            value: 'Guías lineales',
-            label: 'Guías lineales',
-          },
-        ],
-      },
-      {
-        value: 'Movimiento radial',
-        label: 'Movimiento radial',
-        children: [
-          {
-            value: 'Guias radiales',
-            label: 'Guias radiales',
-          },
-          {
-            value: 'Gupias uniformes',
-            label: 'Gupias uniformes',
-          },
-        ],
-      },
-    ],
-  },
-  {
-    value: 'Sujetadores y tornillos',
-    label: 'Sujetadores y tornillos',
-    children: [
-      {
-        value: 'Tornillos y pernos',
-        label: 'Tornillos y pernos',
-        children: [
-          {
-            value: 'cabeza cuadrada',
-            label: 'cabeza cuadrada',
-          },
-          {
-            value: 'Cabeza redonda',
-            label: 'Cabeza redonda',
-          },
-        ],
-      },
-      {
-        value: 'Tornillos de cruz',
-        label: 'Tornillos de cruz',
-        children: [
-          {
-            value: 'Hallen',
-            label: 'Hallen',
-          },
-          {
-            value: 'Phillips',
-            label: 'Phillips',
-          },
-        ],
-      },
-    ],
-  },
-];
+// Función para transformar categorías
+const transformCategories = (categories) => {
+  if (!categories || !Array.isArray(categories)) return []; // Asegúrate de que categories esté definido y sea un arreglo
+
+  return categories.map(category => {
+    const transformedCategory = {
+      value: category.name,
+      label: category.name,
+      children: []
+    };
+
+    // Organizar subcategorías por nivel
+    let level1 = [];
+    let level2 = [];
+    let level3 = [];
+
+    category.subcategories.forEach(subcategory => {
+      if (subcategory.level === 1) {
+        level1.push({
+          id: subcategory.id,
+          value: subcategory.name,
+          label: subcategory.name,
+          children: []
+        });
+      } else if (subcategory.level === 2) {
+        level2.push({
+          id: subcategory.id,
+          value: subcategory.name,
+          label: subcategory.name,
+          prev_sub: subcategory.prev_subcategory_id,
+          children: []
+        });
+      } else if (subcategory.level === 3) {
+        level3.push({
+          id: subcategory.id,
+          value: subcategory.name,
+          label: subcategory.name,
+          prev_sub: subcategory.prev_subcategory_id,
+          children: []
+        });
+      }
+    });
+
+    // Añadir subcategorías de nivel 2 a las correspondientes de nivel 1
+    level2.forEach(l2 => {
+      const parent = level1.find(l1 => l1.id === l2.prev_sub);
+      if (parent) parent.children.push(l2);
+    });
+
+    // Añadir subcategorías de nivel 3 a las correspondientes de nivel 2
+    level3.forEach(l3 => {
+      const parent = level2.find(l2 => l2.id === l3.prev_sub);
+      if (parent) parent.children.push(l3);
+    });
+
+    transformedCategory.children.push(...level1);
+
+    return transformedCategory;
+  });
+};
+
+const options = computed(() => transformCategories(props.categories));
 
 </script>
 
@@ -101,14 +108,13 @@ const options = [
             <!-- ------------ -->
 
             <body>
-
                 <!-- cascader -->
                 <div class="md:w-96">
                     <el-cascader
                     class="!w-full"
                     v-model="value"
                     :options="options"
-                    :props="props"
+                    :props="cascaderProps"
                     @change="handleChange"
                     placeholder="Todas las categorías"
                     />
@@ -117,7 +123,11 @@ const options = [
 
                 <!-- Vista de selección de categorías -->
                 <section class="mx-auto my-16">
-                    <h1 class="font-bold text-center">TODAS LAS CATEGORIAS</h1>
+                    <h1 class="font-bold text-center mb-5">TODAS LAS CATEGORIAS</h1>
+
+                    <div class="md:grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <PublicCategoryCard class="z-10" v-for="category in categories" :key="category" :category="category" />
+                    </div>
                 </section>
                 <!-- -------------------------------- -->
             </body>

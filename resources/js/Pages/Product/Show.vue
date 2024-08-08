@@ -47,8 +47,8 @@
                 <!-- fotografia de producto -->
                 <section class="mt-7">
                     <figure class="border h-64 md:h-96 border-grayD9 rounded-lg flex justify-center items-center">
-                        <img v-if="product.media?.length" class="h-52 md:h-80 mx-auto object-contain"
-                            :src="product.media[0]?.original_url" alt="product's image cover">
+                        <img v-if="product.media?.find(img => img.collection_name === 'imageCover')" class="h-52 md:h-80 mx-auto object-contain"
+                            :src="product.media?.find(img => img.collection_name === 'imageCover')?.original_url" alt="product's image cover">
                         <div v-else>
                             <i class="fa-regular fa-image text-9xl text-gray-200"></i>
                             <p class="text-sm text-gray-300">Imagen no disponible</p>

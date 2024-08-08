@@ -7,18 +7,59 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SubcategoryController;
 use App\Http\Controllers\UserController;
-use Illuminate\Foundation\Application;
+use App\Models\Category;
+use App\Models\Product;
+use App\Models\Subcategory;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+//muestra la página principal de la landing.
 Route::get('/', function () {
+    $categories = Category::with('subcategories')->get();
+
+    // return $categories;
     return Inertia::render('Welcome', [
-        'canLogin' => Route::has('login'),
-        'canRegister' => Route::has('register'),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
+        'categories' => $categories,
     ]);
-});
+})->name('welcome');
+
+
+//ruta para mostrar las subcategorías de categoría
+Route::get('/show-category/{category_id}', function ($category_id) {
+    $category = Category::with(['media', 'subcategories.media'])->find($category_id);
+
+    // return $category;
+    return Inertia::render('LandingPage/ShowCategory', [
+        'category' => $category,
+    ]);
+})->name('public.show-category');
+
+
+//ruta para mostrar las subcategorías de una subcategoría seleccionada
+Route::get('/show-subcategory/{subcategory_id}', function ($subcategory_id) {
+    $subcategory = Subcategory::with(['media', 'products' => function($query) {
+        $query->select('id', 'name', 'description', 'part_number', 'location', 'subcategory_id')
+              ->with('media'); // Asegúrate de incluir la relación 'media' dentro de 'products'
+    }, 'category.subcategories.media', 'category.media'])
+    ->find($subcategory_id);
+
+    // return $subcategory;
+    return Inertia::render('LandingPage/ShowSubcategory', [
+        'subcategory' => $subcategory,
+    ]);
+})->name('public.show-subcategory');
+
+
+//ruta para mostrar producto encontrado desde barra buscadora de inicio
+Route::get('/show-product/{product_id}', function ($product_id) {
+    $product = Product::with(['media', 'subcategory.category'])->find($product_id);
+
+    // return $product;
+    return Inertia::render('LandingPage/ShowProduct', [
+        'product' => $product,
+    ]);
+})->name('public.show-product');
+
 
 Route::middleware([
     'auth:sanctum',
@@ -44,7 +85,7 @@ Route::post('users/massive-delete', [UserController::class, 'massiveDelete'])->n
 Route::resource('products', ProductController::class)->middleware('auth');
 Route::post('products/update-with-media/{product}', [ProductController::class, 'updateWithMedia'])->name('products.update-with-media')->middleware('auth');
 Route::post('products/massive-delete', [ProductController::class, 'massiveDelete'])->name('products.massive-delete');
-Route::get('products-search', [ProductController::class, 'searchProduct'])->name('products.search')->middleware('auth');
+Route::get('products-search', [ProductController::class, 'searchProduct'])->name('products.search');
 
 
 //Category routes----------------------------------------------------------------------------------
