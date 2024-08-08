@@ -63,7 +63,7 @@
                                             </Link>
                                         </p>
                                     </template>
-                                    <button
+                                    <button @click="downloadTemplate(data)"
                                         class="size-6 rounded-full flex items-center justify-center text-secondary hover:text-white hover:bg-primary">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                             stroke-width="1.5" stroke="currentColor" class="size-4">
@@ -106,6 +106,9 @@ export default {
         category: Object,
     },
     methods: {
+        downloadTemplate(data) {
+            this.$inertia.visit(route('subcategories.download-excel-template', data.id))
+        },
         handleNodeClick(data) {
             console.log(data)
         },
@@ -115,6 +118,7 @@ export default {
             // Organizar las subcategorías en un mapa por su ID
             this.category.subcategories.forEach(subcategory => {
                 map.set(subcategory.id, {
+                    id: subcategory.id,
                     label: subcategory.name,
                     features: subcategory.features, // Incluyendo las características
                     children: []

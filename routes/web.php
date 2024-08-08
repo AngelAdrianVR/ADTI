@@ -61,6 +61,7 @@ Route::get('categories-get-all', [CategoryController::class, 'getAll'])->name('c
 //----------------------------------------------------------------------------------------------------
 Route::resource('subcategories', SubcategoryController::class)->middleware('auth');
 Route::post('subcategories/update-with-media/{subcategory}', [SubcategoryController::class, 'updateWithMedia'])->name('subcategories.update-with-media')->middleware('auth');
+Route::get('subcategories-download-excel-template/{subcategory}', [SubcategoryController::class, 'generateExcelTemplate'])->name('subcategories.download-excel-template')->middleware('auth');
 
 
 //measure unit routes----------------------------------------------------------------------------------
