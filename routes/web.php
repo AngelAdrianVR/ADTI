@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\FeatureController;
 use App\Http\Controllers\MeasureUnitController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SettingController;
@@ -51,6 +52,8 @@ Route::get('products-search', [ProductController::class, 'searchProduct'])->name
 Route::resource('categories', CategoryController::class)->middleware('auth');
 Route::get('categories/fetch-subcategories/{category}', [CategoryController::class, 'fetchSubcategories'])->name('categories.fetch-subcategories')->middleware('auth');
 Route::post('categories/update-with-media/{category}', [CategoryController::class, 'updateWithMedia'])->name('categories.update-with-media')->middleware('auth');
+Route::post('categories/store-with-subcategories', [CategoryController::class, 'storeWithSubcategories'])->name('categories.store-with-subcategories')->middleware('auth');
+Route::get('categories-get-all', [CategoryController::class, 'getAll'])->name('categories.get-all')->middleware('auth');
 
 
 //Subcategory routes----------------------------------------------------------------------------------
@@ -62,6 +65,11 @@ Route::post('subcategories/update-with-media/{subcategory}', [SubcategoryControl
 //measure unit routes----------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------
 Route::resource('measure_units', MeasureUnitController::class)->middleware('auth');
+
+
+//features routes----------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::resource('features', FeatureController::class)->middleware('auth');
 
 
 //settings routes----------------------------------------------------------------------------------
