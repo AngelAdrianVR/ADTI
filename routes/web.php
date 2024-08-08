@@ -15,7 +15,7 @@ use Inertia\Inertia;
 
 //muestra la página principal de la landing.
 Route::get('/', function () {
-    $categories = Category::with('subcategories')->get();
+    $categories = Category::with('subcategories', 'media')->get();
 
     // return $categories;
     return Inertia::render('Welcome', [
@@ -52,7 +52,7 @@ Route::get('/show-subcategory/{subcategory_id}', function ($subcategory_id) {
 
 //ruta para mostrar producto encontrado desde barra buscadora de inicio
 Route::get('/show-product/{product_id}', function ($product_id) {
-    $product = Product::with(['media', 'subcategory.category'])->find($product_id);
+    $product = Product::with(['media', 'subcategory' => ['category.subcategories']])->find($product_id);
 
     // return $product;
     return Inertia::render('LandingPage/ShowProduct', [

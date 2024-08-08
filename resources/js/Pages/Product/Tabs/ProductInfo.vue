@@ -6,8 +6,13 @@
         </div>
 
         <div class="flex mt-2">
-            <p class="text-[#6D6E72] w-48">Número de parte:</p>
+            <p class="text-[#6D6E72] w-48">Número de parte interno:</p>
             <p class="text-black">{{ product.part_number }}</p>
+        </div>
+
+        <div class="flex mt-2">
+            <p class="text-[#6D6E72] w-48">Número de parte de fabricante:</p>
+            <p class="text-black">{{ product.part_number_supplier }}</p>
         </div>
 
         <div class="flex mt-2">

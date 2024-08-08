@@ -4,7 +4,7 @@
             <Back :to="route('users.index')" />
 
             <form @submit.prevent="store"
-                class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-1/2 mx-auto mt-2 lg:grid lg:grid-cols-2 gap-3">
+                class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-2/3 xl:w-1/2 mx-auto mt-2 lg:grid lg:grid-cols-2 gap-3">
                 <h1 class="font-bold ml-2 col-span-full">Crear usuario</h1>
                 <p class="col-span-full text-sm px-2 py-1 bg-blue-100 rounded-sm">
                     La contraseña por defecto es <b>123456</b>. Esta puede cambiarla el usuario desde su perfil.

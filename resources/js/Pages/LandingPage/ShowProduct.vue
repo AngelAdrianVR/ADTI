@@ -1,11 +1,7 @@
 <template>
     <PublicLayout :title="'Detalles de producto'">
-        <main class="px-2 lg:p-5 xl:py-2 xl:px-48 py-7 mx-auto">
-            
-            <div class="my-2 -ml-2">
-                <Back />
-            </div>
-            
+        <main class="px-2 lg:p-8 xl:px-48 py-7 mx-auto">
+                        
             <!-- Decorations  -->
             <figure>
                 <img class="absolute top-40 left-0 z-0" src="@/../../public/images/home_decoration1.png" alt="">
@@ -16,13 +12,19 @@
 
             <!-- bread crumbles -->
             <div class="flex items-center space-x-3 text-sm text-gray99 mb-9 mx-2 md:mx-6">
-                <p>Inicio</p>
+                <p class="cursor-pointer hover:text-primary" @click="$inertia.get(route('welcome'))">Inicio</p>
+                <i class="fa-solid fa-angle-right text-xs"></i>
+                <p class="cursor-pointer hover:text-primary" @click="$inertia.get(route('public.show-category', product.subcategory?.category?.id))">{{ product.subcategory?.category?.name }}</p>
                 <i class="fa-solid fa-angle-right text-xs"></i>
                 <div class="flex items-center space-x-3" v-for="subcategory in product.bread_crumbles" :key="subcategory">
-                    <p>{{ subcategory }}</p>
+                    <p @click="getSubcategoryRoute(subcategory)" class="cursor-pointer hover:text-primary">{{ subcategory }}</p>
                     <i class="fa-solid fa-angle-right text-xs"></i>
                 </div>
-                <p>{{ product.name }}</p>
+                <p class='text-primary font-bold'>{{ product.name }}</p>
+            </div>
+
+            <div class="my-2 -ml-2">
+                <Back />
             </div>
 
             <!-- Info de producto -->
@@ -51,13 +53,19 @@
                     <!-- tabla de caracteristicas -->
                     <div v-if="product.features?.length" class="border border-gray-300 rounded overflow-hidden">
                         <div v-for="(feature, index) in product.features" :key="index" class="grid grid-cols-2 *:py-1 *:px-4" :class="{ 'bg-gray-200': index % 2 != 0 }">
+                                <div class="border-r border-gray-300 font-medium">{{ feature }}</div>
+                                <div>
+                                    <span class="text-sm">{{ feature.measure_unit }} </span>
+                                </div>
+                        </div>
+                        <!-- <div v-for="(feature, index) in product.features" :key="index" class="grid grid-cols-2 *:py-1 *:px-4" :class="{ 'bg-gray-200': index % 2 != 0 }">
                             <template v-for="(value, key) in feature" :key="key">
                                 <div v-if="key !== 'measure_unit'" class="border-r border-gray-300 font-medium">{{ key }}</div>
                                 <div v-if="key !== 'measure_unit'">
                                     {{ value }} <span class="text-sm" v-if="feature.measure_unit">{{ feature.measure_unit }}</span>
                                 </div>
                             </template>
-                        </div>
+                        </div> -->
                     </div>
                     <p class="text-xs text-[#6D6E72] pl-2" v-else>No contiene características</p>
 
@@ -93,6 +101,11 @@ components:{
 props:{
     product: Object
 },
-
+methods:{
+    getSubcategoryRoute(subcategory) {
+        const subcategory_id = this.product.subcategory?.category?.subcategories.find(sb => sb.name === subcategory)?.id;
+        this.$inertia.get(route('public.show-subcategory', subcategory_id));
+    }
 }
+};
 </script>
