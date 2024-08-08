@@ -142,7 +142,8 @@ return [
         'level' => 'nivel',
         'category_id' => 'categoría',
         'subcategory_id' => 'subcategoría',
-        'part_number' => 'número de parte',
+        'part_number' => 'número de parte interno',
         'permissions' => 'permisos',
+        'part_number_supplier' => 'número de parte del fabricante',
     ],
 ];

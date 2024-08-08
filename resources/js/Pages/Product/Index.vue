@@ -5,7 +5,7 @@
             <section class="md:flex justify-between items-center">
                 <div class="lg:w-1/3 relative">
                     <input v-model="searchQuery" @keydown.enter="handleSearch" class="input w-full pl-9"
-                        placeholder="Buscar por nombre o número de parte" type="search" ref="searchInput" />
+                        placeholder="Buscar por nombre o número de parte del fabricante" type="search" ref="searchInput" />
                     <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
                 </div>
                 <div class="my-4 lg:my-0 flex items-center justify-end space-x-3">
@@ -37,7 +37,7 @@
                     @selection-change="handleSelectionChange" ref="multipleTableRef"
                     :row-class-name="tableRowClassName">
                     <el-table-column type="selection" width="30" />
-                    <el-table-column prop="part_number" label="Num de parte" width="150" />
+                    <el-table-column prop="part_number_supplier" label="Num. de parte fabricante" width="200" />
                     <el-table-column prop="name" label="Nombre" width="150" />
                     <el-table-column prop="subcategory.category.name" label="Categoría" width="150" />
                     <el-table-column label="Subcategorías" width="150">
@@ -198,7 +198,7 @@ computed: {
             return this.products.filter(
                 (product) =>
                     product.name.toLowerCase().includes(this.search.toLowerCase()) ||
-                    product.part_number.toLowerCase().includes(this.search.toLowerCase())
+                    product.part_number_supplier.toLowerCase().includes(this.search.toLowerCase())
             )
         }
     }
