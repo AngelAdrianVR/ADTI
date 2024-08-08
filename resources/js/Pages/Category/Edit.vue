@@ -1,10 +1,10 @@
 <template>
-    <AppLayout title="Crear categoría">
+    <AppLayout title="Editar categoría">
         <div class="px-3 md:px-16 py-8">
             <Back :to="route('settings.index', { currentTab: 1 })" />
 
             <form @submit.prevent="store" class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-1/2 mx-auto mt-2">
-                <h1 class="font-bold ml-2 col-span-full">Crear categoría</h1>
+                <h1 class="font-bold ml-2 col-span-full">Editar categoría</h1>
 
                 <section class="my-3 grid grid-cols-2 gap-3">
                     <div>
@@ -15,7 +15,7 @@
                             <el-tooltip content="Agregar imagen" placement="top">
                                 <button type="button" @click="openFileExplorer"
                                     class="hover:text-primary disabled:opacity-50 disabled:hover:text-black disabled:cursor-not-allowed"
-                                    :disabled="imageUrl">
+                                    :disabled="form.image">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                         stroke-width="1.5" stroke="currentColor" class="size-4">
                                         <path stroke-linecap="round" stroke-linejoin="round"
@@ -27,12 +27,12 @@
                         <InputError :message="form.errors.category" />
                         <!-- imagen de categoria -->
                         <input type="file" ref="fileInput" accept="image/*" @change="onImageChange" class="hidden" />
-                        <div v-if="imageUrl" class="mt-2">
+                        <div v-if="form.image" class="mt-2">
                             <figure class="size-32 border border-grayD9 rounded-[3px] relative">
                                 <button @click="removeImage" class="absolute p-1 top-1 right-1 z-10 text-xs">
                                     <i class="fa-solid fa-xmark"></i>
                                 </button>
-                                <img :src="imageUrl" alt="Image Preview" class="size-32 object-contain opacity-50" />
+                                <img :src="form.image" alt="Image Preview" class="size-32 object-contain opacity-50" />
                             </figure>
                         </div>
                     </div>
@@ -60,9 +60,10 @@
                         @removeFeatures="removeFeatures" @openFeaturesModal="openFeaturesModal" />
                 </div>
                 <div class="col-span-full text-right mt-7">
-                    <PrimaryButton class="!rounded-full" :disabled="form.processing || subcategoryNameEmpty(form.subCategories)">
+                    <PrimaryButton class="!rounded-full"
+                        :disabled="form.processing || subcategoryNameEmpty(form.subCategories)">
                         <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
-                        Crear categoría
+                        Guardar cambios
                     </PrimaryButton>
                 </div>
             </form>
@@ -182,7 +183,7 @@ export default {
             category: null,
             key: null,
             image: null,
-            subCategories: [{ name: '', subCategories: [], image: null, features: [] }],
+            subCategories: [{ id: null, name: '', subCategories: [], image: null, features: [] }],
         });
 
         const featureForm = useForm({
@@ -200,8 +201,6 @@ export default {
             elementFeaturesPath: '',
             localFeatures: [],
             // generales
-            imageUrl: null,
-
         }
     },
     components: {
@@ -217,6 +216,7 @@ export default {
     props: {
         features: Array,
         measure_units: Array,
+        category: Object,
     },
     computed: {
         getAvailableFeatures() {
@@ -226,8 +226,42 @@ export default {
         },
     },
     methods: {
-        store() {
-            this.form.post(route('categories.store-with-subcategories'), {
+        transformData(data) {
+            // Inicializa la categoría principal
+            this.form.category = data.name;
+            this.form.key = data.key;
+            this.form.image = data.media.length ? data.media[0].original_url : null;
+
+            // Organiza las subcategorías
+            const map = new Map();
+
+            data.subcategories.forEach(subcategory => {
+                map.set(subcategory.id, {
+                    id: subcategory.id,
+                    name: subcategory.name,
+                    subCategories: [],
+                    image: subcategory.media.length ? subcategory.media[0].original_url : null,
+                    features: subcategory.features || [],
+                });
+            });
+
+            const subCategories = [];
+
+            data.subcategories.forEach(subcategory => {
+                if (subcategory.prev_subcategory_id) {
+                    const parent = map.get(subcategory.prev_subcategory_id);
+                    if (parent) {
+                        parent.subCategories.push(map.get(subcategory.id));
+                    }
+                } else {
+                    subCategories.push(map.get(subcategory.id));
+                }
+            });
+
+            this.form.subCategories = subCategories;
+        },
+        update() {
+            this.form.post(route('categories.update-with-subcategories'), {
                 onSuccess: () => {
                     this.form.reset();
                 },
@@ -255,12 +289,10 @@ export default {
         onImageChange(event) {
             const file = event.target.files[0];
             if (file) {
-                this.imageUrl = URL.createObjectURL(file);
                 this.form.image = file;
             }
         },
         removeImage() {
-            this.imageUrl = null;
             this.form.image = null;
         },
         addMainSubCategory() {
@@ -382,6 +414,9 @@ export default {
         removeLocalFeature(index) {
             this.localFeatures.splice(index, 1);
         }
+    },
+    mounted() {
+        this.transformData(this.category);
     }
 }
 </script>
