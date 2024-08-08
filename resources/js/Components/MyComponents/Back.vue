@@ -1,7 +1,7 @@
 <template>
   <button @click="handleRedirection()"
-    class="flex justify-center items-center rounded-full size-6 focus:outline-none hover-3dbuttom bg-[#373737]">
-    <i class="fa-solid fa-angle-left text-white text-xs"></i>
+    class="flex justify-center items-center rounded-full size-9 focus:outline-none hover-3dbuttom z-50">
+    <i class="fa-solid fa-angle-left text-black text-base"></i>
   </button>
 </template>
 

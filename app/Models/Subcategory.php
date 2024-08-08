@@ -6,10 +6,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
-class Subcategory extends Model
+class Subcategory extends Model implements HasMedia
 {
-    use HasFactory;
+    use HasFactory, InteractsWithMedia;
 
     protected $fillable = [
         'name',
@@ -17,6 +19,7 @@ class Subcategory extends Model
         'level',
         'features',
         'category_id',
+        'prev_subcategory_id', //guarda el id de la subcategoria previa. (si es nulo el anterior ya es la categoría)
     ];
 
     protected $casts = [

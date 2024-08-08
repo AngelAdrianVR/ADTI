@@ -18,6 +18,7 @@ return new class extends Migration
             $table->unsignedSmallInteger('level');
             $table->json('features')->nullable();
             $table->foreignId('category_id')->constrained()->cascadeOnDelete();
+            $table->unsignedSmallInteger('prev_subcategory_id')->nullable();
             $table->timestamps();
         });
     }
