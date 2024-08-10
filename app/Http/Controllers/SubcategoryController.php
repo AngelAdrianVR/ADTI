@@ -188,9 +188,9 @@ class SubcategoryController extends Controller
         array_unshift($preFilledColumns, 'Campo prellenado');
 
         // Añadir columnas fijas
-        $headers = array_merge($headers, ['Nombre del producto', 'Descripción', 'Ubicación en almacén']);
-        $values = array_merge($values, ['', '', '']);
-        $preFilledColumns = array_merge($preFilledColumns, ['Campo obligatorio', '', '']);
+        $headers = array_merge($headers, ['Nombre del producto', 'Descripción', 'Número de parte de fabricante', 'Ubicación en almacén']);
+        $values = array_merge($values, ['', '', '', '']);
+        $preFilledColumns = array_merge($preFilledColumns, ['Campo obligatorio', '', '', '']);
 
         // Añadir columnas de características (features) de la subcategoría seleccionada
         foreach ($subcategory->features as $feature) {

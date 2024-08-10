@@ -86,6 +86,7 @@ Route::post('products/update-with-media/{product}', [ProductController::class, '
 Route::post('products/massive-delete', [ProductController::class, 'massiveDelete'])->name('products.massive-delete');
 Route::get('products-search', [ProductController::class, 'searchProduct'])->name('products.search');
 Route::get('products-fetch-subcategory-products/{subcategory_id}', [ProductController::class, 'fetchSubcategoryProducts'])->name('products.fetch-subcategory-products');
+Route::post('products/import', [ProductController::class, 'import'])->name('products.import')->middleware('auth');
 
 
 //Category routes----------------------------------------------------------------------------------
