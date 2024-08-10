@@ -121,7 +121,7 @@
 
                 <div class="mt-3">
                     <InputLabel value="Número de parte del fabricante" class="ml-3 mb-1" />
-                    <el-input v-model="form.part_number_supplier" placeholder="Escribe el numero de parte del fabricante" :maxlength="100" clearable />
+                    <el-input v-model="form.part_number_supplier" placeholder="Escribe el numero de parte del fabricante" :maxlength="17" show-word-limit clearable />
                     <InputError :message="form.errors.part_number_supplier" />
                 </div>
 
