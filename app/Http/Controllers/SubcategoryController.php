@@ -142,6 +142,7 @@ class SubcategoryController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
 
         // Variables de encabezados y valores
+        $currentSubcategory = $subcategory;
         $headers = [];
         $values = [];
         $preFilledColumns = [];
@@ -163,14 +164,22 @@ class SubcategoryController extends Controller
             ],
         ]);
 
-        // Obtener la cadena de subcategorías (niveles superiores)
-        $currentSubcategory = $subcategory;
-        while ($currentSubcategory->prev_subcategory_id !== null) {
-            $parentSubcategory = Subcategory::find($currentSubcategory->prev_subcategory_id);
-            array_unshift($headers, 'Subcategoría ' . $parentSubcategory->key);
-            array_unshift($values, $parentSubcategory->name);
-            array_unshift($preFilledColumns, 'Campo prellenado');
-            $currentSubcategory = $parentSubcategory;
+        // Crear una pila para almacenar las subcategorías en el orden correcto
+        $subcategoryStack = [];
+
+        // Primero, recorre hasta llegar al nivel más alto (primer nivel de subcategoría)
+        while ($currentSubcategory !== null) {
+            array_unshift($subcategoryStack, $currentSubcategory);
+            $currentSubcategory = Subcategory::find($currentSubcategory->prev_subcategory_id);
+        }
+
+        // Ahora que tenemos las subcategorías en la pila, generamos los encabezados
+        $sufix = '';
+        foreach ($subcategoryStack as $level => $subcat) {
+            $sufix = ($sufix === '') ? $subcat->key : $sufix . '.' . $subcat->key;
+            $headers[] = 'Subcategoría ' . $sufix;
+            $values[] = $subcat->name;
+            $preFilledColumns[] = 'Campo prellenado';
         }
 
         // Agregar la categoría principal
