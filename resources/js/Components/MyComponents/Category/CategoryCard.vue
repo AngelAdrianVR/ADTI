@@ -58,8 +58,8 @@
                                         <h1 class="font-bold">Descargar plantilla</h1>
                                         <p>Si ya tienes los productos en la plantilla da clic en el link</p>
                                         <p class="text-end">
-                                            <Link :href="route('products.index')">
-                                            <button class="underline text-primary">Ir a importación</button>
+                                            <Link :href="route('products.index', {openImportModal: true})">
+                                            <button class="underline text-primarylight">Ir a importación</button>
                                             </Link>
                                         </p>
                                     </template>
