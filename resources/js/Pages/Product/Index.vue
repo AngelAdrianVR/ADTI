@@ -125,32 +125,90 @@
         <DialogModal :show="showImportModal" @close="showImportModal = false">
             <template #title> Importar productos </template>
             <template #content>
-                <p class="text-secondary">¡Bienvenido a la función de importación de productos! Para facilitar el
-                    proceso y asegurar que todos
-                    los datos se ingresen correctamente, te recomendamos seguir estos pasos simples.</p>
-                <p class="text-black mt-5">
-                    Primero, descarga la plantilla de importación desde la última subcategoría de cada línea jerárquica.
-                    Esto permite identificar los productos específicos de cada jerarquía que se van a subir, ya que cada
-                    subcategoría cuenta con características diferentes.
-                </p>
-                <Link :href="route('settings.index')" class="flex items-center space-x-3 text-primary mt-3">
-                <span class="underline">Descargar plantilla desde categorías</span>
-                <i class="fa-solid fa-arrow-right-long mt-1"></i>
-                </Link>
-                <figure class="border border-grayD9 rounded-[5px] px-5 py-2 mt-4">
-                    <img src="@/../../public/images/import.jpg" alt="logo">
-                </figure>
-                <p class="text-black mt-4">
-                    Una vez que hayas agregado todos los productos a la plantilla, adjunta el archivo. El sistema se
-                    encargará automáticamente de procesar la información y agregar tus productos.
-                </p>
-                <form @submit.prevent="importProducts" ref="importForm" class="mt-4">
-                    <div>
-                        <FileUploader @files-selected="importForm.file = $event" :multiple="false"
-                            acceptedFormat="excel" />
-                        <InputError :message="importForm.errors.file" />
-                    </div>
-                </form>
+                <div v-if="importWasWrong" class="flex flex-col items-center justify-center">
+                    <p>Se detectaron inconvenientes con la información</p>
+                    <p class="text-gray99">
+                        A continuación verás una lista de la información que necesitamos que revises
+                        para poder importar correctamente tus productos. Al editar tu archivo recuerda
+                        guardar los cambios y vuelve a subirlo.
+                    </p>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                        stroke="currentColor" class="size-10 text-amber-600">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                    </svg>
+                    <section v-for="(error, index1) in importErrors" :key="index1" class="mt-3 self-start mx-5 text-xs">
+                        <p>Fila {{ error.row }} de tu archivo excel</p>
+                        <ul>
+                            <li v-for="(item, index2) in error.errors" :key="index2">
+                                • {{ item }}
+                            </li>
+                        </ul>
+                    </section>
+                </div>
+                <div v-else-if="importWasSuccessful" class="flex flex-col items-center justify-center">
+                    <p>¡Listo!</p>
+                    <p class="text-gray99">Tus productos se han subido con éxito.</p>
+                    <svg class="mt-2" width="24" height="24" viewBox="0 0 54 43" fill="none"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M12.5263 42.0011C8.73489 31.147 0.492597 22.5137 0.0263141 22.0011C-0.439969 21.4884 5.33881 20.5148 13.5263 29.0011C29.0463 11.4303 44.0918 -0.0470468 52.5263 0.00107837C52.8512 -0.0320255 53.3498 0.705849 53.0263 1.00108C34.3519 9.89275 24.0145 25.6913 15.0263 42.0011C14.9721 42.4953 12.5049 42.397 12.5263 42.0011Z"
+                            fill="#189203" />
+                    </svg>
+                </div>
+                <div v-else-if="isImporting" class="flex flex-col items-center justify-center">
+                    <p>Procesando productos</p>
+                    <p class="text-gray99">Esto podría tardar un momento, gracias por la espera.</p>
+                    <svg class="animate-spin text-primary mt-4 text-center" xmlns="http://www.w3.org/2000/svg"
+                        fill="none" viewBox="0 0 24 24" id="Rotate-Right--Streamline-Sharp" height="20" width="20">
+                        <desc>Rotate Right Streamline Icon: https://streamlinehq.com</desc>
+                        <g id="rotate-right">
+                            <path id="Vector 2754" stroke="currentColor" d="M20.2047 0.5135V4.8893H15.8289"
+                                stroke-width="2"></path>
+                            <path id="Ellipse 1206" stroke="currentColor"
+                                d="M20.2047 4.764C18.2001 2.4929 15.2674 1.0605 12.0001 1.0605C5.9583 1.0605 1.0605 5.9583 1.0605 12C1.0605 16.194 3.4207 19.8367 6.8853 21.6726"
+                                stroke-width="2"></path>
+                            <path id="Ellipse 1207" stroke="currentColor"
+                                d="M9.1081 22.5533C10.0293 22.8051 10.999 22.9395 11.9999 22.9395C13.4231 22.9395 14.7826 22.6678 16.0297 22.1734"
+                                stroke-width="2"></path>
+                            <path id="Ellipse 1208" stroke="currentColor"
+                                d="M17.7655 21.2986C19.2694 20.3641 20.5299 19.0749 21.4301 17.548" stroke-width="2">
+                            </path>
+                            <path id="Ellipse 1209" stroke="currentColor"
+                                d="M22.9395 12C22.9395 13.2879 22.717 14.5237 22.3083 15.6713" stroke-width="2"></path>
+                        </g>
+                    </svg>
+                </div>
+                <div v-else>
+                    <p class="text-secondary">¡Bienvenido a la función de importación de productos! Para facilitar el
+                        proceso y asegurar que todos
+                        los datos se ingresen correctamente, te recomendamos seguir estos pasos simples.</p>
+                    <p class="text-black mt-5">
+                        Primero, descarga la plantilla de importación desde la última subcategoría de cada línea
+                        jerárquica.
+                        Esto permite identificar los productos específicos de cada jerarquía que se van a subir, ya que
+                        cada
+                        subcategoría cuenta con características diferentes.
+                    </p>
+                    <Link :href="route('settings.index')" class="flex items-center space-x-3 text-primary mt-3">
+                    <span class="underline">Descargar plantilla desde categorías</span>
+                    <i class="fa-solid fa-arrow-right-long mt-1"></i>
+                    </Link>
+                    <figure class="border border-grayD9 rounded-[5px] px-5 py-2 mt-4">
+                        <img src="@/../../public/images/import.jpg" alt="logo">
+                    </figure>
+                    <p class="text-black mt-4">
+                        Una vez que hayas agregado todos los productos a la plantilla, adjunta el archivo. El sistema se
+                        encargará automáticamente de procesar la información y agregar tus productos.
+                    </p>
+                    <form @submit.prevent="importProducts" ref="importForm" class="mt-4">
+                        <div>
+                            <FileUploader @files-selected="importForm.file = $event" :multiple="false"
+                                acceptedFormat="excel" />
+                            <InputError :message="importForm.errors.file" />
+                        </div>
+                    </form>
+                </div>
             </template>
             <template #footer>
                 <div v-if="!isImporting && !importWasSuccessful && !importWasWrong" class="flex items-center space-x-2">
@@ -319,7 +377,8 @@ export default {
                     this.isImporting = false;
                     this.importWasSuccessful = true;
                     this.importWasWrong = false;
-                    window.location.reload();
+                    this.$inertia.visit(route('products.index'));
+                    // window.location.reload();
                 }
             } catch (error) {
                 this.isImporting = false;
@@ -348,6 +407,11 @@ export default {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('openImportModal')) {
             this.showImportModal = true;
+
+            // Eliminar el parámetro 'openImportModal' de la URL
+            urlParams.delete('openImportModal');
+            const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+            window.history.replaceState({}, '', newUrl);
         }
     }
 }

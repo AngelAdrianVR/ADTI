@@ -230,53 +230,6 @@ class ProductController extends Controller
         }
     }
 
-    // private function validateProductsFromFile($worksheet)
-    // {
-    //     // Almacenar los errores de validación
-    //     $errorsBag = [];
-
-    //     $columnNames = [];
-    //     // Obtener datos y guardar en la base de datos
-    //     foreach ($worksheet->getRowIterator() as $row) {
-    //         if ($row->getRowIndex() < 3) {
-    //             continue; // Saltar las primeras 2 filas
-    //         }
-
-    //         $cellIterator = $row->getCellIterator();
-    //         $cellIterator->setIterateOnlyExistingCells(false);
-
-    //         if ($row->getRowIndex() == 3) {
-    //             // Obtener los nombres de columna de la fila 3 del archivo Excel
-    //             foreach ($cellIterator as $cell) {
-    //                 $columnNames[] = $cell->getValue();
-    //             }
-    //             continue;
-    //         }
-
-    //         $data = [];
-    //         $currentColumn = 0;
-    //         foreach ($cellIterator as $cell) {
-    //             $columnName = $columnNames[$currentColumn++]; // Obtener el nombre de columna
-    //             $data[$columnName] = $cell->getValue(); // Asignar el valor al array asociativo usando el nombre de columna
-    //         }
-
-    //         // Validar los datos
-    //         $validator = Validator::make($data, [
-    //             $columnNames[0] => 'required|string|max:120',
-    //         ]);
-
-    //         // Si la validación falla, almacenar los errores
-    //         if ($validator->fails()) {
-    //             $errorsBag[] = [
-    //                 'row' => $row->getRowIndex(),
-    //                 'errors' => $validator->errors()->all(),
-    //             ];
-    //         }
-    //     }
-
-    //     return $errorsBag;
-    // }
-
     private function validateProductsFromFile($worksheet)
     {
         // Almacenar los errores de validación
@@ -315,6 +268,9 @@ class ProductController extends Controller
             // Validar los datos
             $validator = Validator::make($data, [
                 $columnNames[$productNameColumnIndex] => 'required|string|max:120',
+                $columnNames[$productNameColumnIndex + 1] => $data[$columnNames[$productNameColumnIndex + 1]] ? 'string|max:255' : '',
+                $columnNames[$productNameColumnIndex + 2] => $data[$columnNames[$productNameColumnIndex + 2]] ? 'string|max:30' : '',
+                $columnNames[$productNameColumnIndex + 3] => $data[$columnNames[$productNameColumnIndex + 3]] ? 'string|max:30' : '',
             ]);
 
             // Si la validación falla, almacenar los errores
@@ -328,57 +284,6 @@ class ProductController extends Controller
 
         return $errorsBag;
     }
-
-
-    // private function storeProductsFromFile($worksheet)
-    // {
-    //     foreach ($worksheet->getRowIterator() as $row) {
-    //         if ($row->getRowIndex() < 3) {
-    //             continue; // Saltar las primeras 2 filas
-    //         }
-
-    //         $cellIterator = $row->getCellIterator();
-    //         $cellIterator->setIterateOnlyExistingCells(false);
-
-    //         if ($row->getRowIndex() == 3) {
-    //             // Obtener los nombres de columna de la cuarta fila del archivo Excel
-    //             foreach ($cellIterator as $cell) {
-    //                 $columnNames[] = $cell->getValue();
-    //             }
-    //             continue;
-    //         }
-
-    //         $data = [];
-    //         foreach ($cellIterator as $cell) {
-    //             $data[] = $cell->getValue(); // Asignar el valor al array asociativo usando el nombre de columna
-    //         }
-
-    //         /**
-    //          * Primero buscar la categoria por nombre en el modelo Category. El nombre de la categoria se obtiene del primer valor de la primer columna del archivo
-    //          * Despues obtener la propiedad $category->key
-    //          * Despues de la ultima subcategoria (columa anterior a la llamada 'Nombre del producto'), obtener en una variable el encabezado y separar el texto por espacio en blanco y obtener el index 1
-    //          * Despues del texto obtenido, retirar los puntos si es que los hay y guardar en $path
-    //          * Finalmente obtener el ultimo id del modelo Product y sumarle 1 para seguir con el consecutivo y guardarlo en $consecutive
-    //          * $partNumber = $category->key . $path . $consecutive; 
-    //          */
-    //         $partNumber = 0;
-
-    //         /**
-    //          * arreglo formado por todas las columnas en pares despues de 'Ubicación en almacén' con formato:
-    //          * ["encabezado de columa 1 del par" => "valor de registro en esta columna", "measure_unit" => "valor de registro en siguiente columna del mismo par"]
-    //          */
-    //         $features = [];
-    //         Product::create([
-    //             'name' => $data[], //index el cual corresponda a valor de columna llamada 'Nombre del producto'
-    //             'description' => $data[], //index el cual corresponda a valor de columna llamada 'Descripción'
-    //             'part_number' => $partNumber,
-    //             'part_number_supplier' => $data[], //index el cual corresponda a valor de columna llamada 'Número de parte de fabricante'
-    //             'location' => $data[], //index el cual corresponda a valor de columna llamada 'Ubicación en almacén'
-    //             'features' => $features,
-    //             'subcategory_id' => $data[], //id de último nivel de subcategoría. antes de la columna llamada 'Nombre del producto' tomar el nombre de la categoria y buscarla en el modelo Subcategory
-    //         ]);
-    //     }
-    // }
 
     private function storeProductsFromFile($worksheet)
     {
@@ -421,11 +326,11 @@ class ProductController extends Controller
             // Obtener el último ID de Product y generar el partNumber
             $lastProduct = Product::latest('id')->first();
             $consecutive = $lastProduct ? $lastProduct->id + 1 : 1;
-            $partNumber = $categoryKey . $path . $consecutive;
+            $partNumber = $categoryKey . $path . '-' . $consecutive;
 
             // Obtener las características después de 'Ubicación en almacén'
             $features = [];
-            for ($i = $productNameColumnIndex + 2; $i < count($columnNames); $i += 2) {
+            for ($i = $productNameColumnIndex + 4; $i < count($columnNames); $i += 2) {
                 $features[] = [
                     'name' => $columnNames[$i],
                     'value' => $data[$i],
