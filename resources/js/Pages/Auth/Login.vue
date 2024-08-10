@@ -18,7 +18,7 @@ defineProps({
 const showPassword = ref(false);
 
 const form = useForm({
-    email: '',
+    username: '',
     password: '',
     remember: false,
 });
@@ -55,16 +55,15 @@ const submit = () => {
             <div>
                 <div
                     class="flex items-center space-x-2 py-2 px-5 w-full h-10 border border-grayD9 rounded-full placeholder:text-sm placeholder:text-[#777777]">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                        stroke="currentColor" class="size-4 text-[#777777]">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4 text-[#777777]">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
                     </svg>
-                    <input v-model="form.email" id="email"
+
+                    <input v-model="form.username" id="username"
                         class="text-sm w-full placeholder:text-sm placeholder:text-[#777777] border-0 focus:ring-0 focus:border-grayD9 border-grayD9 border-l h-full"
-                        type="email" placeholder="Correo electrónico" required autofocus autocomplete="username">
+                        type="text" placeholder="Nombre de usuario" required autofocus autocomplete="username">
                 </div>
-                <InputError :message="form.errors.email" />
+                <InputError :message="form.errors.username" />
             </div>
             <div>
                 <div

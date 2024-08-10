@@ -34,7 +34,7 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:255|unique:users,name',
             'email' => 'required|string|max:255|unique:users',
             'phone' => 'required|string|max:15',
             'org_props.position' => 'required|string|max:255',
@@ -67,7 +67,7 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
             'email' => 'required|string|max:255',
             'phone' => 'required|string|max:15',
             'org_props.position' => 'required|string|max:255',
@@ -88,7 +88,7 @@ class UserController extends Controller
     public function updateWithMedia(Request $request, User $user)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
             'email' => 'required|string|max:255',
             'phone' => 'required|string|max:15',
             'org_props.position' => 'required|string|max:255',
