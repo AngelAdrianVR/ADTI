@@ -175,4 +175,15 @@ class ProductController extends Controller
 
         return response()->json(['items' => $products]);
     }
+
+    //Recupera los productos de la subcategoría seleccionada
+    //ultilizado en LandingPage/ShowSubcategory
+    public function fetchSubcategoryProducts($subcategory_id)
+    {
+        $products = Product::where('subcategory_id', $subcategory_id)
+            ->with('media')
+            ->get(['id', 'name', 'description', 'part_number', 'part_number_supplier', 'location']);
+
+        return response()->json(compact('products'));
+    }
 }

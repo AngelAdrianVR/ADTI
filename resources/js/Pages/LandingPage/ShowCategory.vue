@@ -26,7 +26,7 @@
                         <p class="py-1 pl-4">{{ subcategory_1.name }}</p>
                     </div>
 
-                    <div class="md:grid md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 gap-4 py-5">
+                    <div class="grid grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 gap-4 py-5">
                         <PublicSubcategoryCard class="z-10" v-for="subcategory in category.subcategories?.filter(sb => sb.level === 2 && sb.prev_subcategory_id === subcategory_1.id)" :key="subcategory" 
                             :subcategory="subcategory"
                             :subcategories_lvl_3="category.subcategories?.filter(sb => sb.level === 3)" />
