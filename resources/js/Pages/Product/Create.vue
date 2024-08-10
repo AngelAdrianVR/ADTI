@@ -4,7 +4,7 @@
             <Back :to="route('products.index')" />
 
             <form @submit.prevent="store"
-                class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-1/2 mx-auto mt-2 lg:grid lg:grid-cols-2 gap-x-3">
+                class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-2/3 xl:w-1/2 mx-auto mt-2 lg:grid lg:grid-cols-2 gap-x-3">
 
                 <h1 class="font-bold ml-2 col-span-full">Crear producto</h1>
 
@@ -120,7 +120,13 @@
                 </div>
 
                 <div class="mt-3">
-                    <InputLabel value="Número de parte" class="ml-3 mb-1" />
+                    <InputLabel value="Número de parte del fabricante" class="ml-3 mb-1" />
+                    <el-input v-model="form.part_number_supplier" placeholder="Escribe el numero de parte del fabricante" :maxlength="17" show-word-limit clearable />
+                    <InputError :message="form.errors.part_number_supplier" />
+                </div>
+
+                <div class="mt-3">
+                    <InputLabel value="Número de parte interno" class="ml-3 mb-1" />
                     <el-input v-model="form.part_number" disabled placeholder="Creación automática" :maxlength="100" clearable />
                     <InputError :message="form.errors.part_number" />
                 </div>
@@ -141,16 +147,6 @@
                         <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
                         Crear producto
                     </PrimaryButton>
-                    <!-- Boton multi accion -->
-                    <!-- <el-dropdown split-button type="primary" @click="store('crear')">
-                        Crear producto
-                        <template #dropdown>
-                            <el-dropdown-menu>
-                            <el-dropdown-item @click="store('seguir')">Crear y seguir creando</el-dropdown-item>
-                            <el-dropdown-item @click="store('mostrar')">Crear y mostrar</el-dropdown-item>
-                            </el-dropdown-menu>
-                        </template>
-                    </el-dropdown> -->
                 </div>
             </form>
         </div>
@@ -300,7 +296,8 @@ data() {
             features: [],
             imageCover: null, //imagen del producto
             media: null, //archivos del producto (descargables)
-            part_number: null,
+            part_number: null, //numero de parte interno
+            part_number_supplier: null, //numero de parte del fabricante
             location: null,
             bread_crumbles: [], //nombres de todas las subcategorías.
         });
@@ -355,43 +352,9 @@ components:{
 props:{
     categories: Array,
     measure_units: Array,
+    next_product_id: Number, //id del ultimo producto para generar numero de parte interno
 },
 methods:{
-    // store(action) {
-    //   axios.post(route("products.store"), this.form)
-    //     .then(response => {
-    //         // toast
-    //         this.$notify({
-    //             title: "Correcto",
-    //             message: "",
-    //             type: "success",
-    //             position: "bottom-right",
-    //         });
-
-    //         const productId = response.data.id; // Obtén el ID del producto creado
-
-    //         switch (action) {
-    //             case 'crear':
-    //                 this.$inertia.get(route('products.index'));
-    //                 break;
-    //             case 'mostrar':
-    //                 this.$inertia.get(route('products.show', productId));
-    //                 break;
-    //             case 'seguir':
-    //                 this.form.reset();
-    //                 break;
-    //         }
-    //     })
-    //     .catch(error => {
-    //       console.error(error);
-    //       this.$notify({
-    //             title: "Error",
-    //             message: error.response.data.message,
-    //             type: "error",
-    //             position: "bottom-right",
-    //         });
-    //     });
-    // },
     store() {
         this.form.post(route("products.store"), {
             onSuccess: () => {
@@ -502,7 +465,7 @@ methods:{
         }).join('');
 
         // Concatenar todos los "key" en un solo string
-        const partNumber = categoryKey + subcategoryKeys;
+        const partNumber = categoryKey + subcategoryKeys + '-' + this.next_product_id;
         this.form.part_number = partNumber;
     },
     handleCreateSubcategory(index) {

@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('description')->nullable();
             $table->string('part_number');
+            $table->string('part_number_supplier');
             $table->string('location')->nullable();
             $table->json('features')->nullable();
             $table->json('bread_crumbles')->nullable();

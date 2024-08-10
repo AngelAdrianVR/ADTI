@@ -4,7 +4,7 @@
             <Back />
 
             <form @submit.prevent="update"
-                class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-1/2 mx-auto mt-2 lg:grid lg:grid-cols-2 gap-3">
+                class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-2/3 xl:w-1/2 mx-auto mt-2 lg:grid lg:grid-cols-2 gap-3">
                 <h1 class="font-bold ml-2 col-span-full">Editar usuario</h1>
                 <div>
                     <InputLabel value="Nombre del usuario*" />

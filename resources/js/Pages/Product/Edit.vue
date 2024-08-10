@@ -4,7 +4,7 @@
             <Back :to="route('products.index')" />
 
             <form @submit.prevent="update"
-                class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-1/2 mx-auto mt-2 lg:grid lg:grid-cols-2 gap-x-3">
+                class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-2/3 xl:w-1/2 mx-auto mt-2 lg:grid lg:grid-cols-2 gap-x-3">
 
                 <h1 class="font-bold ml-2 col-span-full">Editar producto</h1>
 
@@ -87,7 +87,7 @@
                         <InputLabel value="Características del producto" class="ml-3 mb-1 text-sm" />
                         <ThirthButton type="button" v-if="Object.keys(form.features).length" @click="showMeasureUnitFormModal = true" class="!py-0">Crear unidad de medida</ThirthButton>
                     </div>
-                    <p v-if="Object.keys(form.features).length" class="text-gray99 text-sm mb-2">Si algún campo no es necesario, puedes dejarlo en blanco. Este campo no será visible para los usuarios.</p>
+                    <p v-if="Object.keys(form.features)?.length" class="text-gray99 text-sm mb-2">Si algún campo no es necesario, puedes dejarlo en blanco. Este campo no será visible para los usuarios.</p>
                     <div v-if="form.features.length" class="grid grid-cols-2 gap-5">
                         <div v-for="(feature, index) in form.features" :key="index" class="flex items-center space-x-2">
                             <div class="w-1/2">
@@ -122,7 +122,13 @@
                 </div>
 
                 <div class="mt-3">
-                    <InputLabel value="Número de parte" class="ml-3 mb-1" />
+                    <InputLabel value="Número de parte del fabricante" class="ml-3 mb-1" />
+                    <el-input v-model="form.part_number_supplier" placeholder="Escribe el numero de parte del fabricante" :maxlength="17" show-word-limit clearable />
+                    <InputError :message="form.errors.part_number_supplier" />
+                </div>
+
+                <div class="mt-3">
+                    <InputLabel value="Número de parte interno" class="ml-3 mb-1" />
                     <el-input v-model="form.part_number" disabled placeholder="Creación automática" :maxlength="100" clearable />
                     <InputError :message="form.errors.part_number" />
                 </div>
@@ -304,10 +310,11 @@ data() {
             category_id: this.product.subcategory?.category_id,
             subcategory_id: [], //se guarda un arreglo de los ids de subcategorías de forma secuencial
             description: this.product.description,
-            features: this.product.features,
+            features: this.product.features ?? {},
             imageCover: null,
             imageCoverCleared: false, //bandera para saber si se eliminó la imagen
-            part_number: this.product.part_number,
+            part_number: this.product.part_number, //numero de parte interno
+            part_number_supplier: this.product.part_number_supplier, //numero de parte del fabricante
             location: this.product.location,
             bread_crumbles: this.product.bread_crumbles, //nombres de todas las subcategorías.
             media: null, //archivos del producto (descargables)
@@ -492,7 +499,7 @@ methods:{
         }).join('');
 
         // Concatenar todos los "key" en un solo string
-        const partNumber = categoryKey + subcategoryKeys;
+        const partNumber = categoryKey + subcategoryKeys + '-' + this.product.id;
         this.form.part_number = partNumber;
     },
     handleCreateSubcategory(index) {

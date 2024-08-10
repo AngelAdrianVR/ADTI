@@ -20,7 +20,7 @@ class ProductController extends Controller
 
     public function index()
     {
-        $products = Product::with(['subcategory:id,name,category_id,prev_subcategory_id' => ['category:id,name']])->get(['id', 'name', 'description', 'part_number', 'location', 'subcategory_id', 'bread_crumbles']);
+        $products = Product::with(['subcategory:id,name,category_id,prev_subcategory_id' => ['category:id,name']])->get(['id', 'name', 'description', 'part_number_supplier', 'location', 'subcategory_id', 'bread_crumbles']);
 
         return inertia('Product/Index', compact('products'));
     }
@@ -29,8 +29,10 @@ class ProductController extends Controller
     {
         $categories = Category::all();
         $measure_units = MeasureUnit::all();
-
-        return inertia('Product/Create', compact('categories', 'measure_units'));
+        $last_product = Product::latest()->first();
+        $next_product_id = $last_product->id + 1;
+        
+        return inertia('Product/Create', compact('categories', 'measure_units', 'next_product_id'));
     }
     
     public function store(Request $request)
@@ -42,6 +44,7 @@ class ProductController extends Controller
             'description' => 'nullable|string|max:255',
             'features' => 'nullable|array',
             'part_number' => 'required|string|max:20',
+            'part_number_supplier' => 'required|string|max:20|unique:products,part_number_supplier',
             'location' => 'nullable|string|max:100',
         ]);
 
@@ -87,6 +90,7 @@ class ProductController extends Controller
             'description' => 'nullable|string|max:255',
             'features' => 'nullable|array',
             'part_number' => 'required|string|max:20',
+            'part_number_supplier' => 'required|string|max:20|unique:products,part_number_supplier,' . $product->id,
             'location' => 'nullable|string|max:100',
         ]);
 
@@ -116,6 +120,7 @@ class ProductController extends Controller
             'description' => 'nullable|string|max:255',
             'features' => 'nullable|array',
             'part_number' => 'required|string|max:20',
+            'part_number_supplier' => 'required|string|max:20|unique:products,part_number_supplier,' . $product->id,
             'location' => 'nullable|string|max:100',
         ]);
         
@@ -132,12 +137,12 @@ class ProductController extends Controller
         if ($request->hasFile('imageCover')) {
             $product->addMediaFromRequest('imageCover')->toMediaCollection('imageCover');
         }
-
         // Guardar los archivos descargables si existen
         if ($request->hasFile('media')) {
-            $product->addAllMediaFromRequest('media')->each(fn ($file) => $file->toMediaCollection('files'));
+            $product->addMediaFromRequest('media')->toMediaCollection('files');
+            // $product->addAllMediaFromRequest('media')->each(fn ($file) => $file->toMediaCollection('files'));
         }
-        
+
         return to_route('products.show', $product->id); //manda al show despues de crear el producto
     }
     
@@ -163,10 +168,22 @@ class ProductController extends Controller
         // Realiza la búsqueda en la base de datos
         $products = Product::where(function ($q) use ($query) {
                 $q->where('name', 'like', "%$query%")
-                    ->orWhere('part_number', 'like', "%$query%");
+                    ->orWhere('part_number', 'like', "%$query%")
+                    ->orWhere('part_number_supplier', 'like', "%$query%");
             })
             ->get();
 
         return response()->json(['items' => $products]);
+    }
+
+    //Recupera los productos de la subcategoría seleccionada
+    //ultilizado en LandingPage/ShowSubcategory
+    public function fetchSubcategoryProducts($subcategory_id)
+    {
+        $products = Product::where('subcategory_id', $subcategory_id)
+            ->with('media')
+            ->get(['id', 'name', 'description', 'part_number', 'part_number_supplier', 'location']);
+
+        return response()->json(compact('products'));
     }
 }

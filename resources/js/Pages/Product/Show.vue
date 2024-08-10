@@ -31,8 +31,10 @@
                     <Loading2 v-if="searchLoading" class="my-3" />
                     <ul v-else-if="productsFound?.length > 0">
                         <li @click.stop="$inertia.get(route('products.show', product.id))" v-for="(product, index) in productsFound"
-                            :key="index" class="hover:bg-gray-100 cursor-default text-sm px-5 py-2">{{
-                                product.global_product_id ? product.global_product?.name : product.name }}</li>
+                            :key="index" class="hover:bg-gray-100 cursor-default text-sm px-5 py-2 flex items-center justify-between">
+                            <p>{{product.name }}</p>
+                            <p class="text-gray99">{{product.part_number_supplier }}</p>
+                        </li>
                     </ul>
                     <p v-else class="text-center text-sm text-gray-600 px-5 py-2">No se encontraron coincidencias</p>
                 </div>
@@ -43,12 +45,12 @@
             </div>
 
             <!-- Info de producto -->
-            <div class="md:grid grid-cols-2 xl:grid-cols-3 gap-x-10 mx-2 md:mx-6">
+            <div class="lg:grid grid-cols-2 xl:grid-cols-3 gap-x-10 mx-2 md:mx-6">
                 <!-- fotografia de producto -->
                 <section class="mt-7">
                     <figure class="border h-64 md:h-96 border-grayD9 rounded-lg flex justify-center items-center">
-                        <img v-if="product.media?.length" class="h-52 md:h-80 mx-auto object-contain"
-                            :src="product.media[0]?.original_url" alt="product's image cover">
+                        <img v-if="product.media?.find(img => img.collection_name === 'imageCover')" class="h-52 md:h-80 mx-auto object-contain"
+                            :src="product.media?.find(img => img.collection_name === 'imageCover')?.original_url" alt="product's image cover">
                         <div v-else>
                             <i class="fa-regular fa-image text-9xl text-gray-200"></i>
                             <p class="text-sm text-gray-300">Imagen no disponible</p>

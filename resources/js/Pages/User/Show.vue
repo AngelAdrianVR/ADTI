@@ -2,27 +2,27 @@
     <AppLayout title="Detalles usuario">
         <header class="lg:px-9 px-1 mt-3">
             <h1 class="font-bold text-base mt-10">Detalles del usuario</h1>
-            <section class="flex items-center justify-between mt-2">
+            <section class="md:flex items-center justify-between mt-2">
                 <!-- buscador -->
                 <el-select @change="$inertia.get(route('users.show', selectedItem))" v-model="selectedItem"
                     class="w-full lg:!w-1/4 mt-2" placeholder="Buscar usuario" filterable
                     no-data-text="No hay más usuarios registrados" no-match-text="No se encontraron coincidencias">
                     <el-option v-for="item in users" :key="item.id" :label="item.name" :value="item.id" />
                 </el-select>
-                <div class="flex items-center space-x-2">
+                <div class="flex items-center space-x-2 mt-3 md:mt-0">
                     <PrimaryButton v-if="$page.props.auth.user.permissions.includes('Editar usuarios')"
                         @click="$inertia.get(route('users.edit', user.id))" :disabled="loading">Editar</PrimaryButton>
                     <el-popconfirm v-if="$page.props.auth.user.permissions.includes('Resetear contraseñas')"
                         confirm-button-text="Si" cancel-button-text="No" icon-color="#6D6E72"
                         :title="'¿Desea continuar?'" @confirm="resetPassword()">
                         <template #reference>
-                            <SecondaryButton class="!rounded-full !p-2 !bg-grayED border-grayED" :disabled="loading">
+                            <SecondaryButton class="!rounded-full !p-2" :disabled="loading">
                                 Resetear contraseña
                             </SecondaryButton>
                         </template>
                     </el-popconfirm>
                     <SecondaryButton @click="$inertia.get(route('users.create'))"
-                        class="!rounded-full !p-2 !bg-grayED border-grayED" :disabled="loading"><i
+                        class="!rounded-full !p-2" :disabled="loading"><i
                             class="fa-solid fa-plus text-xs size-4"></i></SecondaryButton>
                 </div>
             </section>
