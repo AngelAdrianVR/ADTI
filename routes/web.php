@@ -30,7 +30,7 @@ Route::get('/show-category/{category_id}', function ($category_id) {
 
     // return $category;
     return Inertia::render('LandingPage/ShowCategory', [
-        'category' => $category,
+        'category' => $category
     ]);
 })->name('public.show-category');
 
@@ -44,7 +44,7 @@ Route::get('/show-subcategory/{subcategory_id}', function ($subcategory_id) {
     // return $total_products;
     return Inertia::render('LandingPage/ShowSubcategory', [
         'subcategory' => $subcategory,
-        'total_products' => $total_products, // cantidad de productos que contiene esa subcategoría
+        'total_products' => $total_products // cantidad de productos que contiene esa subcategoría
     ]);
 })->name('public.show-subcategory');
 
@@ -55,7 +55,7 @@ Route::get('/show-product/{product_id}', function ($product_id) {
 
     // return $product;
     return Inertia::render('LandingPage/ShowProduct', [
-        'product' => $product,
+        'product' => $product
     ]);
 })->name('public.show-product');
 
@@ -66,7 +66,14 @@ Route::middleware([
     'verified',
 ])->group(function () {
     Route::get('/dashboard', function () {
-        return Inertia::render('Dashboard');
+        $categories = Category::with(['subcategories:id,name,category_id' => ['products:id,name,subcategory_id']])->get();
+        $total_products = Product::all()->count();
+
+        // return $categories;
+        return Inertia::render('Dashboard', [
+            'categories' => $categories,
+            'total_products' => $total_products,
+        ]);
     })->name('dashboard');
 });
 
