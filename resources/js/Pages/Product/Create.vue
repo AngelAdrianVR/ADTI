@@ -2,7 +2,6 @@
     <AppLayout title="Nuevo producto">
         <div class="px-3 md:px-16 py-8">
             <Back :to="route('products.index')" />
-
             <form @submit.prevent="store"
                 class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-2/3 xl:w-1/2 mx-auto mt-2 lg:grid lg:grid-cols-2 gap-x-3">
 
@@ -49,7 +48,7 @@
                         </div>
 
                         <!-- Cuando es la primera subcategoría (no contiene un subcategory_id) -->
-                        <el-select v-if="index == 0" @change="saveFeatures((index + 1))" class="w-1/2" filterable v-model="form.subcategory_id[index]" clearable placeholder="Seleccione"
+                        <el-select v-if="index == 0" @change="saveFeatures((index + 1), form.subcategory_id[index])" class="w-1/2" filterable v-model="form.subcategory_id[index]" clearable placeholder="Seleccione"
                             no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
                             <el-option @click.stop="form.bread_crumbles[index] = subcategory.name" v-for="subcategory in categoryInfo.subcategories.filter(sub => sub.level == (index + 1))" :key="subcategory" :label="subcategory.name" :value="subcategory.id">
                                 <p class="flex items-center justify-between">
@@ -60,7 +59,7 @@
                         </el-select>
 
                         <!-- Cuando no es la primera subcategoría -->
-                        <el-select v-else @change="saveFeatures((index + 1))" class="w-1/2" filterable v-model="form.subcategory_id[index]" clearable placeholder="Seleccione"
+                        <el-select v-else @change="saveFeatures((index + 1), form.subcategory_id[index])" class="w-1/2" filterable v-model="form.subcategory_id[index]" clearable placeholder="Seleccione"
                             no-data-text="No hay opciones registradas" no-match-text="Primero seleccione el nivel anterior">
                             <el-option @click.stop="form.bread_crumbles[index] = subcategory.name" v-for="subcategory in categoryInfo.subcategories.filter(sub => sub.prev_subcategory_id === form.subcategory_id[index - 1] && sub.level === (index + 1))" :key="subcategory" :label="subcategory.name"
                                 :value="subcategory.id">
@@ -91,13 +90,13 @@
                     <div v-if="form.features.length" class="grid grid-cols-2 gap-5">
                         <div v-for="(feature, index) in form.features" :key="index" class="flex items-center space-x-2">
                             <div class="w-1/2">
-                                <InputLabel :value="Object.keys(feature)[0]" class="ml-3 mb-1 text-sm" />
-                                <el-input v-model="feature[Object.keys(feature)[0]]" placeholder="Escribe el valor de la característica" :maxlength="100" clearable />
+                                <InputLabel :value="Object.values(feature)[0]" class="ml-3 mb-1 text-sm" />
+                                <el-input v-model="feature[Object.keys(feature)[1]]" placeholder="Escribe el valor de la característica" :maxlength="100" clearable />
                             </div>
 
                             <div class="w-1/2">
                                 <InputLabel value="Unidad de medida" class="ml-3 mb-1 text-sm" />
-                                <el-select class="w-1/2" filterable v-model="feature.measure_unit" placeholder="Seleccione"
+                                <el-select class="w-1/2" filterable v-model="feature.measure_unit" clearable placeholder="Seleccione"
                                 no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
                                     <el-option v-for="unit in measure_units" :key="unit" :label="unit.name" :value="unit.name">
                                         <p class="flex items-center justify-between">
@@ -421,7 +420,8 @@ methods:{
                 this.categoryInfo = response.data.category;
 
                 // Encontrar el nivel más alto entre las subcategorías
-                this.highestLevel = Math.max(...this.categoryInfo.subcategories.map(sub => sub.level));
+                // this.highestLevel = Math.max(...this.categoryInfo.subcategories.map(sub => sub.level));
+                this.highestLevel = 1; //para mostrar solo una subcategoría
             }
         } catch (error) {
             console.log(error);
@@ -429,10 +429,17 @@ methods:{
             this.loading = false;
         }
     },
-    saveFeatures(level) {
+    saveFeatures(level, subcategory_id) {
         // Elimina la seleccion de la subcategoria siguiente
         this.form.subcategory_id.splice(level);
         this.form.bread_crumbles.splice(level);
+
+        // Busca si hay aunque sea una subcategoría de nivel mas alto que el seleccionado
+        const nextLevelSubcategories = this.categoryInfo.subcategories.find(sb => sb.prev_subcategory_id === subcategory_id);
+        if ( nextLevelSubcategories ) {
+            //si existe una mas alta la variable se iguala al nivel para mostrar las otras subcategorias de nivel mas alto
+            this.highestLevel = nextLevelSubcategories.level;
+        }
 
         // Si es el último nivel, guarda las características de la subcategoría
         if (level === this.highestLevel) {
@@ -442,9 +449,11 @@ methods:{
             if (highestLevelSubcategory && Array.isArray(highestLevelSubcategory.features)) {
                 // Crear un array de objetos con las características y unidad de medida asignando null a cada una
                 this.form.features = highestLevelSubcategory.features.map(feature => ({
-                    [feature]: null,
-                    measure_unit: null
+                    name: feature.name,       // Nombre de la característica
+                    value: null,              // Valor inicial de la característica
+                    measure_unit: feature.measure_unit // Unidad de medida predefinida
                 }));
+                console.log(this.form.features);
             } else {
                 // Si no hay características, inicializar features como un array vacío
                 this.form.features = [];
