@@ -162,9 +162,11 @@ class SubcategoryController extends Controller
         }
 
         // Llenar las celdas de valores en la fila 4
-        foreach ($values as $col => $value) {
-            $cell = Coordinate::stringFromColumnIndex($col + 1) . '4';
-            $sheet->setCellValue($cell, $value);
+        if (!request('withProducts')) {
+            foreach ($values as $col => $value) {
+                $cell = Coordinate::stringFromColumnIndex($col + 1) . '4';
+                $sheet->setCellValue($cell, $value);
+            }
         }
 
         // Aplicar estilos a las celdas del encabezado (fila 3)
@@ -197,26 +199,29 @@ class SubcategoryController extends Controller
             $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($colIndex))->setAutoSize(true);
         }
 
+        // agregar productos
         if (request('withProducts')) {
             // Obtener todos los productos de la subcategoría
             $products = Product::where('subcategory_id', $subcategoryId)->get();
 
             // Rellenar los datos de los productos en las filas siguientes
-            $rowIndex = 5; // Empezar en la fila 5 después de los encabezados y valores prellenados
+            $rowIndex = 4; // Empezar en la fila 4 después de los encabezados y valores prellenados
             foreach ($products as $product) {
-                $productData = [
-                    $subcategory->category->name, // Categoría principal
-                    ...$values, // Subcategorías
-                    $product->name, // Nombre del producto
-                    $product->description, // Descripción
-                    $product->part_number_supplier, // Número de parte de fabricante
-                    $product->location, // Ubicación en almacén
-                ];
+                // Inicializar el array con los valores prellenados
+                $productData = [...$values];
+
+                // Reemplazar los valores correspondientes con los datos del producto
+                $productData[array_search('Nombre del producto', $headers)] = $product->name;
+                $productData[array_search('Descripción', $headers)] = $product->description;
+                $productData[array_search('Número de parte de fabricante', $headers)] = $product->part_number_supplier;
+                $productData[array_search('Ubicación en almacén', $headers)] = $product->location;
 
                 // Añadir valores de las características (features)
-                foreach ($subcategory->features as $feature) {
-                    $productData[] = $product->features[$feature['name']] ?? '';
-                    $productData[] = $feature['measure_unit'];
+                foreach ($subcategory->features as $key => $feature) {
+                    $featureIndex = array_search($feature['name'], $headers);
+                    $unitIndex = $featureIndex + 1; // La unidad de medida siempre sigue a la característica en el orden de las columnas
+                    $productData[$featureIndex] = $product->features[$key]['value'] ?? '';
+                    $productData[$unitIndex] = $feature['measure_unit'];
                 }
 
                 // Llenar las celdas de la fila actual
