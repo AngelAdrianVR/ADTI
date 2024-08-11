@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Product;
 use App\Models\Subcategory;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -56,81 +57,6 @@ class SubcategoryController extends Controller
     {
         //
     }
-
-    // public function generateExcelTemplate($subcategoryId)
-    // {
-    //     // Obtener la subcategoría seleccionada y sus relaciones
-    //     $subcategory = Subcategory::with('category', 'category.subcategories')->findOrFail($subcategoryId);
-
-    //     // Crear una nueva hoja de cálculo
-    //     $spreadsheet = new Spreadsheet();
-    //     $sheet = $spreadsheet->getActiveSheet();
-
-    //     // Variables de encabezados y valores
-    //     $headers = [];
-    //     $values = [];
-
-    //     // Obtener la cadena de subcategorías (niveles superiores)
-    //     $currentSubcategory = $subcategory;
-    //     while ($currentSubcategory->prev_subcategory_id !== null) {
-    //         $parentSubcategory = Subcategory::find($currentSubcategory->prev_subcategory_id);
-    //         array_unshift($headers, 'Subcategoría ' . $parentSubcategory->key);
-    //         array_unshift($values, $parentSubcategory->name);
-    //         $currentSubcategory = $parentSubcategory;
-    //     }
-    //     // Agregar la categoría principal
-    //     array_unshift($headers, 'Categoría principal');
-    //     array_unshift($values, $subcategory->category->name);
-
-    //     // Añadir columnas fijas
-    //     $headers = array_merge($headers, ['Nombre del producto', 'Descripción', 'Ubicación en almacén']);
-    //     $values = array_merge($values, ['', '', '']);
-
-    //     // Añadir columnas de características (features) de la subcategoría seleccionada
-    //     foreach ($subcategory->features as $feature) {
-    //         $headers[] = $feature['name'];
-    //         $headers[] = 'Unidad de medida';
-    //         $values[] = '';
-    //         $values[] = $feature['measure_unit'];
-    //     }
-
-    //     // Llenar las celdas del encabezado (fila 1)
-    //     foreach ($headers as $col => $header) {
-    //         $cell = Coordinate::stringFromColumnIndex($col + 1) . '1';
-    //         $sheet->setCellValue($cell, $header);
-    //     }
-
-    //     // Llenar las celdas de valores (fila 2)
-    //     foreach ($values as $col => $value) {
-    //         $cell = Coordinate::stringFromColumnIndex($col + 1) . '2';
-    //         $sheet->setCellValue($cell, $value);
-    //     }
-
-    //     // Aplicar estilos a las celdas del encabezado
-    //     $headerStyle = [
-    //         'fill' => [
-    //             'fillType' => Fill::FILL_SOLID,
-    //             'startColor' => ['argb' => 'FFD9EAD3'], // Color de fondo
-    //         ],
-    //         'font' => [
-    //             'bold' => true,
-    //             'color' => ['argb' => 'FF000000'], // Color de texto
-    //         ],
-    //         'alignment' => [
-    //             'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
-    //         ]
-    //     ];
-
-    //     $sheet->getStyle('A1:' . $sheet->getHighestColumn() . '1')->applyFromArray($headerStyle);
-
-    //     // Descargar el archivo Excel en lugar de guardarlo en el servidor
-    //     $writer = new Xlsx($spreadsheet);
-    //     $filename = 'plantilla_productos_' . $subcategory->category->name . '.xlsx';
-
-    //     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    //     header('Content-Disposition: attachment; filename="' . urlencode($filename) . '"');
-    //     $writer->save('php://output');
-    // }
 
     public function generateExcelTemplate($subcategoryId)
     {
@@ -236,9 +162,11 @@ class SubcategoryController extends Controller
         }
 
         // Llenar las celdas de valores en la fila 4
-        foreach ($values as $col => $value) {
-            $cell = Coordinate::stringFromColumnIndex($col + 1) . '4';
-            $sheet->setCellValue($cell, $value);
+        if (!request('withProducts')) {
+            foreach ($values as $col => $value) {
+                $cell = Coordinate::stringFromColumnIndex($col + 1) . '4';
+                $sheet->setCellValue($cell, $value);
+            }
         }
 
         // Aplicar estilos a las celdas del encabezado (fila 3)
@@ -271,6 +199,41 @@ class SubcategoryController extends Controller
             $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($colIndex))->setAutoSize(true);
         }
 
+        // agregar productos
+        if (request('withProducts')) {
+            // Obtener todos los productos de la subcategoría
+            $products = Product::where('subcategory_id', $subcategoryId)->get();
+
+            // Rellenar los datos de los productos en las filas siguientes
+            $rowIndex = 4; // Empezar en la fila 4 después de los encabezados y valores prellenados
+            foreach ($products as $product) {
+                // Inicializar el array con los valores prellenados
+                $productData = [...$values];
+
+                // Reemplazar los valores correspondientes con los datos del producto
+                $productData[array_search('Nombre del producto', $headers)] = $product->name;
+                $productData[array_search('Descripción', $headers)] = $product->description;
+                $productData[array_search('Número de parte de fabricante', $headers)] = $product->part_number_supplier;
+                $productData[array_search('Ubicación en almacén', $headers)] = $product->location;
+
+                // Añadir valores de las características (features)
+                foreach ($subcategory->features as $key => $feature) {
+                    $featureIndex = array_search($feature['name'], $headers);
+                    $unitIndex = $featureIndex + 1; // La unidad de medida siempre sigue a la característica en el orden de las columnas
+                    $productData[$featureIndex] = $product->features[$key]['value'] ?? '';
+                    $productData[$unitIndex] = $feature['measure_unit'];
+                }
+
+                // Llenar las celdas de la fila actual
+                foreach ($productData as $col => $value) {
+                    $cell = Coordinate::stringFromColumnIndex($col + 1) . $rowIndex;
+                    $sheet->setCellValue($cell, $value);
+                }
+
+                $rowIndex++;
+            }
+        }
+
         // Descargar el archivo Excel en lugar de guardarlo en el servidor
         $writer = new Xlsx($spreadsheet);
         $filename = 'plantilla_productos_' . $subcategory->category->name . '.xlsx';
@@ -278,5 +241,11 @@ class SubcategoryController extends Controller
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         header('Content-Disposition: attachment; filename="' . urlencode($filename) . '"');
         $writer->save('php://output');
+    }
+
+    public function getSubcategoryProducts(Subcategory $subcategory)
+    {
+        $products = $subcategory->products;
+        return response()->json(['items' => $products]);
     }
 }

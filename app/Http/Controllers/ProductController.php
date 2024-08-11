@@ -343,6 +343,14 @@ class ProductController extends Controller
             $subCategoryName = $data[$productNameColumnIndex - 1];
             $subcategory = Subcategory::where('name', $subCategoryName)->firstOrFail();
 
+            // Primero, recorre hasta llegar al nivel más alto (primer nivel de subcategoría)
+            $currentSubcategory = $subcategory;
+            $subcategoryStack = [];
+            while ($currentSubcategory !== null) {
+                array_unshift($subcategoryStack, $currentSubcategory->name);
+                $currentSubcategory = Subcategory::find($currentSubcategory->prev_subcategory_id);
+            }
+
             // Guardar el producto en la base de datos
             Product::create([
                 'name' => $data[$productNameColumnIndex],
@@ -350,6 +358,7 @@ class ProductController extends Controller
                 'part_number' => $partNumber,
                 'part_number_supplier' => $data[$productNameColumnIndex + 2], // Asumimos que la columna 'Número de parte de fabricante' está inmediatamente después de 'Descripción'
                 'location' => $data[$productNameColumnIndex + 3], // Asumimos que la columna 'Ubicación en almacén' está inmediatamente después de 'Número de parte de fabricante'
+                'bread_crumbles' => $subcategoryStack,
                 'features' => $features,
                 'subcategory_id' => $subcategory->id,
             ]);
