@@ -74,7 +74,6 @@ class ProductController extends Controller
     {
         $product->load(['media', 'subcategory:id,name,category_id,prev_subcategory_id' => ['category:id,name']]);
 
-        // return $product;
         return inertia('Product/Show', compact('product'));
     }
 
