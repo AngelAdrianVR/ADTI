@@ -54,9 +54,11 @@ class ProductController extends Controller
         $product = Product::create($request->except(['imageCover', 'subcategory_id']) +
             ['subcategory_id' => collect($request->subcategory_id)->last()]); //guarda el ultimo id del arreglo de subcategorías
 
-        // Guardar la imagen de portada del producto en la colección 'imageCover'
+
+        // Guardar la imagen de categoria temporalmente
         if ($request->hasFile('imageCover')) {
-            $product->addMediaFromRequest('imageCover')->toMediaCollection('imageCover');
+            $path = $request->file('imageCover')->storeAs('temp', $request->file('imageCover')->getClientOriginalName());
+            $product->addMedia(storage_path('app/' . $path))->toMediaCollection('imageCover');
         }
 
         // Guardar los archivos descargables si existen
@@ -135,16 +137,15 @@ class ProductController extends Controller
         // Eliminar imagen antigua solo si se proporciona nueva imagen
         if ($request->hasFile('imageCover')) {
             $product->clearMediaCollection('imageCover');
+
+            // Guardar la imagen de categoria temporalmente
+            $path = $request->file('imageCover')->storeAs('temp', $request->file('imageCover')->getClientOriginalName());
+            $product->addMedia(storage_path('app/' . $path))->toMediaCollection('imageCover');
         }
 
-        // Guardar el archivo en la colección 'imageCover'
-        if ($request->hasFile('imageCover')) {
-            $product->addMediaFromRequest('imageCover')->toMediaCollection('imageCover');
-        }
         // Guardar los archivos descargables si existen
         if ($request->hasFile('media')) {
-            $product->addMediaFromRequest('media')->toMediaCollection('files');
-            // $product->addAllMediaFromRequest('media')->each(fn ($file) => $file->toMediaCollection('files'));
+            $product->addAllMediaFromRequest('media')->each(fn($file) => $file->toMediaCollection('files'));
         }
 
         return to_route('products.show', $product->id); //manda al show despues de crear el producto
