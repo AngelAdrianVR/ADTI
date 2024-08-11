@@ -33,7 +33,7 @@
                         <li @click.stop="$inertia.get(route('products.show', product.id))" v-for="(product, index) in productsFound"
                             :key="index" class="hover:bg-gray-100 cursor-default text-sm px-5 py-2 flex items-center justify-between">
                             <p>{{product.name }}</p>
-                            <p class="text-gray99">{{product.part_number_supplier }}</p>
+                            <p class="text-gray99 text-xs">{{product.part_number_supplier }}</p>
                         </li>
                     </ul>
                     <p v-else class="text-center text-sm text-gray-600 px-5 py-2">No se encontraron coincidencias</p>
