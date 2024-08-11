@@ -3,7 +3,8 @@
         <div class="px-3 md:px-16 py-8">
             <Back :to="route('settings.index', { currentTab: 1 })" />
 
-            <form @submit.prevent="store" class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-2/3 xl:w-1/2 mx-auto mt-2">
+            <form @submit.prevent="store"
+                class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-2/3 xl:w-1/2 mx-auto mt-2">
                 <h1 class="font-bold ml-2 col-span-full">Crear categoría</h1>
 
                 <section class="my-3 grid grid-cols-2 gap-3">
@@ -87,13 +88,12 @@
                             <div v-for="(item, index) in localFeatures" :key="index"
                                 class="grid grid-cols-2 gap-3 relative">
                                 <el-input v-model="item.name" disabled />
-                                <el-select filterable v-model="item.measure_unit" placeholder="Selecciona"
-                                    no-data-text="No hay opciones registradas"
-                                    no-match-text="No se encontraron coincidencias">
-                                    <el-option label="No aplica" value="No aplica" />
-                                    <el-option v-for="mu in measure_units" :key="mu.id" :label="mu.name"
-                                        :value="mu.name" />
-                                </el-select>
+                                <select v-model="item.measure_unit" plceholder="Selecciona"
+                                    class="text-sm h-9 border-grayD9 rounded-[5px] outline-none focus:ring-0 focus:border-primary transition-all duration-100">
+                                    <option value="No aplica">No aplica</option>
+                                    <option v-for="mu in measure_units" :key="mu.id" :value="mu.name">{{ mu.name }}
+                                    </option>
+                                </select>
                                 <button @click="removeLocalFeature(index)" type="button"
                                     class="text-primary absolute top-2 -right-6">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"

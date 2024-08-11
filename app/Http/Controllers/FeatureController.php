@@ -38,11 +38,15 @@ class FeatureController extends Controller
 
     public function update(Request $request, Feature $feature)
     {
-        //
+        $validated = $request->validate([
+            'name' => 'required|string|max:255'
+        ]);
+
+        $feature->update($validated);
     }
 
     public function destroy(Feature $feature)
     {
-        //
+        $feature->delete();
     }
 }

@@ -26,7 +26,7 @@
         <main class="mt-3">
             <figure class="w-full h-56 border border-grayD9 rounded-[3px]">
                 <img v-if="category.media.length" :src="category.media[0].original_url" :alt="category.name"
-                    class="w-full h-56 object-contain">
+                    class="h-full object-contain mx-auto">
                 <div v-else class="h-full flex items-center justify-center">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1"
                         stroke="currentColor" class="size-32 text-grayED">
@@ -44,7 +44,7 @@
                             <span>{{ node.label }}</span>
                             <div v-if="data.features && data.features.length" class="flex items-center space-x-1">
                                 <el-tooltip content="Exportar productos" placement="top">
-                                    <button
+                                    <button @click="openExportModal(data)"
                                         class="size-6 rounded-full flex items-center justify-center text-secondary hover:text-white hover:bg-primary">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                             stroke-width="1.5" stroke="currentColor" class="size-4">
@@ -58,8 +58,8 @@
                                         <h1 class="font-bold">Descargar plantilla</h1>
                                         <p>Si ya tienes los productos en la plantilla da clic en el link</p>
                                         <p class="text-end">
-                                            <Link :href="route('products.index')">
-                                            <button class="underline text-primary">Ir a importación</button>
+                                            <Link :href="route('products.index', { openImportModal: true })">
+                                            <button class="underline text-primarylight">Ir a importación</button>
                                             </Link>
                                         </p>
                                     </template>
@@ -79,9 +79,31 @@
             </section>
         </main>
     </div>
+
+    <DialogModal :show="showExportModal" @close="showExportModal = false">
+        <template #title> Exportar productos </template>
+        <template #content>
+            <p class="text-black">
+                Al seleccionar “Exportar” el archivo se descargará automáticamente a tu dispositivo. <br><br>
+                Hay
+                <InlineLoading v-if="gettingProducts" />
+                <b v-else class="text-primary">{{ productsToExport.length }}</b>
+                producto(s) para exportar
+            </p>
+        </template>
+        <template #footer>
+            <div class="flex items-center justify-end space-x-1">
+                <PrimaryButton @click="exportProducts()" :disabled="!productsToExport.length">Exportar</PrimaryButton>
+            </div>
+        </template>
+    </DialogModal>
 </template>
 <script>
 import { Link, useForm } from '@inertiajs/vue3';
+import InlineLoading from '@/Components/MyComponents/InlineLoading.vue';
+import DialogModal from '@/Components/DialogModal.vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import axios from 'axios';
 
 export default {
     data() {
@@ -96,18 +118,49 @@ export default {
             },
             // carga
             loading: false,
+            gettingProducts: false,
+            // modals
+            showExportModal: false,
+            // exportacion
+            productsToExport: [],
+            subcategoryToExport: null,
         }
     },
     components: {
         Link,
+        InlineLoading,
+        DialogModal,
+        PrimaryButton,
     },
     emits: ['deleted'],
     props: {
         category: Object,
     },
     methods: {
+        async openExportModal(data) {
+            this.showExportModal = true;
+            this.subcategoryToExport = data.id;
+            try {
+                this.gettingProducts = true;
+                const response = await axios.get(route('subcategories.get-products', data.id));
+                
+                if (response.status === 200) {
+                    this.productsToExport = response.data.items;
+                }
+            } catch (error) {
+                console.log(error);
+            } finally {
+                this.gettingProducts = false;
+            }
+        },
         downloadTemplate(data) {
-            this.$inertia.visit(route('subcategories.download-excel-template', data.id))
+            const url = route('subcategories.download-excel-template', data.id);
+            window.open(url, '_blank');
+        },
+        exportProducts() {
+            const url = route('subcategories.download-excel-template', { subcategory: this.subcategoryToExport, withProducts: true });
+            window.open(url, '_blank');
+            this.showExportModal = false;
         },
         handleNodeClick(data) {
             console.log(data)

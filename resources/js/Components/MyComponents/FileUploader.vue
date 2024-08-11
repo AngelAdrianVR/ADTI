@@ -16,7 +16,7 @@
                         <i :class="getFileTypeIcon(file.name)"></i>
                         <span class="ml-2">{{ file.name }}</span>
                     </p>
-                    <button type="button" @click="removeFile(index)"><i class="fa-solid fa-xmark text-xs"></i></button>
+                    <button type="button" @click="removeFile(index)"><i class="fa-solid fa-xmark text-xs ml-2"></i></button>
                 </li>
             </ul>
         </div>
@@ -47,6 +47,7 @@ export default {
             if (format === 'video') return 'video/*';
             else if (format === 'pdf') return 'application/pdf';
             else if (format === 'imagen') return 'image/*';
+            else if (format === 'excel') return '.xlsx, .xls';
             else '*/*';
         },
         openFileBrowser() {
@@ -83,6 +84,9 @@ export default {
                 case 'mkv':
                 case 'mov':
                     return 'fa-regular fa-file-video text-sky-400';
+                case 'xlsx':
+                case 'xls':
+                    return 'fa-regular fa-file-excel text-green-600';
                 default:
                     return 'fa-regular fa-file-lines';
             }

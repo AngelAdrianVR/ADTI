@@ -30,22 +30,21 @@ Route::get('/show-category/{category_id}', function ($category_id) {
 
     // return $category;
     return Inertia::render('LandingPage/ShowCategory', [
-        'category' => $category,
+        'category' => $category
     ]);
 })->name('public.show-category');
 
 
 //ruta para mostrar las subcategorías de una subcategoría seleccionada
 Route::get('/show-subcategory/{subcategory_id}', function ($subcategory_id) {
-    $subcategory = Subcategory::with(['media', 'products' => function($query) {
-        $query->select('id', 'name', 'description', 'part_number', 'location', 'subcategory_id')
-              ->with('media'); // Asegúrate de incluir la relación 'media' dentro de 'products'
-    }, 'category.subcategories.media', 'category.media'])
-    ->find($subcategory_id);
+    $subcategory = Subcategory::with(['media', 'products', 'category.subcategories.media', 'category.media'])->find($subcategory_id);
 
-    // return $subcategory;
+    $total_products = Product::where('subcategory_id', $subcategory_id)->count();
+
+    // return $total_products;
     return Inertia::render('LandingPage/ShowSubcategory', [
         'subcategory' => $subcategory,
+        'total_products' => $total_products // cantidad de productos que contiene esa subcategoría
     ]);
 })->name('public.show-subcategory');
 
@@ -56,7 +55,7 @@ Route::get('/show-product/{product_id}', function ($product_id) {
 
     // return $product;
     return Inertia::render('LandingPage/ShowProduct', [
-        'product' => $product,
+        'product' => $product
     ]);
 })->name('public.show-product');
 
@@ -67,7 +66,14 @@ Route::middleware([
     'verified',
 ])->group(function () {
     Route::get('/dashboard', function () {
-        return Inertia::render('Dashboard');
+        $categories = Category::with(['subcategories:id,name,category_id' => ['products:id,name,subcategory_id']])->get();
+        $total_products = Product::all()->count();
+
+        // return $categories;
+        return Inertia::render('Dashboard', [
+            'categories' => $categories,
+            'total_products' => $total_products,
+        ]);
     })->name('dashboard');
 });
 
@@ -86,6 +92,8 @@ Route::resource('products', ProductController::class)->middleware('auth');
 Route::post('products/update-with-media/{product}', [ProductController::class, 'updateWithMedia'])->name('products.update-with-media')->middleware('auth');
 Route::post('products/massive-delete', [ProductController::class, 'massiveDelete'])->name('products.massive-delete');
 Route::get('products-search', [ProductController::class, 'searchProduct'])->name('products.search');
+Route::get('products-fetch-subcategory-products/{subcategory_id}', [ProductController::class, 'fetchSubcategoryProducts'])->name('products.fetch-subcategory-products');
+Route::post('products/import', [ProductController::class, 'import'])->name('products.import')->middleware('auth');
 
 
 //Category routes----------------------------------------------------------------------------------
@@ -103,6 +111,7 @@ Route::get('categories-get-all', [CategoryController::class, 'getAll'])->name('c
 Route::resource('subcategories', SubcategoryController::class)->middleware('auth');
 Route::post('subcategories/update-with-media/{subcategory}', [SubcategoryController::class, 'updateWithMedia'])->name('subcategories.update-with-media')->middleware('auth');
 Route::get('subcategories-download-excel-template/{subcategory}', [SubcategoryController::class, 'generateExcelTemplate'])->name('subcategories.download-excel-template')->middleware('auth');
+Route::get('subcategories-get-products/{subcategory}', [SubcategoryController::class, 'getSubcategoryProducts'])->name('subcategories.get-products')->middleware('auth');
 
 
 //measure unit routes----------------------------------------------------------------------------------

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Feature;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -14,11 +15,12 @@ class SettingController extends Controller
         $permissions = Permission::all()->groupBy(function ($data) {
             return $data->category;
         });
+        $features = Feature::latest()->get();
 
         // mandar el unmero de tab por defecto desde la url
         $currentTab = request('currentTab');
 
-        return inertia('Setting/Index', compact('roles', 'permissions', 'currentTab'));
+        return inertia('Setting/Index', compact('roles', 'permissions', 'currentTab', 'features'));
     }
 
     public function storeRole(Request $request)
