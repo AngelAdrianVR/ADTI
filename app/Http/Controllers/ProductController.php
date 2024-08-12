@@ -33,7 +33,7 @@ class ProductController extends Controller
         $categories = Category::all();
         $measure_units = MeasureUnit::all();
         $last_product = Product::latest()->first();
-        $next_product_id = $last_product->id + 1;
+        $next_product_id = $last_product ? $last_product->id + 1 : 0;
 
         return inertia('Product/Create', compact('categories', 'measure_units', 'next_product_id'));
     }
