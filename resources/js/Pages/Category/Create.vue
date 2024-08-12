@@ -82,7 +82,12 @@
                     <article class="w-[60%]">
                         <div class="grid grid-cols-2 gap-x-4 text-gray37 *:ml-2">
                             <p>Característica</p>
-                            <p>Unidad de medida</p>
+                            <p class="flex items-center justify-between">
+                                <span>Unidad de medida</span>
+                                <button type="button" @click="showNewUnitModal = true" class="text-primary text-sm">
+                                    <i class="fa-solid fa-circle-plus"></i>
+                                </button>
+                            </p>
                         </div>
                         <div v-if="localFeatures.length" class="space-y-2">
                             <div v-for="(item, index) in localFeatures" :key="index"
@@ -163,6 +168,32 @@
                 </div>
             </template>
         </DialogModal>
+
+         <!-- agregar nueva unidad de medida -->
+         <DialogModal :show="showNewUnitModal" @close="showNewUnitModal = false" maxWidth="2xl">
+            <template #title>
+                <h1>Crear Unidad de medida</h1>
+            </template>
+            <template #content>
+                <form @submit.prevent="storeUnit" class="grid grid-cols-2 gap-3">
+                    <div>
+                        <InputLabel value="Nombre de la unidad de medida*" />
+                        <el-input v-model="unitForm.name" placeholder="Ej. Metro" :maxlength="255" clearable />
+                        <InputError :message="unitForm.errors.name" />
+                    </div>
+                    <div>
+                        <InputLabel value="Abreviación*" />
+                        <el-input v-model="unitForm.abreviation" placeholder="Ej. m" :maxlength="10" clearable />
+                        <InputError :message="unitForm.errors.abreviation" />
+                    </div>
+                </form>
+            </template>
+            <template #footer>
+                <div class="flex items-center space-x-1">
+                    <PrimaryButton @click="storeUnit" :disabled="unitForm.processing">Crear</PrimaryButton>
+                </div>
+            </template>
+        </DialogModal>
     </AppLayout>
 </template>
 
@@ -189,14 +220,21 @@ export default {
         const featureForm = useForm({
             name: null,
         });
+        
+        const unitForm = useForm({
+            name: null,
+            abreviation: null,
+        });
 
         return {
             //formularios
             form,
             featureForm,
+            unitForm,
             // modales
             showFeaturesModal: false,
             showNewFeatureModal: false,
+            showNewUnitModal: false,
             // caracteristicas
             elementFeaturesPath: '',
             localFeatures: [],
@@ -370,6 +408,17 @@ export default {
                 onSuccess: () => {
                     this.featureForm.reset();
                     this.showNewFeatureModal = false;
+                },
+                onError: (errors) => {
+                    console.log(errors);
+                }
+            });
+        },
+        storeUnit() {
+            this.unitForm.post(route('measure_units.store'), {
+                onSuccess: () => {
+                    this.unitForm.reset();
+                    this.showNewUnitModal = false;
                 },
                 onError: (errors) => {
                     console.log(errors);
