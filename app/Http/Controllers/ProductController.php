@@ -95,7 +95,7 @@ class ProductController extends Controller
             'description' => 'nullable|string|max:255',
             'features' => 'nullable|array',
             'part_number' => 'required|string|max:20',
-            'part_number_supplier' => 'required|string|max:20|unique:products,part_number_supplier,' . $product->id, //ignora si es el mismo para este id
+            'part_number_supplier' => 'required|string|max:20',
             'location' => 'nullable|string|max:100',
         ]);
 
@@ -125,7 +125,7 @@ class ProductController extends Controller
             'description' => 'nullable|string|max:255',
             'features' => 'nullable|array',
             'part_number' => 'required|string|max:20',
-            'part_number_supplier' => 'required|string|max:20|unique:products,part_number_supplier,' . $product->id, //ignora si es el mismo para este
+            'part_number_supplier' => 'required|string|max:20',
             'location' => 'nullable|string|max:100',
         ]);
 
