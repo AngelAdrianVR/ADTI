@@ -20,10 +20,10 @@
                         <p v-if="loading" class="text-xs mb-1 text-center">
                             Cargando <i class="fa-sharp fa-solid fa-circle-notch fa-spin ml-2 text-primary"></i>
                         </p>
-                        <button @click="showCategoryFormModal = true" type="button"
+                        <!-- <button @click="showCategoryFormModal = true" type="button"
                             class="rounded-full flex items-center justify-center">
                             <i class="fa-solid fa-circle-plus text-primary mr-2"></i>
-                        </button>
+                        </button> -->
                     </div>
                     <el-select @change="fetchSubcategories()" class="w-1/2" filterable v-model="form.category_id" placeholder="Seleccione"
                         no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
@@ -42,10 +42,10 @@
                     <div v-for="(subcategory, index) in highestLevel" :key="subcategory" class="mt-3">
                         <div class="flex items-center justify-between">
                             <InputLabel :value="'Subcategoría (' + (index + 1) + ')*'" class="ml-3 mb-1" />
-                            <button @click="handleCreateSubcategory(index)" type="button"
+                            <!-- <button @click="handleCreateSubcategory(index)" type="button"
                                 class="rounded-full flex items-center justify-center">
                                 <i class="fa-solid fa-circle-plus text-primary mr-2"></i>
-                            </button>
+                            </button> -->
                         </div>
 
                         <!-- Cuando es la primera subcategoría (no contiene un subcategory_id) -->
@@ -127,11 +127,11 @@
                     <InputError :message="form.errors.part_number_supplier" />
                 </div>
 
-                <div class="mt-3">
+                <!-- <div class="mt-3">
                     <InputLabel value="Número de parte interno" class="ml-3 mb-1" />
                     <el-input v-model="form.part_number" disabled placeholder="Creación automática" :maxlength="100" clearable />
                     <InputError :message="form.errors.part_number" />
-                </div>
+                </div> -->
 
                 <div class="mt-3">
                     <InputLabel value="Ubicación en almacén" class="ml-3 mb-1" />
@@ -157,7 +157,7 @@
                 </div>
 
                 <div class="col-span-full space-x-4 text-right mt-7">
-                    <ThirthButton :disabled="!form.category_id || form.subcategory_id.length < 2" type="button" @click="generatePartNumber()">Generar número de parte</ThirthButton>
+                    <!-- <ThirthButton :disabled="!form.category_id || form.subcategory_id.length < 2" type="button" @click="generatePartNumber()">Generar número de parte</ThirthButton> -->
                     <PrimaryButton class="!rounded-full" :disabled="form.processing">
                         <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
                         Guardar cambios
@@ -375,6 +375,7 @@ props:{
 },
 methods:{
     update() {
+        this.generatePartNumber();
         if (this.form.imageCover || this.form.media) {
             this.form.post(route("products.update-with-media", this.product.id), {
                 method: '_put',
