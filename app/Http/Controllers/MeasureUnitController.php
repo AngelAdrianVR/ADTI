@@ -20,7 +20,7 @@ class MeasureUnitController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:100',
+            'name' => 'required|string|max:100|unique:measure_units',
             'abreviation' => 'required|string|max:10',
         ]);
 

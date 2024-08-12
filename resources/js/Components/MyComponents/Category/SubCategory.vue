@@ -13,7 +13,7 @@
                         </svg>
                     </button>
                 </el-tooltip>
-                <el-tooltip content="Agregar imagen" placement="top">
+                <el-tooltip v-if="canAddImage" content="Agregar imagen" placement="top">
                     <button type="button" @click="openFileExplorer"
                         class="hover:text-primary disabled:opacity-50 disabled:hover:text-black disabled:cursor-not-allowed"
                         :disabled="subCategory.image">
@@ -121,7 +121,6 @@ import DialogModal from "@/Components/DialogModal.vue";
 export default {
     data() {
         return {
-            // imageUrl: null,
             showFeatureInheritedConfirm: false,
         };
     },
@@ -144,6 +143,10 @@ export default {
         canAddSubCategory() {
             const level = this.parentIndex ? this.parentIndex.split('.').length : 0;
             return level < 2; // Limita a 3 niveles (0, 1, 2)
+        },
+        canAddImage() {
+            const level = this.parentIndex ? this.parentIndex.split('.').length : 0;
+            return level > 0; // Limita a 1 nivel (1 y 2)
         },
         canAddCharacteristics() {
             return this.subCategory.subCategories.length === 0;
@@ -192,7 +195,6 @@ export default {
         onImageChange(event) {
             const file = event.target.files[0];
             if (file) {
-                // this.imageUrl = URL.createObjectURL(file);
                 this.$emit('imageUploaded', file, this.getLabel);
             }
         },
@@ -200,7 +202,6 @@ export default {
             this.$emit('imageUploaded', file, path);
         },
         removeImage() {
-            // this.imageUrl = null;
             this.$emit('imageUploaded', null, this.getLabel);
         },
         removeFeatures() {
