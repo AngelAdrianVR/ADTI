@@ -40,6 +40,9 @@ class PermissionSeeder extends Seeder
                 'Crear permisos',
                 'Editar permisos',
                 'Eliminar permisos',
+                'Crear caracteristicas',
+                'Editar caracteristicas',
+                'Eliminar caracteristicas',
             ],
         ];
 
