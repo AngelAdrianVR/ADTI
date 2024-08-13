@@ -229,6 +229,7 @@ export default {
         return {
             //formularios
             form,
+            unitForm,
             featureForm,
             // modales
             showFeaturesModal: false,
