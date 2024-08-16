@@ -364,4 +364,11 @@ class ProductController extends Controller
             ]);
         }
     }
+
+    public function printBarcodes()
+    {
+        $products = Product::whereIn('id', request('items_ids'))->get(['id', 'name', 'part_number']);
+
+        return inertia('Product/BarcodeTemplate', compact('products'));
+    }
 }
