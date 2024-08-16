@@ -320,7 +320,6 @@ export default {
                     features: []
                 };
             }
-
             indexes.forEach((index, idx) => {
                 if (idx === indexes.length - 1) {
                     subCategories[index].subCategories.push(data);
