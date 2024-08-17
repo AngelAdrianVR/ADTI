@@ -17,7 +17,6 @@ use Inertia\Inertia;
 Route::get('/', function () {
     $categories = Category::with('subcategories', 'media')->get();
 
-    // return $categories;
     return Inertia::render('Welcome', [
         'categories' => $categories,
     ]);
@@ -94,6 +93,8 @@ Route::post('products/massive-delete', [ProductController::class, 'massiveDelete
 Route::get('products-search', [ProductController::class, 'searchProduct'])->name('products.search');
 Route::get('products-fetch-subcategory-products/{subcategory_id}', [ProductController::class, 'fetchSubcategoryProducts'])->name('products.fetch-subcategory-products');
 Route::post('products/import', [ProductController::class, 'import'])->name('products.import')->middleware('auth');
+Route::get('products-print-barcodes', [ProductController::class, 'printBarcodes'])->name('products.print-barcodes')->middleware('auth');
+Route::post('products/get-consecutivo/{subcategory_id}', [ProductController::class, 'getConsecutivo'])->name('products.get-consecutivo')->middleware('auth');
 
 
 //Category routes----------------------------------------------------------------------------------

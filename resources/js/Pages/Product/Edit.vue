@@ -9,7 +9,7 @@
                 <h1 class="font-bold ml-2 col-span-full">Editar producto</h1>
 
                 <div class="mt-3">
-                    <InputLabel value="Nombre del producto*" class="ml-3 mb-1" />
+                    <InputLabel value="Nombre del producto" class="ml-3 mb-1" />
                     <el-input v-model="form.name" placeholder="Escribe el nombre del producto" :maxlength="100" clearable />
                     <InputError :message="form.errors.name" />
                 </div>
@@ -77,7 +77,7 @@
                 <div class="mt-3 col-span-full">
                     <InputLabel value="Descripción del producto" class="ml-3 mb-1 text-sm" />
                     <el-input v-model="form.description" :autosize="{ minRows: 3, maxRows: 5 }" type="textarea"
-                        placeholder="Escribe una descripción del producto si es necesario" :maxlength="255" show-word-limit clearable />
+                        placeholder="Escribe una descripción del producto si es necesario" :maxlength="100" show-word-limit clearable />
                     <InputError :message="form.errors.description" />
                 </div>
 
@@ -122,16 +122,42 @@
                 </div>
 
                 <div class="mt-3">
+                    <InputLabel value="Ubicación en almacén" class="ml-3 mb-1" />
+                    <el-input v-model="form.location" placeholder="Ej. S-4763" :maxlength="100" clearable />
+                    <InputError :message="form.errors.location" />
+                </div>
+
+                <div class="mt-3">
+                    <InputLabel value="Costo de línea" class="ml-3 mb-1" />
+                     <el-input v-model="form.line_cost" type="text"
+                        :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
+                        :parser="(value) => value.replace(/[^\d.]/g, '')"
+                        placeholder="0.00">
+                        <template #prefix>
+                            <i class="fa-solid fa-dollar-sign"></i>
+                        </template>
+                    </el-input>
+                    <InputError :message="form.errors.line_cost" />
+                </div>
+
+                <div class="mt-3">
                     <InputLabel value="Número de parte del fabricante" class="ml-3 mb-1" />
-                    <el-input v-model="form.part_number_supplier" placeholder="Escribe el numero de parte del fabricante" :maxlength="17" show-word-limit clearable />
+                    <el-input 
+                        v-model="form.part_number_supplier" 
+                        placeholder="Escribe el número de parte del fabricante" 
+                        :maxlength="100" 
+                        show-word-limit 
+                        clearable 
+                        @input="filterInput"
+                    />
                     <InputError :message="form.errors.part_number_supplier" />
                 </div>
 
-                <!-- <div class="mt-3">
+                <div class="mt-3">
                     <InputLabel value="Número de parte interno" class="ml-3 mb-1" />
                     <el-input v-model="form.part_number" disabled placeholder="Creación automática" :maxlength="100" clearable />
                     <InputError :message="form.errors.part_number" />
-                </div> -->
+                </div>
 
                 <div class="mt-3">
                     <InputLabel value="Ubicación en almacén" class="ml-3 mb-1" />
@@ -153,7 +179,7 @@
                 </div>
 
                 <div class="ml-2 mt-3 col-span-full">
-                    <FileUploader @files-selected="this.form.media = $event" />
+                    <FileUploader @files-selected="this.form.media = $event" :currentFiles="product.media?.filter(file => file.collection_name !== 'imageCover')" />
                 </div>
 
                 <div class="col-span-full space-x-4 text-right mt-7">
@@ -283,7 +309,7 @@
                 </div>
             </template>
         </DialogModal>
-
+        {{ form.media }}
     </AppLayout>
 </template>
 
@@ -316,6 +342,7 @@ data() {
             part_number: this.product.part_number, //numero de parte interno
             part_number_supplier: this.product.part_number_supplier, //numero de parte del fabricante
             location: this.product.location,
+            line_cost: this.product.line_cost,
             bread_crumbles: this.product.bread_crumbles, //nombres de todas las subcategorías.
             media: null, //archivos del producto (descargables)
             deleteMedia: false, //elimina todos los archivos existentes
@@ -375,8 +402,7 @@ props:{
 },
 methods:{
     update() {
-        this.generatePartNumber();
-        if (this.form.imageCover || this.form.media) {
+        if (this.form.imageCover || this.form.media?.length) {
             this.form.post(route("products.update-with-media", this.product.id), {
                 method: '_put',
                 onSuccess: () => {
@@ -477,8 +503,14 @@ methods:{
 
         // Si es el último nivel, guarda las características de la subcategoría
         if (level === this.highestLevel) {
+
+            this.generatePartNumber(); //se crea el numero de parte interno.
+
             // Filtrar subcategoría que tienen el nivel más alto
             const highestLevelSubcategory = this.categoryInfo.subcategories.find(sub => sub.id === this.form.subcategory_id[level - 1]);
+
+            //crea en la descripción con el breadCrumble agregando tambien el nombre de la categoría
+            this.form.description = this.categoryInfo.name + ' ' + this.form.bread_crumbles.join(' ');
 
             if (highestLevelSubcategory && Array.isArray(highestLevelSubcategory.features)) {
                 // Crear un array de objetos con las características y unidad de medida asignando null a cada una
@@ -487,7 +519,7 @@ methods:{
                     value: null,              // Valor inicial de la característica
                     measure_unit: feature.measure_unit // Unidad de medida predefinida
                 }));
-                console.log(this.form.features);
+                // console.log(this.form.features);
             } else {
                 // Si no hay características, inicializar features como un array vacío
                 this.form.features = [];
@@ -497,19 +529,34 @@ methods:{
     saveImage(image) {
         this.form.imageCover = image;
     },
-    generatePartNumber() {
-        // Obtener la categoría seleccionada
-        const categoryKey = this.categoryInfo.key;
+    filterInput(event) {
+        // Filtrar caracteres especiales dejando solo letras y números
+        this.form.part_number_supplier = event.replace(/[^a-zA-Z0-9]/g, '');
+    },
+    async generatePartNumber() {
+        try {
+            const lastElement = this.form.subcategory_id[this.form.subcategory_id.length - 1];
+            const response = await axios.post(route('products.get-consecutivo', lastElement));
+            if ( response.status === 200 ) {
+                 // Obtener la categoría seleccionada
+                const categoryKey = this.categoryInfo.key;
 
-        // Concatenar los "key" de las subcategorías seleccionadas
-        const subcategoryKeys = this.form.subcategory_id.map(id => {
-            const subcategory = this.categoryInfo.subcategories.find(sub => sub.id === id);
-            return subcategory ? subcategory.key : '';
-        }).join('');
+                // Concatenar los "key" de las subcategorías seleccionadas
+                const subcategoryKeys = this.form.subcategory_id.map(id => {
+                    const subcategory = this.categoryInfo.subcategories.find(sub => sub.id === id);
+                    return subcategory ? subcategory.key : '';
+                }).join('');
 
-        // Concatenar todos los "key" en un solo string
-        const partNumber = categoryKey + subcategoryKeys + '-' + this.product.id;
-        this.form.part_number = partNumber;
+                // Función para agregar ceros a la izquierda si es necesario
+                const nextConsecutivo = String(response.data.next_consecutivo).padStart(3, '0');
+
+                // Concatenar todos los "key" en un solo string
+                const partNumber = categoryKey + subcategoryKeys + '-' + nextConsecutivo;
+                this.form.part_number = partNumber;
+            }
+        } catch (error) {
+            console.log(error);
+        }
     },
     handleCreateSubcategory(index) {
         this.showSubcategoryFormModal = true; 

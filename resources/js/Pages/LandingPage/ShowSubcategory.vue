@@ -120,8 +120,12 @@ computed:{
         //si la subcategoría es de nivel 1 recupera las subcategorías relacionadas a esa 1 nivel arriba
         if ( this.subcategory.level === 1 ) {
             return this.subcategory?.category?.subcategories?.filter(sb => sb.level === 2 && sb.prev_subcategory_id === this.subcategory.id)
-        } else { //si la subcategoría es de nivel 2 recupera las subcategorías relacionadas a esa 1 nivel arriba
+        } else if ( this.subcategory.level === 2 ) { //si la subcategoría es de nivel 2 recupera las subcategorías relacionadas a esa 1 nivel arriba
             return this.subcategory?.category?.subcategories?.filter(sb => sb.level === 3 && sb.prev_subcategory_id === this.subcategory.id)
+        } else if ( this.subcategory.level === 3 ) { //si la subcategoría es de nivel 3 recupera las subcategorías relacionadas a esa 1 nivel arriba
+            return this.subcategory?.category?.subcategories?.filter(sb => sb.level === 4 && sb.prev_subcategory_id === this.subcategory.id)
+        } else if ( this.subcategory.level === 4 ) { //si la subcategoría es de nivel 4 recupera las subcategorías relacionadas a esa 1 nivel arriba
+            return this.subcategory?.category?.subcategories?.filter(sb => sb.level === 5 && sb.prev_subcategory_id === this.subcategory.id)
         }
     }
 },
