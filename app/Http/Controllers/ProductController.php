@@ -41,10 +41,10 @@ class ProductController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:100',
+            'name' => 'nullable|string|max:100',
             'category_id' => 'required',
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
-            'description' => 'nullable|string|max:255',
+            'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
             'part_number' => 'required|string|max:20',
             'part_number_supplier' => 'required|string|max:20|unique:products,part_number_supplier',
@@ -74,6 +74,7 @@ class ProductController extends Controller
     {
         $product->load(['media', 'subcategory:id,name,category_id,prev_subcategory_id' => ['category:id,name']]);
 
+        // return $product;
         return inertia('Product/Show', compact('product'));
     }
 
@@ -89,10 +90,10 @@ class ProductController extends Controller
     public function update(Request $request, Product $product)
     {
         $request->validate([
-            'name' => 'required|string|max:100',
+            'name' => 'nullable|string|max:100',
             'category_id' => 'required',
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
-            'description' => 'nullable|string|max:255',
+            'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
             'part_number' => 'required|string|max:20',
             'part_number_supplier' => 'required|string|max:20',
@@ -119,10 +120,10 @@ class ProductController extends Controller
     public function updateWithMedia(Request $request, Product $product)
     {
         $request->validate([
-            'name' => 'required|string|max:100',
+            'name' => 'nullable|string|max:100',
             'category_id' => 'required',
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
-            'description' => 'nullable|string|max:255',
+            'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
             'part_number' => 'required|string|max:20',
             'part_number_supplier' => 'required|string|max:20',
