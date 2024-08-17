@@ -1,16 +1,16 @@
 <template>
     <AppLayout title="Productos">
-        <main class="px-2 lg:px-10 pt-1 pb-16">
+        <main class="px-2 md:px-10 pt-1 pb-16">
             <h1 class="font-bold my-3 ml-4 text-lg">Productos</h1>
             <section class="md:flex justify-between items-center">
-                <div class="lg:w-1/3 relative">
+                <div class="mb-3 md:mb-0 lg:w-1/3 relative">
                     <input v-model="searchQuery" @keydown.enter="handleSearch" class="input w-full pl-9"
                         placeholder="Buscar por nombre, categoria o número de parte del fabricante" type="search"
                         ref="searchInput" />
                     <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
                 </div>
                 <el-dropdown split-button type="primary" @click="$inertia.get(route('products.create'))" trigger="click"
-                    @command="handleDropdownCommand">
+                    @command="handleDropdownCommand" class="mr-4">
                     Crear producto
                     <template #dropdown>
                         <el-dropdown-menu>
