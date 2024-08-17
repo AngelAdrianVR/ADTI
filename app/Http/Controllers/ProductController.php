@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 class ProductController extends Controller
 {
@@ -155,8 +156,6 @@ class ProductController extends Controller
 
         // Guardar los archivos descargables si existen
         if ($request->hasFile('media')) {
-            //elimina todos los archivos existentes de la coleccion files
-            $product->clearMediaCollection('files');
             $product->addAllMediaFromRequest('media')->each(fn($file) => $file->toMediaCollection('files'));
         }
 
@@ -166,6 +165,15 @@ class ProductController extends Controller
     public function destroy(Product $product)
     {
         //
+    }
+    
+    public function deleteFile($file_id)
+    {
+        // Buscar el archivo por su ID
+        $media = Media::findOrFail($file_id);
+
+        // Eliminar el archivo
+        $media->delete();
     }
 
     public function massiveDelete(Request $request)
