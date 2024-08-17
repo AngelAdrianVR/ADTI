@@ -169,7 +169,7 @@
                     <p class="text-[#6D6E72] mb-2 text-sm">Archivos adjuntos al producto</p>
                     <section v-if="product.media?.filter(media => media.collection_name === 'files')?.length > 0">
                         <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
-                            <FileView v-for="file in form.media?.filter(media => media.collection_name === 'files')" :key="file" :file="file"
+                            <FileView v-for="file in product_files.filter(media => media.collection_name === 'files')" :key="file" :file="file"
                                 :deletable="true" @delete-file="removeFile($event)" />
                         </div>
                         <!-- <div class="flex justify-between items-center mt-2">
@@ -344,7 +344,7 @@ data() {
             location: this.product.location,
             line_cost: this.product.line_cost,
             bread_crumbles: this.product.bread_crumbles, //nombres de todas las subcategorías.
-            media: this.product.media, //archivos del producto (descargables)
+            media: null, //archivos del producto (descargables)
             deleteMedia: false, //elimina todos los archivos existentes
         });
 
@@ -380,6 +380,7 @@ data() {
         categoryInfo: null, //Información recuperada de categoría incluye subcategorías.
         highestLevel: null, //Nivel maximo de subcategoría subcategorías.
         loading: false, //estado de carga (fetchCategory).
+        product_files: this.product.media
     }
 },
 components:{
@@ -592,11 +593,11 @@ methods:{
     },
     removeFile(file_id) {
         // Encuentra el índice del archivo en el arreglo form.media
-        const index = this.form.media.findIndex(file => file.id === file_id);
+        const index = this.product_files.findIndex(file => file.id === file_id);
 
         // Si el archivo se encuentra en el arreglo, elimínalo usando splice
         if (index !== -1) {
-            this.form.media.splice(index, 1);
+            this.product_files.splice(index, 1);
         }
     },
 },
