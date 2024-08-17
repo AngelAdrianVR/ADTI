@@ -330,7 +330,8 @@ export default {
         },
         printBarcodes() {
             const items_ids = this.$refs.multipleTableRef.value.map(item => item.id);
-            this.$inertia.get(route('products.print-barcodes', {items_ids: items_ids}));
+            const url = route('products.print-barcodes', { items_ids: items_ids });
+            window.open(url, '_blank');
         },
         async deleteSelections() {
             try {
