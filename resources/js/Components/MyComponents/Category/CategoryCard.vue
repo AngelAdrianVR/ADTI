@@ -26,7 +26,7 @@
         <main class="mt-3">
             <figure class="w-full h-56 border border-grayD9 rounded-[3px]">
                 <img v-if="category.media.length" :src="category.media[0].original_url" :alt="category.name"
-                    class="w-full h-56 object-contain">
+                    class="h-full object-contain mx-auto">
                 <div v-else class="h-full flex items-center justify-center">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1"
                         stroke="currentColor" class="size-32 text-grayED">
@@ -35,7 +35,7 @@
                     </svg>
                 </div>
             </figure>
-            <section class="lg:mx-5 mt-4">
+            <section class="mt-4">
                 <h1 class="font-bold text-primary">{{ category.name }}</h1>
                 <el-tree :data="data" default-expand-all :expand-on-click-node="false" :props="defaultProps"
                     @node-click="handleNodeClick">

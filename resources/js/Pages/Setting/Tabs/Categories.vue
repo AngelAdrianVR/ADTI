@@ -1,6 +1,6 @@
 <template>
     <Loading v-if="loading" class="mt-4 lg:mt-20" />
-    <div v-else class="mx-3">
+    <div v-else class="mx-3 mb-10">
         <div class="flex items-center justify-end">
             <PrimaryButton v-if="$page.props.auth.user.permissions.includes('Crear categorias')"
                 @click="$inertia.visit(route('categories.create'))" class="rounded-full">

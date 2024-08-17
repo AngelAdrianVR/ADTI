@@ -9,7 +9,7 @@
                 <h1 class="font-bold ml-2 col-span-full">Editar producto</h1>
 
                 <div class="mt-3">
-                    <InputLabel value="Nombre del producto*" class="ml-3 mb-1" />
+                    <InputLabel value="Nombre del producto" class="ml-3 mb-1" />
                     <el-input v-model="form.name" placeholder="Escribe el nombre del producto" :maxlength="100" clearable />
                     <InputError :message="form.errors.name" />
                 </div>
@@ -20,10 +20,10 @@
                         <p v-if="loading" class="text-xs mb-1 text-center">
                             Cargando <i class="fa-sharp fa-solid fa-circle-notch fa-spin ml-2 text-primary"></i>
                         </p>
-                        <button @click="showCategoryFormModal = true" type="button"
+                        <!-- <button @click="showCategoryFormModal = true" type="button"
                             class="rounded-full flex items-center justify-center">
                             <i class="fa-solid fa-circle-plus text-primary mr-2"></i>
-                        </button>
+                        </button> -->
                     </div>
                     <el-select @change="fetchSubcategories()" class="w-1/2" filterable v-model="form.category_id" placeholder="Seleccione"
                         no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
@@ -42,14 +42,14 @@
                     <div v-for="(subcategory, index) in highestLevel" :key="subcategory" class="mt-3">
                         <div class="flex items-center justify-between">
                             <InputLabel :value="'Subcategoría (' + (index + 1) + ')*'" class="ml-3 mb-1" />
-                            <button @click="handleCreateSubcategory(index)" type="button"
+                            <!-- <button @click="handleCreateSubcategory(index)" type="button"
                                 class="rounded-full flex items-center justify-center">
                                 <i class="fa-solid fa-circle-plus text-primary mr-2"></i>
-                            </button>
+                            </button> -->
                         </div>
 
                         <!-- Cuando es la primera subcategoría (no contiene un subcategory_id) -->
-                        <el-select v-if="index == 0" @change="saveFeatures((index + 1))" class="w-1/2" filterable v-model="form.subcategory_id[index]" clearable placeholder="Seleccione"
+                        <el-select v-if="index == 0" @change="saveFeatures((index + 1), form.subcategory_id[index])" class="w-1/2" filterable v-model="form.subcategory_id[index]" clearable placeholder="Seleccione"
                             no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
                             <el-option @click.stop="form.bread_crumbles[index] = subcategory.name" v-for="subcategory in categoryInfo.subcategories.filter(sub => sub.level == (index + 1))" :key="subcategory" :label="subcategory.name" :value="subcategory.id">
                                 <p class="flex items-center justify-between">
@@ -60,7 +60,7 @@
                         </el-select>
 
                         <!-- Cuando no es la primera subcategoría -->
-                        <el-select v-else @change="saveFeatures((index + 1))" class="w-1/2" filterable v-model="form.subcategory_id[index]" clearable placeholder="Seleccione"
+                        <el-select v-else @change="saveFeatures((index + 1), form.subcategory_id[index])" class="w-1/2" filterable v-model="form.subcategory_id[index]" clearable placeholder="Seleccione"
                             no-data-text="No hay opciones registradas" no-match-text="Primero seleccione el nivel anterior">
                             <el-option @click.stop="form.bread_crumbles[index] = subcategory.name" v-for="subcategory in categoryInfo.subcategories.filter(sub => sub.prev_subcategory_id === form.subcategory_id[index - 1] && sub.level === (index + 1))" :key="subcategory" :label="subcategory.name"
                                 :value="subcategory.id">
@@ -77,7 +77,7 @@
                 <div class="mt-3 col-span-full">
                     <InputLabel value="Descripción del producto" class="ml-3 mb-1 text-sm" />
                     <el-input v-model="form.description" :autosize="{ minRows: 3, maxRows: 5 }" type="textarea"
-                        placeholder="Escribe una descripción del producto si es necesario" :maxlength="255" show-word-limit clearable />
+                        placeholder="Escribe una descripción del producto si es necesario" :maxlength="100" show-word-limit clearable />
                     <InputError :message="form.errors.description" />
                 </div>
 
@@ -87,17 +87,17 @@
                         <InputLabel value="Características del producto" class="ml-3 mb-1 text-sm" />
                         <ThirthButton type="button" v-if="Object.keys(form.features).length" @click="showMeasureUnitFormModal = true" class="!py-0">Crear unidad de medida</ThirthButton>
                     </div>
-                    <p v-if="Object.keys(form.features)?.length" class="text-gray99 text-sm mb-2">Si algún campo no es necesario, puedes dejarlo en blanco. Este campo no será visible para los usuarios.</p>
+                    <p v-if="Object.keys(form.features).length" class="text-gray99 text-sm mb-2">Si algún campo no es necesario, puedes dejarlo en blanco. Este campo no será visible para los usuarios.</p>
                     <div v-if="form.features.length" class="grid grid-cols-2 gap-5">
                         <div v-for="(feature, index) in form.features" :key="index" class="flex items-center space-x-2">
                             <div class="w-1/2">
-                                <InputLabel :value="Object.keys(feature)[0]" class="ml-3 mb-1 text-sm" />
-                                <el-input v-model="feature[Object.keys(feature)[0]]" placeholder="Escribe el valor de la característica" :maxlength="100" clearable />
+                                <InputLabel :value="Object.values(feature)[0]" class="ml-3 mb-1 text-sm" />
+                                <el-input v-model="feature[Object.keys(feature)[1]]" placeholder="Escribe el valor de la característica" :maxlength="100" clearable />
                             </div>
 
                             <div class="w-1/2">
                                 <InputLabel value="Unidad de medida" class="ml-3 mb-1 text-sm" />
-                                <el-select class="w-1/2" filterable v-model="feature.measure_unit" placeholder="Seleccione"
+                                <el-select class="w-1/2" filterable v-model="feature.measure_unit" clearable placeholder="Seleccione"
                                 no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
                                     <el-option v-for="unit in measure_units" :key="unit" :label="unit.name" :value="unit.name">
                                         <p class="flex items-center justify-between">
@@ -123,7 +123,14 @@
 
                 <div class="mt-3">
                     <InputLabel value="Número de parte del fabricante" class="ml-3 mb-1" />
-                    <el-input v-model="form.part_number_supplier" placeholder="Escribe el numero de parte del fabricante" :maxlength="17" show-word-limit clearable />
+                    <el-input 
+                        v-model="form.part_number_supplier" 
+                        placeholder="Escribe el número de parte del fabricante" 
+                        :maxlength="100" 
+                        show-word-limit 
+                        clearable 
+                        @input="filterInput"
+                    />
                     <InputError :message="form.errors.part_number_supplier" />
                 </div>
 
@@ -157,7 +164,7 @@
                 </div>
 
                 <div class="col-span-full space-x-4 text-right mt-7">
-                    <ThirthButton :disabled="!form.category_id || form.subcategory_id.length < 2" type="button" @click="generatePartNumber()">Generar número de parte</ThirthButton>
+                    <!-- <ThirthButton :disabled="!form.category_id || form.subcategory_id.length < 2" type="button" @click="generatePartNumber()">Generar número de parte</ThirthButton> -->
                     <PrimaryButton class="!rounded-full" :disabled="form.processing">
                         <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
                         Guardar cambios
@@ -375,6 +382,7 @@ props:{
 },
 methods:{
     update() {
+        // this.generatePartNumber();
         if (this.form.imageCover || this.form.media) {
             this.form.post(route("products.update-with-media", this.product.id), {
                 method: '_put',
@@ -455,7 +463,8 @@ methods:{
                 this.categoryInfo = response.data.category;
 
                 // Encontrar el nivel más alto entre las subcategorías
-                this.highestLevel = Math.max(...this.categoryInfo.subcategories.map(sub => sub.level));
+                // this.highestLevel = Math.max(...this.categoryInfo.subcategories.map(sub => sub.level));
+                this.highestLevel = 1; //para mostrar solo una subcategoría
             }
         } catch (error) {
             console.log(error);
@@ -463,22 +472,35 @@ methods:{
             this.loading = false;
         }
     },
-    saveFeatures(level) {
+    saveFeatures(level, subcategory_id) {
         // Elimina la seleccion de la subcategoria siguiente
         this.form.subcategory_id.splice(level);
         this.form.bread_crumbles.splice(level);
 
+        const nextLevelSubcategories = this.categoryInfo.subcategories.find(sb => sb.prev_subcategory_id === subcategory_id);
+        if ( nextLevelSubcategories ) {
+            this.highestLevel = nextLevelSubcategories.level;
+        }
+
         // Si es el último nivel, guarda las características de la subcategoría
         if (level === this.highestLevel) {
+
+            this.generatePartNumber(); //se crea el numero de parte interno.
+
             // Filtrar subcategoría que tienen el nivel más alto
             const highestLevelSubcategory = this.categoryInfo.subcategories.find(sub => sub.id === this.form.subcategory_id[level - 1]);
+
+            //crea en la descripción con el breadCrumble agregando tambien el nombre de la categoría
+            this.form.description = this.categoryInfo.name + ' ' + this.form.bread_crumbles.join(' ');
 
             if (highestLevelSubcategory && Array.isArray(highestLevelSubcategory.features)) {
                 // Crear un array de objetos con las características y unidad de medida asignando null a cada una
                 this.form.features = highestLevelSubcategory.features.map(feature => ({
-                    [feature]: null,
-                    measure_unit: null
+                    name: feature.name,       // Nombre de la característica
+                    value: null,              // Valor inicial de la característica
+                    measure_unit: feature.measure_unit // Unidad de medida predefinida
                 }));
+                console.log(this.form.features);
             } else {
                 // Si no hay características, inicializar features como un array vacío
                 this.form.features = [];
@@ -487,6 +509,10 @@ methods:{
     },
     saveImage(image) {
         this.form.imageCover = image;
+    },
+    filterInput(event) {
+        // Filtrar caracteres especiales dejando solo letras y números
+        this.form.part_number_supplier = event.replace(/[^a-zA-Z0-9]/g, '');
     },
     generatePartNumber() {
         // Obtener la categoría seleccionada
@@ -498,8 +524,11 @@ methods:{
             return subcategory ? subcategory.key : '';
         }).join('');
 
+        // Función para agregar ceros a la izquierda si es necesario
+        const paddedProductId = String(this.next_product_id).padStart(3, '0');
+
         // Concatenar todos los "key" en un solo string
-        const partNumber = categoryKey + subcategoryKeys + '-' + this.product.id;
+        const partNumber = categoryKey + subcategoryKeys + '-' + paddedProductId;
         this.form.part_number = partNumber;
     },
     handleCreateSubcategory(index) {

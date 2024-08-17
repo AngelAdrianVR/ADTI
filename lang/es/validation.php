@@ -145,5 +145,6 @@ return [
         'part_number' => 'número de parte interno',
         'permissions' => 'permisos',
         'part_number_supplier' => 'número de parte del fabricante',
+        'abreviation' => 'abreviación',
     ],
 ];

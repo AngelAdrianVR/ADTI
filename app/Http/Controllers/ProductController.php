@@ -33,7 +33,7 @@ class ProductController extends Controller
         $categories = Category::all();
         $measure_units = MeasureUnit::all();
         $last_product = Product::latest()->first();
-        $next_product_id = $last_product->id + 1;
+        $next_product_id = $last_product ? $last_product->id + 1 : 0;
 
         return inertia('Product/Create', compact('categories', 'measure_units', 'next_product_id'));
     }
@@ -41,10 +41,10 @@ class ProductController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:100',
+            'name' => 'nullable|string|max:100',
             'category_id' => 'required',
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
-            'description' => 'nullable|string|max:255',
+            'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
             'part_number' => 'required|string|max:20',
             'part_number_supplier' => 'required|string|max:20|unique:products,part_number_supplier',
@@ -54,9 +54,11 @@ class ProductController extends Controller
         $product = Product::create($request->except(['imageCover', 'subcategory_id']) +
             ['subcategory_id' => collect($request->subcategory_id)->last()]); //guarda el ultimo id del arreglo de subcategorías
 
-        // Guardar la imagen de portada del producto en la colección 'imageCover'
+
+        // Guardar la imagen de categoria temporalmente
         if ($request->hasFile('imageCover')) {
-            $product->addMediaFromRequest('imageCover')->toMediaCollection('imageCover');
+            $path = $request->file('imageCover')->storeAs('temp', $request->file('imageCover')->getClientOriginalName());
+            $product->addMedia(storage_path('app/' . $path))->toMediaCollection('imageCover');
         }
 
         // Guardar los archivos descargables si existen
@@ -72,6 +74,7 @@ class ProductController extends Controller
     {
         $product->load(['media', 'subcategory:id,name,category_id,prev_subcategory_id' => ['category:id,name']]);
 
+        // return $product;
         return inertia('Product/Show', compact('product'));
     }
 
@@ -87,13 +90,13 @@ class ProductController extends Controller
     public function update(Request $request, Product $product)
     {
         $request->validate([
-            'name' => 'required|string|max:100',
+            'name' => 'nullable|string|max:100',
             'category_id' => 'required',
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
-            'description' => 'nullable|string|max:255',
+            'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
             'part_number' => 'required|string|max:20',
-            'part_number_supplier' => 'required|string|max:20|unique:products,part_number_supplier,' . $product->id, //ignora si es el mismo para este id
+            'part_number_supplier' => 'required|string|max:20',
             'location' => 'nullable|string|max:100',
         ]);
 
@@ -117,13 +120,13 @@ class ProductController extends Controller
     public function updateWithMedia(Request $request, Product $product)
     {
         $request->validate([
-            'name' => 'required|string|max:100',
+            'name' => 'nullable|string|max:100',
             'category_id' => 'required',
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
-            'description' => 'nullable|string|max:255',
+            'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
             'part_number' => 'required|string|max:20',
-            'part_number_supplier' => 'required|string|max:20|unique:products,part_number_supplier,' . $product->id, //ignora si es el mismo para este
+            'part_number_supplier' => 'required|string|max:20',
             'location' => 'nullable|string|max:100',
         ]);
 
@@ -134,16 +137,15 @@ class ProductController extends Controller
         // Eliminar imagen antigua solo si se proporciona nueva imagen
         if ($request->hasFile('imageCover')) {
             $product->clearMediaCollection('imageCover');
+
+            // Guardar la imagen de categoria temporalmente
+            $path = $request->file('imageCover')->storeAs('temp', $request->file('imageCover')->getClientOriginalName());
+            $product->addMedia(storage_path('app/' . $path))->toMediaCollection('imageCover');
         }
 
-        // Guardar el archivo en la colección 'imageCover'
-        if ($request->hasFile('imageCover')) {
-            $product->addMediaFromRequest('imageCover')->toMediaCollection('imageCover');
-        }
         // Guardar los archivos descargables si existen
         if ($request->hasFile('media')) {
-            $product->addMediaFromRequest('media')->toMediaCollection('files');
-            // $product->addAllMediaFromRequest('media')->each(fn ($file) => $file->toMediaCollection('files'));
+            $product->addAllMediaFromRequest('media')->each(fn($file) => $file->toMediaCollection('files'));
         }
 
         return to_route('products.show', $product->id); //manda al show despues de crear el producto
@@ -362,5 +364,12 @@ class ProductController extends Controller
                 'subcategory_id' => $subcategory->id,
             ]);
         }
+    }
+
+    public function printBarcodes()
+    {
+        $products = Product::whereIn('id', request('items_ids'))->get(['id', 'name', 'part_number']);
+
+        return inertia('Product/BarcodeTemplate', compact('products'));
     }
 }

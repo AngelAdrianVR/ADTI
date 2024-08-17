@@ -1,16 +1,16 @@
 <template>
     <AppLayout title="Productos">
-        <main class="px-2 lg:px-10 pt-1 pb-16">
+        <main class="px-2 md:px-10 pt-1 pb-16">
             <h1 class="font-bold my-3 ml-4 text-lg">Productos</h1>
             <section class="md:flex justify-between items-center">
-                <div class="lg:w-1/3 relative">
+                <div class="mb-3 md:mb-0 lg:w-1/3 relative">
                     <input v-model="searchQuery" @keydown.enter="handleSearch" class="input w-full pl-9"
-                        placeholder="Buscar por nombre o número de parte del fabricante" type="search"
+                        placeholder="Buscar por nombre, categoria o número de parte del fabricante" type="search"
                         ref="searchInput" />
                     <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
                 </div>
                 <el-dropdown split-button type="primary" @click="$inertia.get(route('products.create'))" trigger="click"
-                    @command="handleDropdownCommand">
+                    @command="handleDropdownCommand" class="mr-4">
                     Crear producto
                     <template #dropdown>
                         <el-dropdown-menu>
@@ -25,12 +25,12 @@
             </section>
 
             <!-- tabla starts -->
-            <div class="w-[95%] lg:w-5/6 mx-auto mt-6">
+            <div class="mx-2 lg:mx-10 mt-6">
                 <div class="lg:flex justify-between mb-2">
                     <!-- pagination -->
                     <div class="flex space-x-5 items-center">
                         <el-pagination @current-change="handlePagination" layout="prev, pager, next"
-                            :total="products.length" />
+                            :total="products.length / itemsPerPage" />
                         <!-- buttons -->
                         <div v-if="$page.props.auth.user.permissions?.includes('Eliminar productos')"
                             class="mt-2 lg:mt-0">
@@ -42,9 +42,14 @@
                                 </template>
                             </el-popconfirm>
                         </div>
+                        <div class="mt-2 lg:mt-0">
+                            <el-button @click="printBarcodes" type="primary" plain class="mb-3"
+                                :disabled="disableMassiveActions">
+                                Imprimir códigos</el-button>
+                        </div>
                     </div>
                 </div>
-                <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="700" style="width: 100%"
+                <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 100%"
                     @selection-change="handleSelectionChange" ref="multipleTableRef"
                     :row-class-name="tableRowClassName">
                     <el-table-column type="selection" width="30" />
@@ -55,8 +60,8 @@
                         <template #default="scope">
                             <div class="flex flex-col">
                                 <p v-for="subcategory in scope.row.bread_crumbles" :key="subcategory"
-                                    class="flex items-center space-x-2">
-                                    <i class="fa-solid fa-caret-right"></i>
+                                    class="flex text-xs space-x-2">
+                                    <i class="fa-solid fa-caret-right mt-[2px]"></i>
                                     <span>{{ subcategory }}</span>
                                 </p>
                             </div>
@@ -255,9 +260,9 @@ export default {
             inputSearch: '',
             search: '',
             // pagination
-            itemsPerPage: 10,
+            itemsPerPage: 30,
             start: 0,
-            end: 10,
+            end: 30,
             // importation
             showImportModal: false,
             isImporting: false,
@@ -322,6 +327,10 @@ export default {
             } else if (command == 'export') {
                 this.showExportModal = true;
             }
+        },
+        printBarcodes() {
+            const items_ids = this.$refs.multipleTableRef.value.map(item => item.id);
+            this.$inertia.get(route('products.print-barcodes', {items_ids: items_ids}));
         },
         async deleteSelections() {
             try {
@@ -395,6 +404,7 @@ export default {
                 return this.products.filter(
                     (product) =>
                         product.name.toLowerCase().includes(this.search.toLowerCase()) ||
+                        product.subcategory.category.name.toLowerCase().includes(this.search.toLowerCase()) ||
                         product.part_number_supplier.toLowerCase().includes(this.search.toLowerCase())
                 )
             }

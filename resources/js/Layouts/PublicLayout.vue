@@ -26,8 +26,9 @@
                                     <ul v-if="productsFound?.length > 0 && !loading">
                                         <li @click="$inertia.get(route('public.show-product', product.id))"
                                             v-for="(product, index) in productsFound" :key="index"
-                                            class="hover:bg-gray-200 cursor-default text-sm px-5 py-2">
-                                            {{product.name }}
+                                            class="hover:bg-gray-200 cursor-default text-sm px-5 py-2 flex items-center justify-between">
+                                            <p>{{product.name }}</p>
+                                            <p class="text-gray99 text-xs">{{product.part_number_supplier }}</p>
                                         </li>
                                     </ul>
                                     <p v-else-if="!loading" class="text-center text-sm text-gray-600 px-5 py-2">No se
