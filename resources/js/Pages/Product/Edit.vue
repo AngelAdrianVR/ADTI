@@ -167,19 +167,20 @@
 
                 <div class="mt-5 col-span-full">
                     <p class="text-[#6D6E72] mb-2 text-sm">Archivos adjuntos al producto</p>
-                    <section v-if="product.media?.filter(media => media.collection_name === 'media')?.length > 0">
+                    <section v-if="product.media?.filter(media => media.collection_name === 'files')?.length > 0">
                         <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
-                            <FileView v-for="file in product.media?.filter(media => media.collection_name === 'media')" :key="file" :file="file" />
+                            <FileView v-for="file in form.media?.filter(media => media.collection_name === 'files')" :key="file" :file="file"
+                                :deletable="true" @delete-file="removeFile($event)" />
                         </div>
-                        <div class="flex justify-between items-center mt-2">
+                        <!-- <div class="flex justify-between items-center mt-2">
                             <el-checkbox v-model="form.deleteMedia" label="Eliminar archivos existentes" />
-                        </div>
+                        </div> -->
                     </section>
                     <p v-else class=" text-gray-400 mx-4 text-xs mt-1">No hay archivos adjuntos</p>
                 </div>
 
                 <div class="ml-2 mt-3 col-span-full">
-                    <FileUploader @files-selected="this.form.media = $event" :currentFiles="product.media?.filter(file => file.collection_name !== 'imageCover')" />
+                    <FileUploader @files-selected="this.form.media = $event" />
                 </div>
 
                 <div class="col-span-full space-x-4 text-right mt-7">
@@ -309,7 +310,6 @@
                 </div>
             </template>
         </DialogModal>
-        {{ form.media }}
     </AppLayout>
 </template>
 
@@ -344,7 +344,7 @@ data() {
             location: this.product.location,
             line_cost: this.product.line_cost,
             bread_crumbles: this.product.bread_crumbles, //nombres de todas las subcategorías.
-            media: null, //archivos del producto (descargables)
+            media: this.product.media, //archivos del producto (descargables)
             deleteMedia: false, //elimina todos los archivos existentes
         });
 
@@ -589,6 +589,15 @@ methods:{
                 this.form.subcategory_id.push(found.id);
             }
         });
+    },
+    removeFile(file_id) {
+        // Encuentra el índice del archivo en el arreglo form.media
+        const index = this.form.media.findIndex(file => file.id === file_id);
+
+        // Si el archivo se encuentra en el arreglo, elimínalo usando splice
+        if (index !== -1) {
+            this.form.media.splice(index, 1);
+        }
     },
 },
 created() {
