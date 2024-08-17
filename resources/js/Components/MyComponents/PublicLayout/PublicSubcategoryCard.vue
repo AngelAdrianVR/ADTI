@@ -35,10 +35,10 @@ components:{
 },
 props:{
     subcategory: Object,
-    subcategories_lvl_3: {
-        default: null,
-        type: Array
-    }
+    // subcategories_lvl_3: {
+    //     default: null,
+    //     type: Array
+    // }
 },
 methods:{
 

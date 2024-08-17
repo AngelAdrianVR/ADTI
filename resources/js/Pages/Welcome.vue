@@ -44,6 +44,8 @@ const transformCategories = (categories) => {
     let level1 = [];
     let level2 = [];
     let level3 = [];
+    let level4 = [];
+    let level5 = [];
 
     category.subcategories.forEach(subcategory => {
       if (subcategory.level === 1) {
@@ -69,6 +71,22 @@ const transformCategories = (categories) => {
           prev_sub: subcategory.prev_subcategory_id,
           children: []
         });
+      } else if (subcategory.level === 4) {
+        level4.push({
+          id: subcategory.id,
+          value: subcategory.name,
+          label: subcategory.name,
+          prev_sub: subcategory.prev_subcategory_id,
+          children: []
+        });
+      } else if (subcategory.level === 5) {
+        level5.push({
+          id: subcategory.id,
+          value: subcategory.name,
+          label: subcategory.name,
+          prev_sub: subcategory.prev_subcategory_id,
+          children: []
+        });
       }
     });
 
@@ -84,13 +102,27 @@ const transformCategories = (categories) => {
       if (parent) parent.children.push(l3);
     });
 
+    // Añadir subcategorías de nivel 4 a las correspondientes de nivel 3
+    level4.forEach(l4 => {
+      const parent = level3.find(l3 => l3.id === l4.prev_sub);
+      if (parent) parent.children.push(l4);
+    });
+
+    // Añadir subcategorías de nivel 5 a las correspondientes de nivel 4
+    level5.forEach(l5 => {
+      const parent = level4.find(l4 => l4.id === l5.prev_sub);
+      if (parent) parent.children.push(l5);
+    });
+
     transformedCategory.children.push(...level1);
 
     return transformedCategory;
   });
 };
 
+// Utiliza la función con tus categorías
 const options = computed(() => transformCategories(props.categories));
+
 
 </script>
 
