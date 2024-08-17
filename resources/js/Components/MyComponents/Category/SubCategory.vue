@@ -65,9 +65,14 @@
             <div v-if="subCategory.features.length" class="mt-2 ml-12">
                 <figure
                     class="size-32 border border-grayD9 rounded-[3px] relative hover:cursor-pointer hover:bg-secondary hover:text-white">
-                    <button @click="removeFeatures" class="absolute p-1 top-1 right-1 z-10 text-xs">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
+                    <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
+                        title="Si quieres recuperarlas recarga la página. ¿Continuar?" @confirm="subCategory.features = []">
+                        <template #reference>
+                            <button type="button" class="absolute p-1 top-1 right-1 z-10 text-xs">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </template>
+                    </el-popconfirm>
                     <div @click="openFeaturesModal" class="flex flex-col items-center justify-center space-y-2 h-full">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
                             stroke="currentColor" class="size-6">
@@ -84,7 +89,7 @@
             <SubCategory v-for="(child, idx) in subCategory.subCategories" :key="idx" :subCategory="child" :index="idx"
                 :parentIndex="getLabel" @addSubCategory="addSubCategoryToChild"
                 @removeSubCategory="handleRemoveSubCategory" @imageUploaded="handleImageUploaded"
-                @openFeaturesModal="handleOpenFeaturesModal" @removeFeatures="handleRemoveFeatures" />
+                @openFeaturesModal="handleOpenFeaturesModal" />
         </div>
     </section>
 
@@ -134,7 +139,7 @@ export default {
         DialogModal,
         PrimaryButton,
     },
-    emits: ['addSubCategory', 'removeSubCategory', 'imageUploaded', 'openFeaturesModal', 'removeFeatures'],
+    emits: ['addSubCategory', 'removeSubCategory', 'imageUploaded', 'openFeaturesModal'],
     computed: {
         getLabel() {
             const parent = this.parentIndex ? `${this.parentIndex}.` : '';
@@ -157,8 +162,8 @@ export default {
     },
     methods: {
         deleteFeaturesAndCreateSubCategory() {
-            this.removeFeatures();
-            this.$emit('addSubCategory', this.getLabel);
+            this.addSubCategoryDirectly();
+            this.subCategory.features = []; // Eliminar características de la subcategoría actual
             this.showFeatureInheritedConfirm = false;
         },
         createSubCategoryWithFeatures() {
@@ -168,7 +173,8 @@ export default {
                 features: [...this.subCategory.features], // Copiar características
                 subCategories: [],
             };
-            this.$emit('addSubCategory', this.getLabel, newSubCategory);
+            this.addSubCategoryDirectly(newSubCategory);
+            // this.$emit('addSubCategory', this.getLabel, newSubCategory);
             this.subCategory.features = []; // Eliminar características de la subcategoría actual
             this.showFeatureInheritedConfirm = false;
         },
@@ -180,13 +186,16 @@ export default {
                 this.addSubCategoryDirectly();
             }
         },
-        addSubCategoryDirectly() {
-            const newSubCategory = {
-                name: '',
-                subCategories: [],
-                image: null,
-                features: []
-            };
+        addSubCategoryDirectly(newSubCategory = null) {
+            if (!newSubCategory) {
+                // crear data vacia para la subcategoria
+                newSubCategory = {
+                    name: '',
+                    subCategories: [],
+                    image: null,
+                    features: []
+                };
+            }
             this.subCategory.subCategories.push(newSubCategory);
         },
         addSubCategoryToChild(path) {
@@ -213,12 +222,6 @@ export default {
         },
         removeImage() {
             this.$emit('imageUploaded', null, this.getLabel);
-        },
-        removeFeatures() {
-            this.$emit('removeFeatures', this.getLabel);
-        },
-        handleRemoveFeatures(path) {
-            this.$emit('removeFeatures', path);
         },
         openFeaturesModal() {
             this.$emit('openFeaturesModal', this.getLabel);

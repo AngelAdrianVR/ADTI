@@ -58,7 +58,7 @@
                     <SubCategory v-for="(subCategory, index) in form.subCategories" :key="index"
                         :subCategory="subCategory" :index="index" :parentIndex="''" @addSubCategory="addSubCategory"
                         @removeSubCategory="removeSubCategory" @imageUploaded="handleImageUploaded"
-                        @removeFeatures="removeFeatures" @openFeaturesModal="openFeaturesModal" />
+                        @openFeaturesModal="openFeaturesModal" />
                 </div>
                 <div class="col-span-full text-right mt-7">
                     <PrimaryButton class="!rounded-full"
@@ -206,6 +206,7 @@
             </template>
             <template #footer>
                 <div class="flex items-center space-x-1">
+                    <CancelButton @click="showFeaturesModal = false">Cancelar</CancelButton>
                     <PrimaryButton @click="storeFeature" :disabled="featureForm.processing">Crear</PrimaryButton>
                 </div>
             </template>
@@ -249,6 +250,7 @@ import InputFilePreview from "@/Components/MyComponents/InputFilePreview.vue";
 import SubCategory from "@/Components/MyComponents/Category/SubCategory.vue";
 import Back from "@/Components/MyComponents/Back.vue";
 import { useForm } from "@inertiajs/vue3";
+import CancelButton from '@/Components/MyComponents/CancelButton.vue';
 
 export default {
     data() {
@@ -282,13 +284,13 @@ export default {
             localFeatures: [],
             // generales
             imageUrl: null,
-
         }
     },
     components: {
         AppLayout,
         InputFilePreview,
         PrimaryButton,
+        CancelButton,
         InputLabel,
         InputError,
         Back,
@@ -408,30 +410,17 @@ export default {
                 }
             });
         },
-        removeFeatures(path) {
-            const indexes = path.split('.').map(i => parseInt(i) - 1);
-            let subCategories = this.form.subCategories;
-
-            indexes.forEach((index, idx) => {
-                if (idx === indexes.length - 1) {
-                    subCategories[index].features = [];
-                } else {
-                    subCategories = subCategories[index].subCategories;
-                }
-            });
-        },
         // funciones de modal para agregar cracteristicas
         openFeaturesModal(path) {
             // buscar si la subcategoria del path ya tiene caracteristicas cargadas
             const indexes = path.split('.').map(i => parseInt(i) - 1);
             let subCategories = this.form.subCategories;
+            this.localFeatures = [];
 
             indexes.forEach((index, idx) => {
                 if (idx === indexes.length - 1) {
                     if (subCategories[index].features.length) {
-                        this.localFeatures = subCategories[index].features;
-                    } else {
-                        this.localFeatures = [];
+                        this.localFeatures = JSON.parse(JSON.stringify(subCategories[index].features));
                     }
                 } else {
                     subCategories = subCategories[index].subCategories;
