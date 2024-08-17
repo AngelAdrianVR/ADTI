@@ -1,7 +1,7 @@
 <template>
     <section>
         <article class="flex items-center space-x-4">
-            <InputLabel :value="getLabel" class="w-6" />
+            <InputLabel :value="getLabel" class="w-8" />
             <el-input v-model="subCategory.name" placeholder="Ej. Movimiento lineal" :maxlength="255" clearable />
             <div class="flex items-center space-x-2">
                 <el-tooltip v-if="canAddSubCategory" content="Crear secuencia/rama de subcategoría" placement="top">
@@ -142,7 +142,7 @@ export default {
         },
         canAddSubCategory() {
             const level = this.parentIndex ? this.parentIndex.split('.').length : 0;
-            return level < 2; // Limita a 3 niveles (0, 1, 2)
+            return level < 4; // Limita a 5 niveles (0, ..., 4)
         },
         canAddImage() {
             const level = this.parentIndex ? this.parentIndex.split('.').length : 0;
@@ -176,12 +176,22 @@ export default {
             if (this.subCategory.features.length) {
                 this.showFeatureInheritedConfirm = true;
             } else {
-                this.$emit('addSubCategory', this.getLabel);
+                // this.$emit('addSubCategory', this.getLabel);
+                this.addSubCategoryDirectly();
             }
         },
+        addSubCategoryDirectly() {
+            const newSubCategory = {
+                name: '',
+                subCategories: [],
+                image: null,
+                features: []
+            };
+            this.subCategory.subCategories.push(newSubCategory);
+        },
         addSubCategoryToChild(path) {
-            const updatedPath = `${this.getLabel}.${path.split('.').pop()}`;
-            this.$emit('addSubCategory', updatedPath);
+            // const updatedPath = `${this.getLabel}.${path.split('.').pop()}`;
+            // this.$emit('addSubCategory', updatedPath);
         },
         removeSubCategory() {
             this.$emit('removeSubCategory', this.getLabel);
