@@ -14,14 +14,6 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 class ProductController extends Controller
 {
-    /* tipos de comentarios
-
-    * Importante
-    ! no usar hasta que..
-    ? no sé si usar este..
-    TODO: No sé para qué sirve jajaja
-    */
-
     public function index()
     {
         $products = Product::with(['subcategory:id,name,category_id,prev_subcategory_id' => ['category:id,name']])
@@ -49,6 +41,7 @@ class ProductController extends Controller
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
             'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
+            'features_keys' => 'nullable|array',
             'part_number' => 'required|string|max:20',
             'part_number_supplier' => 'nullable|string|max:20|unique:products,part_number_supplier',
             'location' => 'nullable|string|max:100',
@@ -106,6 +99,7 @@ class ProductController extends Controller
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
             'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
+            'features_keys' => 'nullable|array',
             'part_number' => 'required|string|max:20',
             'part_number_supplier' => 'nullable|string|max:20',
             'location' => 'nullable|string|max:100',
@@ -137,6 +131,7 @@ class ProductController extends Controller
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
             'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
+            'features_keys' => 'nullable|array',
             'part_number' => 'required|string|max:20',
             'part_number_supplier' => 'nullable|string|max:20',
             'location' => 'nullable|string|max:100',

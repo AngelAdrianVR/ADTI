@@ -100,46 +100,49 @@
                     </div>
                     <p v-if="Object.keys(form.features).length" class="text-gray99 text-sm mb-2">Si algún campo no es
                         necesario, puedes dejarlo en blanco. Este campo no será visible para los usuarios.</p>
-                    <div v-if="form.features.length" class="grid grid-cols-2 gap-5">
-                        <div v-for="(feature, index) in form.features" :key="index" class="flex items-center space-x-2">
-                            <div class="w-1/2">
-                                <InputLabel :value="Object.values(feature)[0]" class="ml-3 mb-1 text-sm" />
-                                <el-select v-if="feature?.options[0]?.name !== null"
-                                    @change="handleChangeFeatureOption(index, $event)"
-                                    v-model="form.features[index][Object.keys(feature)[1]]" class="w-1/2" filterable
-                                    placeholder="Seleccione" no-data-text="No hay opciones registradas"
-                                    no-match-text="No se encontraron coincidencias">
-                                    <el-option v-for="option in feature.options" :key="option" :label="option.name"
-                                        :value="option.name">
-                                        <p class="flex items-center justify-between">
-                                            <span>{{ option.name }}</span>
-                                            <span class="text-[10px] text-gray99">({{ option.key }})</span>
-                                        </p>
-                                    </el-option>
-                                </el-select>
-                                <el-input v-else v-model="form.features[index][Object.keys(feature)[1]]"
-                                    placeholder="Escribe el valor de la característica" :maxlength="100" clearable />
-                            </div>
-                            <div class="w-1/2">
-                                <InputLabel value="Unidad de medida" class="ml-3 mb-1 text-sm" />
-                                <el-select class="w-1/2" filterable v-model="form.features[index].measure_unit"
-                                    placeholder="Seleccione" no-data-text="No hay opciones registradas"
-                                    no-match-text="No se encontraron coincidencias">
-                                    <el-option label="No aplica" value="No aplica" />
-                                    <el-option v-for="unit in measure_units" :key="unit" :label="unit.name"
-                                        :value="unit.name">
-                                        <p class="flex items-center justify-between">
-                                            <span>{{ unit.name }}</span>
-                                            <span v-if="unit.abreviation" class="text-[10px] text-gray99">({{
-                                                unit.abreviation }})</span>
-                                        </p>
-                                    </el-option>
-                                </el-select>
+                    <Loading v-if="loadingFeatures" class="my-6"/>
+                    <section v-else>
+                        <div v-if="form.features.length" class="grid grid-cols-2 gap-5">
+                            <div v-for="(feature, index) in form.features" :key="index" class="flex items-center space-x-2">
+                                <div class="w-1/2">
+                                    <InputLabel :value="Object.values(feature)[0]" class="ml-3 mb-1 text-sm" />
+                                    <el-select v-if="feature?.options[0]?.name !== null"
+                                        @change="handleChangeFeatureOption(index, $event)"
+                                        v-model="form.features[index][Object.keys(feature)[1]]" class="w-1/2" filterable
+                                        placeholder="Seleccione" no-data-text="No hay opciones registradas"
+                                        no-match-text="No se encontraron coincidencias">
+                                        <el-option v-for="option in feature.options" :key="option" :label="option.name"
+                                            :value="option.name">
+                                            <p class="flex items-center justify-between">
+                                                <span>{{ option.name }}</span>
+                                                <span class="text-[10px] text-gray99">({{ option.key }})</span>
+                                            </p>
+                                        </el-option>
+                                    </el-select>
+                                    <el-input v-else v-model="form.features[index][Object.keys(feature)[1]]"
+                                        placeholder="Escribe el valor de la característica" :maxlength="100" clearable />
+                                </div>
+                                <div class="w-1/2">
+                                    <InputLabel value="Unidad de medida" class="ml-3 mb-1 text-sm" />
+                                    <el-select class="w-1/2" filterable v-model="form.features[index].measure_unit"
+                                        placeholder="Seleccione" no-data-text="No hay opciones registradas"
+                                        no-match-text="No se encontraron coincidencias">
+                                        <el-option label="No aplica" value="No aplica" />
+                                        <el-option v-for="unit in measure_units" :key="unit" :label="unit.name"
+                                            :value="unit.name">
+                                            <p class="flex items-center justify-between">
+                                                <span>{{ unit.name }}</span>
+                                                <span v-if="unit.abreviation" class="text-[10px] text-gray99">({{
+                                                    unit.abreviation }})</span>
+                                            </p>
+                                        </el-option>
+                                    </el-select>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <p v-else class="text-gray99 text-sm">Selecciona la subcategoría final para ver las características
-                        disponibles</p>
+                        <p v-else class="text-gray99 text-sm">Selecciona la subcategoría final para ver las características
+                            disponibles</p>
+                    </section>
                 </div>
 
                 <div class="border-t border-grayD9 w-full col-span-full my-7"></div>
@@ -351,10 +354,10 @@ import DialogModal from "@/Components/DialogModal.vue";
 import Back from "@/Components/MyComponents/Back.vue";
 import { useForm } from "@inertiajs/vue3";
 import axios from 'axios';
+import Loading from '@/Components/MyComponents/Loading.vue';
 
 export default {
     data() {
-
         const form = useForm({
             name: this.product.name,
             category_id: this.product.subcategory?.category_id,
@@ -370,6 +373,7 @@ export default {
             bread_crumbles: this.product.bread_crumbles, //nombres de todas las subcategorías.
             media: null, //archivos del producto (descargables)
             deleteMedia: false, //elimina todos los archivos existentes
+            features_keys: this.product.features_keys, //claves de caracteristicas en orden para formar #parte interno
         });
 
         const categoryForm = useForm({
@@ -398,13 +402,13 @@ export default {
             measureUnitForm,
 
             //General
-            selectedFeatureKeys: [],
             showCategoryFormModal: false,
             showSubcategoryFormModal: false,
             showMeasureUnitFormModal: false,
             categoryInfo: null, //Información recuperada de categoría incluye subcategorías.
             highestLevel: null, //Nivel maximo de subcategoría subcategorías.
             loading: false, //estado de carga (fetchCategory).
+            loadingFeatures: false,
             product_files: this.product.media
         }
     },
@@ -420,6 +424,7 @@ export default {
         InputError,
         FileView,
         Back,
+        Loading,
     },
     props: {
         measure_units: Array,
@@ -517,10 +522,10 @@ export default {
 
             if (key) {
                 // Crear un arreglo para mantener las partes seleccionadas según el índice de la característica
-                this.selectedFeatureKeys[featureIndex] = key;
+                this.form.features_keys[featureIndex] = key;
 
                 // Filtrar las partes seleccionadas y concatenarlas en orden
-                const selectedKeys = this.selectedFeatureKeys.filter(Boolean).join('');
+                const selectedKeys = this.form.features_keys.filter(Boolean).join('');
 
                 // resetear numero de parte
                 await this.generatePartNumber();
@@ -624,6 +629,7 @@ export default {
         },
         //metodo que trae las subcategorias de la categoria seleccionada desde el mount para no borrar otras variables
         async fetchSubcategoriesMounted() {
+            this.loadingFeatures = true;
             try {
                 const response = await axios.get(route('categories.fetch-subcategories', this.form.category_id));
                 if (response.status === 200) {
@@ -645,14 +651,14 @@ export default {
                 }
             });
 
-            // agregar opciones a caracteristicas
+            // agregar opciones a caracteristicas que sean de lista desplegable
             const highestLevelSubcategory = this.categoryInfo.subcategories.find(sub => sub.level == this.highestLevel)
             const options = highestLevelSubcategory.features.map(feature => ({ options: feature.options }));
 
             this.form.features.forEach((element, index) => {
-                // console.log(options[index].options);
                 element.options = options[index].options
             });
+            this.loadingFeatures = false;
         },
         removeFile(file_id) {
             // Encuentra el índice del archivo en el arreglo form.media

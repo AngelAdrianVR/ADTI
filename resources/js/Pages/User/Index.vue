@@ -10,15 +10,6 @@
                 </div>
                 <!-- buttons -->
                 <div class="flex items-center space-x-1">
-                    <div v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios') && !disableMassiveActions"
-                        class="mt-2 lg:mt-0">
-                        <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#6D6E72"
-                            title="¿Continuar?" @confirm="deleteSelections">
-                            <template #reference>
-                                <PrimaryButton class="!bg-red-600 focus:!ring-red-600">Eliminar</PrimaryButton>
-                            </template>
-                        </el-popconfirm>
-                    </div>
                     <div class="my-4 lg:my-0 flex items-center justify-end space-x-3">
                         <PrimaryButton v-if="$page.props.auth.user.permissions?.includes('Crear usuarios')"
                             @click="$inertia.get(route('users.create'))">Crear usuario</PrimaryButton>
@@ -29,9 +20,19 @@
             <div class="mx-2 lg:mx-10 mt-6">
                 <div class="lg:flex justify-between mb-2">
                     <!-- pagination -->
-                    <div>
+                    <div class="flex space-x-5 items-center">
                         <el-pagination @current-change="handlePagination" layout="prev, pager, next"
                             :total="users.length" />
+                        <div v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')"
+                            class="mt-2 lg:mt-0">
+                            <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
+                                title="¿Continuar?" @confirm="deleteSelections">
+                                <template #reference>
+                                    <el-button type="danger" plain class="mb-3"
+                                        :disabled="disableMassiveActions">Eliminar</el-button>
+                                </template>
+                            </el-popconfirm>
+                        </div>
                     </div>
                 </div>
                 <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 100%"
@@ -52,16 +53,21 @@
                                 <template #dropdown>
                                     <el-dropdown-menu>
                                         <el-dropdown-item :command="'show-' + scope.row.id">
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4 mr-1">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                                stroke-width="1.5" stroke="currentColor" class="size-4 mr-1">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                    d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                    d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                                             </svg>
                                             Ver</el-dropdown-item>
                                         <el-dropdown-item
                                             v-if="$page.props.auth.user.permissions.includes('Editar usuarios')"
                                             :command="'edit-' + scope.row.id">
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4 mr-1">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                                stroke-width="1.5" stroke="currentColor" class="size-4 mr-1">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                    d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
                                             </svg>
                                             Editar</el-dropdown-item>
                                     </el-dropdown-menu>
