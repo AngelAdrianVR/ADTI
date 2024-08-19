@@ -24,7 +24,9 @@ class ProductController extends Controller
 
     public function index()
     {
-        $products = Product::with(['subcategory:id,name,category_id,prev_subcategory_id' => ['category:id,name']])->get(['id', 'name', 'description', 'part_number_supplier', 'location', 'subcategory_id', 'bread_crumbles']);
+        $products = Product::with(['subcategory:id,name,category_id,prev_subcategory_id' => ['category:id,name']])
+            ->latest('id')
+            ->get(['id', 'name', 'description', 'part_number_supplier', 'location', 'subcategory_id', 'bread_crumbles']);
 
         return inertia('Product/Index', compact('products'));
     }
@@ -42,20 +44,20 @@ class ProductController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'nullable|string|max:100',
+            'name' => 'required|string|max:100',
             'category_id' => 'required',
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
             'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
             'part_number' => 'required|string|max:20',
-            'part_number_supplier' => 'required|string|max:20|unique:products,part_number_supplier',
+            'part_number_supplier' => 'nullable|string|max:20|unique:products,part_number_supplier',
             'location' => 'nullable|string|max:100',
             'line_cost' => 'nullable|numeric|min:0|max:99999',
         ]);
 
         $product = Product::create($request->except(['imageCover', 'subcategory_id']) +
             ['subcategory_id' => collect($request->subcategory_id)->last()]); //guarda el ultimo id del arreglo de subcategorías
-        
+
         //busca la cantidad de productos agregados a la subcategoría del producto recién agregado para agregarle su consecutivo 
         $last_consecutivo = Product::where('subcategory_id', $product->subcategory_id)->count();
 
@@ -99,13 +101,13 @@ class ProductController extends Controller
     public function update(Request $request, Product $product)
     {
         $request->validate([
-            'name' => 'nullable|string|max:100',
+            'name' => 'required|string|max:100',
             'category_id' => 'required',
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
             'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
             'part_number' => 'required|string|max:20',
-            'part_number_supplier' => 'required|string|max:20',
+            'part_number_supplier' => 'nullable|string|max:20',
             'location' => 'nullable|string|max:100',
             'line_cost' => 'nullable|numeric|min:0|max:99999',
         ]);
@@ -130,13 +132,13 @@ class ProductController extends Controller
     public function updateWithMedia(Request $request, Product $product)
     {
         $request->validate([
-            'name' => 'nullable|string|max:100',
+            'name' => 'required|string|max:100',
             'category_id' => 'required',
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
             'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
             'part_number' => 'required|string|max:20',
-            'part_number_supplier' => 'required|string|max:20',
+            'part_number_supplier' => 'nullable|string|max:20',
             'location' => 'nullable|string|max:100',
             'line_cost' => 'nullable|numeric|min:0|max:99999',
         ]);
@@ -166,7 +168,7 @@ class ProductController extends Controller
     {
         //
     }
-    
+
     public function deleteFile($file_id)
     {
         // Buscar el archivo por su ID
