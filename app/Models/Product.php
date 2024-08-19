@@ -21,12 +21,14 @@ class Product extends Model implements HasMedia
         'location',
         'line_cost',
         'features',
+        'features_keys', //arreglo de claves de caracteristicas en orden necesarias para formar # de parte interno
         'bread_crumbles', //guarda todos los nombres de las subcategorias que sigue
         'subcategory_id', //última subcategoría. traza el camino completo
     ];
 
     protected $casts = [
         'features' => 'array',
+        'features_keys' => 'array',
         'bread_crumbles' => 'array'
     ];
 

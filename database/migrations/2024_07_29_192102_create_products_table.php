@@ -21,6 +21,7 @@ return new class extends Migration
             $table->string('location')->nullable();
             $table->float('line_cost')->nullable();
             $table->json('features')->nullable();
+            $table->json('features_keys')->nullable();
             $table->json('bread_crumbles')->nullable();
             $table->foreignId('subcategory_id')->constrained()->cascadeOnDelete();
             $table->timestamps();

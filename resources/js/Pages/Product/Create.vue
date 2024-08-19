@@ -349,6 +349,8 @@ export default {
             location: null,
             line_cost: null,
             bread_crumbles: [], //nombres de todas las subcategorías.
+            features_keys: [], //claves de caracteristicas en orden para formar #parte interno
+            features: {},
         });
 
         const categoryForm = useForm({
@@ -379,7 +381,6 @@ export default {
 
             //General
             features: [],
-            selectedFeatureKeys: [],
             showCategoryFormModal: false,
             showSubcategoryFormModal: false,
             showMeasureUnitFormModal: false,
@@ -475,10 +476,10 @@ export default {
 
             if (key) {
                 // Crear un arreglo para mantener las partes seleccionadas según el índice de la característica
-                this.selectedFeatureKeys[featureIndex] = key;
+                this.form.features_keys[featureIndex] = key;
 
                 // Filtrar las partes seleccionadas y concatenarlas en orden
-                const selectedKeys = this.selectedFeatureKeys.filter(Boolean).join('');
+                const selectedKeys = this.form.features_keys.filter(Boolean).join('');
 
                 // resetear numero de parte
                 await this.generatePartNumber();
