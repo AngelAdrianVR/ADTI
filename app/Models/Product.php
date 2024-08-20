@@ -23,6 +23,7 @@ class Product extends Model implements HasMedia
         'features',
         'features_keys', //arreglo de claves de caracteristicas en orden necesarias para formar # de parte interno
         'bread_crumbles', //guarda todos los nombres de las subcategorias que sigue
+        'currency', //Moneda
         'subcategory_id', //última subcategoría. traza el camino completo
     ];
 

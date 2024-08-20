@@ -23,6 +23,7 @@ return new class extends Migration
             $table->json('features')->nullable();
             $table->json('features_keys')->nullable();
             $table->json('bread_crumbles')->nullable();
+            $table->string('currency')->default('$MXN');
             $table->foreignId('subcategory_id')->constrained()->cascadeOnDelete();
             $table->timestamps();
         });

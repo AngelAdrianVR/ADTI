@@ -40,14 +40,14 @@
                 <el-tree :data="data" default-expand-all :expand-on-click-node="false" :props="defaultProps"
                     @node-click="handleNodeClick">
                     <template #default="{ node, data }">
-                        <div class="w-full flex items-center justify-between">
-                            <span>{{ node.label }}</span>
-                            <div v-if="data.features && data.features.length" class="flex items-center space-x-1">
+                        <div class="w-full flex items-center justify-between text-xs">
+                            <p :title="node.label" class="w-[85%] truncate">{{ node.label }}</p>
+                            <div v-if="data.features && data.features.length" class="flex items-center w-[41px]">
                                 <el-tooltip content="Exportar productos" placement="top">
                                     <button @click="openExportModal(data)"
-                                        class="size-6 rounded-full flex items-center justify-center text-secondary hover:text-white hover:bg-primary">
+                                        class="size-5 rounded-full flex items-center justify-center text-secondary hover:text-white hover:bg-primary">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                            stroke-width="1.5" stroke="currentColor" class="size-4">
+                                            stroke-width="1.5" stroke="currentColor" class="size-3">
                                             <path stroke-linecap="round" stroke-linejoin="round"
                                                 d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
                                         </svg>
@@ -64,9 +64,9 @@
                                         </p>
                                     </template>
                                     <button @click="downloadTemplate(data)"
-                                        class="size-6 rounded-full flex items-center justify-center text-secondary hover:text-white hover:bg-primary">
+                                        class="size-5 rounded-full flex items-center justify-center text-secondary hover:text-white hover:bg-primary">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                            stroke-width="1.5" stroke="currentColor" class="size-4">
+                                            stroke-width="1.5" stroke="currentColor" class="size-3">
                                             <path stroke-linecap="round" stroke-linejoin="round"
                                                 d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
                                         </svg>

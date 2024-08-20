@@ -22,7 +22,7 @@
                     <!-- pagination -->
                     <div class="flex space-x-5 items-center">
                         <el-pagination @current-change="handlePagination" layout="prev, pager, next"
-                            :total="users.length" />
+                            :total="users.length / itemsPerPage" />
                         <div v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')"
                             class="mt-2 lg:mt-0">
                             <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
@@ -35,7 +35,7 @@
                         </div>
                     </div>
                 </div>
-                <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 100%"
+                <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 90%"
                     @selection-change="handleSelectionChange" ref="multipleTableRef"
                     :row-class-name="tableRowClassName">
                     <el-table-column type="selection" width="30" />

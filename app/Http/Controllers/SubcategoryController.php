@@ -114,9 +114,9 @@ class SubcategoryController extends Controller
         array_unshift($preFilledColumns, 'Campo prellenado');
 
         // Añadir columnas fijas
-        $headers = array_merge($headers, ['Nombre del producto', 'Descripción', 'Número de parte de fabricante', 'Ubicación en almacén']);
-        $values = array_merge($values, ['', '', '', '']);
-        $preFilledColumns = array_merge($preFilledColumns, ['Campo obligatorio', '', '', '']);
+        $headers = array_merge($headers, ['Número de parte de fabricante', 'Descripción', 'Ubicación en almacén']);
+        $values = array_merge($values, ['', '', '']);
+        $preFilledColumns = array_merge($preFilledColumns, ['', '', '']);
 
         // Añadir columnas de características (features) de la subcategoría seleccionada
         foreach ($subcategory->features as $feature) {
@@ -211,9 +211,9 @@ class SubcategoryController extends Controller
                 $productData = [...$values];
 
                 // Reemplazar los valores correspondientes con los datos del producto
-                $productData[array_search('Nombre del producto', $headers)] = $product->name;
-                $productData[array_search('Descripción', $headers)] = $product->description;
+                // $productData[array_search('Nombre del producto', $headers)] = $product->name;
                 $productData[array_search('Número de parte de fabricante', $headers)] = $product->part_number_supplier;
+                $productData[array_search('Descripción', $headers)] = $product->description;
                 $productData[array_search('Ubicación en almacén', $headers)] = $product->location;
 
                 // Añadir valores de las características (features)
