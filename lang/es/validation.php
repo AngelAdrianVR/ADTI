@@ -146,5 +146,6 @@ return [
         'permissions' => 'permisos',
         'part_number_supplier' => 'número de parte del fabricante',
         'abreviation' => 'abreviación',
+        'description' => 'descripción',
     ],
 ];

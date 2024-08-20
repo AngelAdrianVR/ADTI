@@ -163,7 +163,7 @@
                                     <el-input v-model="option.name" :placeholder="`Opción ${index2 + 1}`"
                                         class="!w-[65%]" />
                                     <el-input v-model="option.key" placeholder="Clave" class="!w-[30%]" />
-                                    <button @click="removeOption(index, index2)" type="button"
+                                    <button @click="removeOption(index, index2)" title="Eliminar opción" type="button"
                                         class="w-[5%] text-black">x</button>
                                 </div>
                                 <div class="col-span-full">

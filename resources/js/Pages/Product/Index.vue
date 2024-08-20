@@ -10,7 +10,7 @@
                     <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
                 </div>
                 <el-dropdown split-button type="primary" @click="$inertia.get(route('products.create'))" trigger="click"
-                    @command="handleDropdownCommand" class="mr-4">
+                    @command="handleDropdownCommand">
                     Crear producto
                     <template #dropdown>
                         <el-dropdown-menu>
@@ -49,7 +49,7 @@
                         </div>
                     </div>
                 </div>
-                <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 100%"
+                <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 90%"
                     @selection-change="handleSelectionChange" ref="multipleTableRef"
                     :row-class-name="tableRowClassName">
                     <el-table-column type="selection" width="30" />

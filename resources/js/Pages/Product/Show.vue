@@ -1,5 +1,5 @@
 <template>
-    <AppLayout :title="product.name">
+    <AppLayout :title="product.part_number_supplier">
         <main class="px-2 lg:px-10 py-7">
             <!-- header botones -->
             <div class="lg:flex justify-between items-center mx-3">

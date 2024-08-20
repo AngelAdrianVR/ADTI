@@ -36,15 +36,16 @@ class ProductController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:100',
+            'name' => 'nullable|string|max:100',
             'category_id' => 'required',
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
             'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
             'features_keys' => 'nullable|array',
-            'part_number' => 'required|string|max:20',
+            'part_number' => 'required|string|max:17',
             'part_number_supplier' => 'nullable|string|max:20|unique:products,part_number_supplier',
             'location' => 'nullable|string|max:100',
+            'currency' => 'required|string|max:255',
             'line_cost' => 'nullable|numeric|min:0|max:99999',
         ]);
 
@@ -94,15 +95,16 @@ class ProductController extends Controller
     public function update(Request $request, Product $product)
     {
         $request->validate([
-            'name' => 'required|string|max:100',
+            'name' => 'nullable|string|max:100',
             'category_id' => 'required',
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
             'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
             'features_keys' => 'nullable|array',
-            'part_number' => 'required|string|max:20',
+            'part_number' => 'required|string|max:17',
             'part_number_supplier' => 'nullable|string|max:20',
             'location' => 'nullable|string|max:100',
+            'currency' => 'required|string|max:255',
             'line_cost' => 'nullable|numeric|min:0|max:99999',
         ]);
 
@@ -126,15 +128,16 @@ class ProductController extends Controller
     public function updateWithMedia(Request $request, Product $product)
     {
         $request->validate([
-            'name' => 'required|string|max:100',
+            'name' => 'nullable|string|max:100',
             'category_id' => 'required',
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
             'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
             'features_keys' => 'nullable|array',
-            'part_number' => 'required|string|max:20',
+            'part_number' => 'required|string|max:17',
             'part_number_supplier' => 'nullable|string|max:20',
             'location' => 'nullable|string|max:100',
+            'currency' => 'required|string|max:255',
             'line_cost' => 'nullable|numeric|min:0|max:99999',
         ]);
 
@@ -272,8 +275,8 @@ class ProductController extends Controller
                     $columnNames[] = $cell->getValue();
                 }
 
-                // Buscar la posición de la columna 'Nombre del producto'
-                $productNameColumnIndex = array_search('Nombre del producto', $columnNames);
+                // Buscar la posición de la columna 'Número de parte de fabricante'
+                $productNameColumnIndex = array_search('Número de parte de fabricante', $columnNames);
                 continue;
             }
 
@@ -286,10 +289,9 @@ class ProductController extends Controller
 
             // Validar los datos
             $validator = Validator::make($data, [
-                $columnNames[$productNameColumnIndex] => 'required|string|max:120',
+                $columnNames[$productNameColumnIndex] => 'nullable|string|max:255',
                 $columnNames[$productNameColumnIndex + 1] => $data[$columnNames[$productNameColumnIndex + 1]] ? 'string|max:255' : '',
                 $columnNames[$productNameColumnIndex + 2] => $data[$columnNames[$productNameColumnIndex + 2]] ? 'string|max:30' : '',
-                $columnNames[$productNameColumnIndex + 3] => $data[$columnNames[$productNameColumnIndex + 3]] ? 'string|max:30' : '',
             ]);
 
             // Si la validación falla, almacenar los errores
@@ -323,8 +325,8 @@ class ProductController extends Controller
                     $columnNames[] = $cell->getValue();
                 }
 
-                // Buscar la posición de la columna 'Nombre del producto'
-                $productNameColumnIndex = array_search('Nombre del producto', $columnNames);
+                // Buscar la posición de la columna 'Número de parte de fabricante'
+                $productNameColumnIndex = array_search('Número de parte de fabricante', $columnNames);
                 continue;
             }
 
@@ -349,7 +351,7 @@ class ProductController extends Controller
 
             // Obtener las características después de 'Ubicación en almacén'
             $features = [];
-            for ($i = $productNameColumnIndex + 4; $i < count($columnNames); $i += 2) {
+            for ($i = $productNameColumnIndex + 3; $i < count($columnNames); $i += 2) {
                 $features[] = [
                     'name' => $columnNames[$i],
                     'value' => $data[$i],
@@ -371,11 +373,10 @@ class ProductController extends Controller
 
             // Guardar el producto en la base de datos
             Product::create([
-                'name' => $data[$productNameColumnIndex],
-                'description' => $data[$productNameColumnIndex + 1], // Asumimos que la columna 'Descripción' está inmediatamente después de 'Nombre del producto'
+                'part_number_supplier' => $data[$productNameColumnIndex],
+                'description' => $data[$productNameColumnIndex + 1], // Asumimos que la columna 'Descripción' está inmediatamente después de 'Número de parte de fabricantes'
+                'location' => $data[$productNameColumnIndex + 2], // Asumimos que la columna 'Ubicación en almacén' está inmediatamente después de 'Descripción'
                 'part_number' => $partNumber,
-                'part_number_supplier' => $data[$productNameColumnIndex + 2], // Asumimos que la columna 'Número de parte de fabricante' está inmediatamente después de 'Descripción'
-                'location' => $data[$productNameColumnIndex + 3], // Asumimos que la columna 'Ubicación en almacén' está inmediatamente después de 'Número de parte de fabricante'
                 'bread_crumbles' => $subcategoryStack,
                 'features' => $features,
                 'subcategory_id' => $subcategory->id,

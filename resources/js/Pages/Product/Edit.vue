@@ -8,13 +8,18 @@
 
                 <h1 class="font-bold ml-2 col-span-full">Editar producto</h1>
 
-                <div class="mt-3">
+                <!-- <div class="mt-3">
                     <InputLabel value="Nombre del producto" class="ml-3 mb-1" />
                     <el-input v-model="form.name" placeholder="Escribe el nombre del producto" :maxlength="100"
                         clearable />
                     <InputError :message="form.errors.name" />
+                </div> -->
+                <div class="mt-3">
+                    <InputLabel value="Número de parte del fabricante" class="ml-3 mb-1" />
+                    <el-input v-model="form.part_number_supplier"
+                        placeholder="Escribe el número de parte del fabricante" clearable @input="filterInput" />
+                    <InputError :message="form.errors.part_number_supplier" />
                 </div>
-
                 <div class="mt-3">
                     <div class="flex items-center justify-between">
                         <InputLabel value="Categoría*" class="ml-3 mb-1" />
@@ -95,15 +100,16 @@
                 <div class="mt-3 col-span-full">
                     <div class="flex justify-between items-center">
                         <InputLabel value="Características del producto" class="ml-3 mb-1 text-sm" />
-                        <ThirthButton type="button" v-if="Object.keys(form.features).length"
-                            @click="showMeasureUnitFormModal = true" class="!py-0">Crear unidad de medida</ThirthButton>
+                        <ThirthButton type="button" v-if="form.features.length" @click="showMeasureUnitFormModal = true"
+                            class="!py-0">Crear unidad de medida</ThirthButton>
                     </div>
-                    <p v-if="Object.keys(form.features).length" class="text-gray99 text-sm mb-2">Si algún campo no es
+                    <p v-if="form.features.length" class="text-gray99 text-sm mb-2">Si algún campo no es
                         necesario, puedes dejarlo en blanco. Este campo no será visible para los usuarios.</p>
-                    <Loading v-if="loadingFeatures" class="my-6"/>
+                    <Loading v-if="loadingFeatures" class="my-6" />
                     <section v-else>
                         <div v-if="form.features.length" class="grid grid-cols-2 gap-5">
-                            <div v-for="(feature, index) in form.features" :key="index" class="flex items-center space-x-2">
+                            <div v-for="(feature, index) in form.features" :key="index"
+                                class="flex items-center space-x-2">
                                 <div class="w-1/2">
                                     <InputLabel :value="Object.values(feature)[0]" class="ml-3 mb-1 text-sm" />
                                     <el-select v-if="feature?.options[0]?.name !== null"
@@ -120,7 +126,8 @@
                                         </el-option>
                                     </el-select>
                                     <el-input v-else v-model="form.features[index][Object.keys(feature)[1]]"
-                                        placeholder="Escribe el valor de la característica" :maxlength="100" clearable />
+                                        placeholder="Escribe el valor de la característica" :maxlength="100"
+                                        clearable />
                                 </div>
                                 <div class="w-1/2">
                                     <InputLabel value="Unidad de medida" class="ml-3 mb-1 text-sm" />
@@ -140,7 +147,8 @@
                                 </div>
                             </div>
                         </div>
-                        <p v-else class="text-gray99 text-sm">Selecciona la subcategoría final para ver las características
+                        <p v-else class="text-gray99 text-sm">Selecciona la subcategoría final para ver las
+                            características
                             disponibles</p>
                     </section>
                 </div>
@@ -153,33 +161,35 @@
                         @cleared="form.imageCover = null; form.imageCoverCleared = true"
                         :imageUrl="product.media?.find(img => img.collection_name === 'imageCover')?.original_url" />
                 </div>
-
                 <div class="mt-3">
                     <InputLabel value="Ubicación en almacén" class="ml-3 mb-1" />
                     <el-input v-model="form.location" placeholder="Ej. S-4763" :maxlength="100" clearable />
                     <InputError :message="form.errors.location" />
                 </div>
-
                 <div class="mt-3">
-                    <InputLabel value="Costo de línea" class="ml-3 mb-1" />
-                    <el-input v-model="form.line_cost" type="text"
-                        :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
-                        :parser="(value) => value.replace(/[^\d.]/g, '')" placeholder="0.00">
-                        <template #prefix>
-                            <i class="fa-solid fa-dollar-sign"></i>
-                        </template>
-                    </el-input>
-                    <InputError :message="form.errors.line_cost" />
+                    <InputLabel value="Precio de lista" class="ml-3 mb-1" />
+                    <div class="flex items-center space-x-1">
+                        <div class="w-1/2">
+                            <el-input v-model="form.line_cost" type="text"
+                                :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
+                                :parser="(value) => value.replace(/[^\d.]/g, '')" placeholder="0.00">
+                                <template #prefix>
+                                    <i class="fa-solid fa-dollar-sign"></i>
+                                </template>
+                            </el-input>
+                            <InputError :message="form.errors.line_cost" />
+                        </div>
+                        <div class="w-1/2">
+                            <el-select v-model="form.currency" placeholder="Moneda"
+                                no-data-text="No hay opciones registradas"
+                                no-match-text="No se encontraron coincidencias">
+                                <el-option v-for="currency in ['$MXN', '$USD']" :key="currency" :label="currency"
+                                    :value="currency" />
+                            </el-select>
+                            <InputError :message="form.errors.currency" />
+                        </div>
+                    </div>
                 </div>
-
-                <div class="mt-3">
-                    <InputLabel value="Número de parte del fabricante" class="ml-3 mb-1" />
-                    <el-input v-model="form.part_number_supplier"
-                        placeholder="Escribe el número de parte del fabricante" :maxlength="100" show-word-limit
-                        clearable @input="filterInput" />
-                    <InputError :message="form.errors.part_number_supplier" />
-                </div>
-
                 <div class="mt-3">
                     <InputLabel value="Número de parte interno" class="ml-3 mb-1" />
                     <el-input v-model="form.part_number" disabled placeholder="Creación automática" :maxlength="100"
@@ -363,7 +373,7 @@ export default {
             category_id: this.product.subcategory?.category_id,
             subcategory_id: [], //se guarda un arreglo de los ids de subcategorías de forma secuencial
             description: this.product.description,
-            features: this.product.features ?? {},
+            features: this.product.features ?? [],
             imageCover: null,
             imageCoverCleared: false, //bandera para saber si se eliminó la imagen
             part_number: this.product.part_number, //numero de parte interno
@@ -374,6 +384,7 @@ export default {
             media: null, //archivos del producto (descargables)
             deleteMedia: false, //elimina todos los archivos existentes
             features_keys: this.product.features_keys, //claves de caracteristicas en orden para formar #parte interno
+            currency: this.product.currency, //claves de caracteristicas en orden para formar #parte interno
         });
 
         const categoryForm = useForm({
