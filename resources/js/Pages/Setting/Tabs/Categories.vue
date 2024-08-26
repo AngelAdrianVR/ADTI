@@ -10,7 +10,7 @@
         <p class="text-secondary mt-2">En este apartado, podrás encontrar las categorías principales junto con sus
             subcategorías. Haz clic en “Editar” para modificar una categoría existente o en “Crear” para añadir una
             nueva categoría</p>
-        <div class="text-sm mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="text-sm mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <CategoryCard v-for="(item, index) in categories" :key="index" :category="item" @deleted="fetchCategories()" />
             <el-empty v-if="!categories.length" description="No hay categorias registradas aún" class="col-span-full" />
         </div>

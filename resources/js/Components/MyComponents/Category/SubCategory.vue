@@ -214,6 +214,7 @@ export default {
         onImageChange(event) {
             const file = event.target.files[0];
             if (file) {
+                this.subCategory.imageChanged = true;
                 this.$emit('imageUploaded', file, this.getLabel);
             }
         },
@@ -221,6 +222,7 @@ export default {
             this.$emit('imageUploaded', file, path);
         },
         removeImage() {
+            this.subCategory.imageDeleted = true;
             this.$emit('imageUploaded', null, this.getLabel);
         },
         openFeaturesModal() {
