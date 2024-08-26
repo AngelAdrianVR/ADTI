@@ -93,7 +93,7 @@ class CategoryController extends Controller
             // Guardar la nueva imagen temporalmente
             $path = $request->file('image')->storeAs('temp', $request->file('image')->getClientOriginalName());
             $category->addMedia(storage_path('app/' . $path))->toMediaCollection();
-        } else if ($category->getFirstMedia()) {
+        } else if ($category->getFirstMedia() && boolval($request->imageDeleted)) {
             $category->clearMediaCollection();
         }
 
@@ -133,7 +133,7 @@ class CategoryController extends Controller
                     }
                     $path = $subCategoryData['image']->storeAs('temp', $subCategoryData['image']->getClientOriginalName());
                     $subcategory->addMedia(storage_path('app/' . $path))->toMediaCollection();
-                } else if ($subcategory->getFirstMedia()) {
+                } else if ($subcategory->getFirstMedia() && boolval($subCategoryData['imageDeleted'])) {
                     $subcategory->clearMediaCollection();
                 }
 

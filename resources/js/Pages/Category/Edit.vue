@@ -48,25 +48,32 @@
                 <hr class="col-span-full border-grayD9">
                 <br>
 
-                <h1 class="font-bold ml-2 mb-2 col-span-full flex items-center space-x-3">
-                    <span>Subcategorías</span>
-                    <button type="button" @click="addMainSubCategory" class="text-primary text-sm font-normal">
-                        + Agregar subcategoría
-                    </button>
-                </h1>
-                <div class="space-y-2">
-                    <SubCategory v-for="(subCategory, index) in form.subCategories" :key="index"
-                        :subCategory="subCategory" :index="index" :parentIndex="''" @addSubCategory="addSubCategory"
-                        @removeSubCategory="removeSubCategory" @imageUploaded="handleImageUploaded"
-                        @openFeaturesModal="openFeaturesModal" />
-                </div>
-                <div class="col-span-full text-right mt-7">
-                    <PrimaryButton class="!rounded-full"
-                        :disabled="form.processing || subcategoryNameEmpty(form.subCategories)">
-                        <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
-                        Guardar cambios
-                    </PrimaryButton>
-                </div>
+                <section v-if="loading" class="flex flex-col items-center justify-center mb-12">
+                    <Loading />
+                    <span class="text-gray-600 text-sm">Cargando subcategorías...</span>
+                </section>
+                <section v-else>
+                    <h1 class="font-bold ml-2 mb-2 col-span-full flex items-center space-x-3">
+                        <span>Subcategorías</span>
+                        <button type="button" @click="addMainSubCategory" class="text-primary text-sm font-normal">
+                            + Agregar subcategoría
+                        </button>
+                    </h1>
+                    <div class="space-y-2">
+                        <SubCategory v-for="(subCategory, index) in form.subCategories" :key="index"
+                            :subCategory="subCategory" :index="index" :parentIndex="''" @addSubCategory="addSubCategory"
+                            @removeSubCategory="removeSubCategory" @imageUploaded="handleImageUploaded"
+                            @openFeaturesModal="openFeaturesModal" />
+                    </div>
+                    <div class="col-span-full text-right mt-7">
+                        <PrimaryButton class="!rounded-full"
+                            :disabled="form.processing || subcategoryNameEmpty(form.subCategories)">
+                            <i v-if="form.processing"
+                                class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
+                            Guardar cambios
+                        </PrimaryButton>
+                    </div>
+                </section>
             </form>
         </div>
         <div class="text-center mb-2">
@@ -251,6 +258,7 @@ import InputFilePreview from "@/Components/MyComponents/InputFilePreview.vue";
 import SubCategory from "@/Components/MyComponents/Category/SubCategory.vue";
 import Back from "@/Components/MyComponents/Back.vue";
 import { useForm } from "@inertiajs/vue3";
+import Loading from '@/Components/MyComponents/Loading.vue';
 
 export default {
     data() {
@@ -258,6 +266,8 @@ export default {
             category: null,
             key: null,
             image: null,
+            imageChanged: false,
+            imageDeleted: false,
             subCategories: [{ id: null, name: '', subCategories: [], image: null, features: [] }],
         });
 
@@ -275,6 +285,8 @@ export default {
             form,
             unitForm,
             featureForm,
+            // carga
+            loading: true,
             // modales
             showFeaturesModal: false,
             showNewFeatureModal: false,
@@ -295,6 +307,7 @@ export default {
         Back,
         SubCategory,
         DialogModal,
+        Loading,
     },
     props: {
         features: Array,
@@ -332,6 +345,7 @@ export default {
             return new File([buffer], filename, { type: mimeType });
         },
         async transformData(data) {
+            this.loading = true;
             // Inicializa la categoría principal
             this.form.category = data.name;
             this.form.key = data.key;
@@ -343,6 +357,8 @@ export default {
             } else {
                 this.image = null;
             }
+            this.form.imageChanged = false; // indicar por defecto que no se ha cambiado la imagen
+            this.form.imageDeleted = false; // indicar por defecto que no se ha eliminado la imagen
 
             // Organiza las subcategorías
             const map = new Map();
@@ -353,6 +369,8 @@ export default {
                     name: subcategory.name,
                     subCategories: [],
                     image: null,
+                    imageChanged: false, // indicar por defecto que no se ha cambiado la imagen
+                    imageDeleted: false, // indicar por defecto que no se ha eliminado la imagen
                     features: subcategory.features || [],
                 };
 
@@ -379,9 +397,21 @@ export default {
             });
 
             this.form.subCategories = subCategories;
+            this.loading = false;
+        },
+        transformSubcategories(subCategories) { // Método recursivo para transformar las subcategorías
+            return subCategories.map(subCategory => ({
+                ...subCategory,
+                image: subCategory.imageChanged ? subCategory.image : null,
+                subCategories: this.transformSubcategories(subCategory.subCategories || []),
+            }));
         },
         update() {
-            this.form.post(route("categories.update-with-subcategories", this.category.id), {
+            this.form.transform(data => ({
+                ...data,
+                image: data.imageChanged ? data.image : null,
+                subCategories: this.transformSubcategories(data.subCategories),
+            })).post(route("categories.update-with-subcategories", this.category.id), {
                 method: '_put',
                 onSuccess: () => {
                     this.$notify({
@@ -416,10 +446,12 @@ export default {
             const file = event.target.files[0];
             if (file) {
                 this.form.image = file;
+                this.form.imageChanged = true;
             }
         },
         removeImage() {
             this.form.image = null;
+            this.form.imageDeleted = true;
         },
         addMainSubCategory() {
             this.form.subCategories.push({ name: '', subCategories: [], image: null, features: [] });
