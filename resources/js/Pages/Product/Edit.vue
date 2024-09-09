@@ -112,7 +112,7 @@
                                 class="flex items-center space-x-2">
                                 <div class="w-1/2">
                                     <InputLabel :value="Object.values(feature)[0]" class="ml-3 mb-1 text-sm" />
-                                    <el-select v-if="feature?.options[0]?.name !== null"
+                                    <el-select v-if="feature?.options?.length && feature?.options[0]?.name !== null"
                                         @change="handleChangeFeatureOption(index, $event)"
                                         v-model="form.features[index][Object.keys(feature)[1]]" class="w-1/2" filterable
                                         placeholder="Seleccione" no-data-text="No hay opciones registradas"
@@ -666,9 +666,11 @@ export default {
             const highestLevelSubcategory = this.categoryInfo.subcategories.find(sub => sub.level == this.highestLevel)
             const options = highestLevelSubcategory.features.map(feature => ({ options: feature.options }));
 
-            this.form.features.forEach((element, index) => {
-                element.options = options[index].options
-            });
+            if ( options ) {
+                this.form.features.forEach((element, index) => {
+                        element.options = options[index]?.options
+                });
+            }
             this.loadingFeatures = false;
         },
         removeFile(file_id) {

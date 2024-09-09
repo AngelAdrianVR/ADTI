@@ -37,7 +37,7 @@
         </div>
         <div class="flex mt-2">
             <p class="text-[#6D6E72] w-48">Precio de lista:</p>
-            <p class="text-black">{{ product.line_cost.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",") }} {{ product.currency }}</p>
+            <p class="text-black">{{ product.line_cost?.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",") }} {{ product.currency }}</p>
         </div>
         <div class="flex mt-5">
             <p class="text-[#6D6E72] w-48">Características:</p>
