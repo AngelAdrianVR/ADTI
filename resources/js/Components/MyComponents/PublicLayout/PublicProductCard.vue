@@ -15,8 +15,10 @@
         <!-- Información de producto -->
         <section class="w-[90%] text-sm md:text-base">
             <div class="flex items-center justify-between">
-                <!-- <p class="text-primary">NÚMERO DE PARTE INTERNO: {{ product.part_number }}</p> -->
-                <p class="text-primary">NÚMERO DE PARTE DE FABRICANTE: {{ product.part_number_supplier }}</p>
+                <div>
+                    <p class="text-primary">NÚMERO DE PARTE DE FABRICANTE: {{ product.part_number_supplier }}</p>
+                    <p class="text-primary">NÚMERO DE PARTE INTERNO: {{ product.part_number }}</p>
+                </div>
                 <p class="text-secondary">UBICACIÓN ALMACÉN: {{ product.location }}</p>
             </div>
             <p class="text-primary uppercase font-bold">{{ product.name }}</p>
