@@ -194,7 +194,8 @@ class ProductController extends Controller
         $products = Product::where(function ($q) use ($query) {
             $q->where('name', 'like', "%$query%")
                 ->orWhere('part_number', 'like', "%$query%")
-                ->orWhere('part_number_supplier', 'like', "%$query%");
+                ->orWhere('part_number_supplier', 'like', "%$query%")
+                ->orWhere('name', 'like', "%$query%");
         })
             ->get();
 
