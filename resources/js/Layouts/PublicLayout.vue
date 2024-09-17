@@ -14,10 +14,10 @@
                             </Link>
 
                             <!-- buscador de productos -->
-                            <div class="relative md:w-96 w-64">
+                            <div class="relative md:w-[400px] w-64">
                                 <input v-model="searchQuery" @focus="searchFocus = true" @blur="handleBlur"
                                     @input="searchProducts" ref="searchInput" class="input w-full pl-9"
-                                    placeholder="Buscar por nombre o número de parte" type="search">
+                                    placeholder="Buscar por descripción, N. interno o N. de fabricante" type="search">
                                 <!-- <PrimaryButton :disabled="!searchQuery" class="!py-[7px] absolute top-[2px] right-[2px]" @click="searchProducts">Buscar</PrimaryButton> -->
                                 <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
                                 <!-- Resultados de la búsqueda -->
@@ -27,8 +27,8 @@
                                         <li @click="$inertia.get(route('public.show-product', product.id))"
                                             v-for="(product, index) in productsFound" :key="index"
                                             class="hover:bg-gray-200 cursor-default text-sm px-5 py-2 flex items-center justify-between">
-                                            <p>{{product.name }}</p>
-                                            <p class="text-gray99 text-xs">{{product.part_number_supplier }}</p>
+                                            <p>{{product.name ?? product.description }}</p>
+                                            <p class="text-gray99 text-xs">{{product.part_number_supplier }}/ {{ product.part_number }}</p>
                                         </li>
                                     </ul>
                                     <p v-else-if="!loading" class="text-center text-sm text-gray-600 px-5 py-2">No se
