@@ -40,8 +40,13 @@
                 </div>
             </div>
 
-            <div class="mt-5">
+            <div class="mt-5 flex justify-between items-center lg:mr-28 mr-5">
                 <Back />
+                <el-tooltip placement="top" content="Siguiente producto">
+                    <button @click="nextProduct" class="flex items-center justify-center size-7 rounded-full hover:bg-gray-200 cursor-pointer">
+                        <i class="fa-solid fa-angle-right"></i>
+                    </button>
+                </el-tooltip>
             </div>
 
             <!-- Info de producto -->
@@ -121,6 +126,19 @@ props:{
     product: Object
 },
 methods:{
+    async nextProduct() {
+      try {
+        const response = await fetch(`/products/${this.product.id}/next`);
+        const nextProduct = await response.json();
+
+        if (nextProduct) {
+          // Redirigir a la página del siguiente producto
+          this.$inertia.get(route('products.show', nextProduct.id));
+        }
+      } catch (error) {
+        console.error('Error al obtener el siguiente producto:', error);
+      }
+    },
     handleBlur() {
         // Introducir un retraso para dar tiempo al evento click de ejecutarse antes del blur
         setTimeout(() => {
