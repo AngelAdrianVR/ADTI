@@ -362,7 +362,8 @@ class ProductController extends Controller
 
             // Obtener el ID de la subcategoría final antes de 'Nombre del producto'
             $subCategoryName = $data[$productNameColumnIndex - 1];
-            $subcategory = Subcategory::where('name', $subCategoryName)->firstOrFail();
+            $firstSubcategory = Subcategory::where('name', $data[$productNameColumnIndex - 2])->first(); //obtiene la primera subcategoría
+            $subcategory = Subcategory::where('name', $subCategoryName)->where('prev_subcategory_id', $firstSubcategory->id)->firstOrFail(); //obtiene la ultima subcatogoría la cual tiene los productos que coincida con la subcategoría previa
 
             // Primero, recorre hasta llegar al nivel más alto (primer nivel de subcategoría)
             $currentSubcategory = $subcategory;
@@ -398,4 +399,13 @@ class ProductController extends Controller
 
         return response()->json(['next_consecutivo' => $last_consecutivo ? $last_consecutivo + 1 : 1]);
     }
+
+    public function getNextProduct($id)
+    {
+        $next = Product::where('id', '>', $id)->orderBy('id', 'asc')->first();
+        
+        // Si no existe un producto mayor, regresar el primero
+        return $next ?? Product::orderBy('id', 'asc')->first();
+    }
+    
 }
