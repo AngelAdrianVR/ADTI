@@ -96,6 +96,7 @@ Route::post('products/import', [ProductController::class, 'import'])->name('prod
 Route::get('products-print-barcodes', [ProductController::class, 'printBarcodes'])->name('products.print-barcodes')->middleware('auth');
 Route::post('products/get-consecutivo/{subcategory_id}', [ProductController::class, 'getConsecutivo'])->name('products.get-consecutivo')->middleware('auth');
 Route::delete('products/delete-file/{file_id}', [ProductController::class, 'deleteFile'])->name('products.delete-file')->middleware('auth');
+Route::get('/products/{id}/next', [ProductController::class, 'getNextProduct']);
 
 
 //Category routes----------------------------------------------------------------------------------
