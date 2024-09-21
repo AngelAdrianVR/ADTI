@@ -1,14 +1,19 @@
 <template>
     <AppLayout title="Productos">
         <main class="px-2 md:px-10 pt-1 pb-16">
-            <h1 class="font-bold my-3 ml-4 text-lg">Productos</h1>
+            <h1 class="font-bold my-3 ml-4 text-lg">Productos ({{ products.length }})</h1>
             <section class="md:flex justify-between items-center">
-                <div class="mb-3 md:mb-0 lg:w-1/3 relative">
-                    <input v-model="searchQuery" @keydown.enter="handleSearch" class="input w-full pl-9"
-                        placeholder="Buscar por nombre, categoria o número de parte del fabricante" type="search"
-                        ref="searchInput" />
-                    <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
-                </div>
+                <article class="flex items-center space-x-5 lg:w-1/3">
+                    <div class="mb-3 md:mb-0 w-full relative">
+                        <input v-model="searchQuery" @keydown.enter="handleSearch" class="input w-full pl-9"
+                            placeholder="Buscar por nombre, categoria o número de parte del fabricante" type="search"
+                            ref="searchInput" />
+                        <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
+                    </div>
+                    <el-tag @close="closedTag" v-if="searchedWord" closable type="primary">
+                        {{ searchedWord }}
+                    </el-tag>
+                </article>
                 <el-dropdown split-button type="primary" @click="$inertia.get(route('products.create'))" trigger="click"
                     @command="handleDropdownCommand">
                     Crear producto
@@ -19,18 +24,17 @@
                         </el-dropdown-menu>
                     </template>
                 </el-dropdown>
-                <!-- <div class="my-4 lg:my-0 flex items-center justify-end space-x-3">
-                    <PrimaryButton @click="$inertia.get(route('products.create'))">Crear producto</PrimaryButton>
-                </div> -->
             </section>
 
+            <Loading v-if="loading" class="mt-4 lg:mt-20" />
+
             <!-- tabla starts -->
-            <div class="mx-2 lg:mx-10 mt-6">
+            <div v-else class="mx-2 lg:mx-10 mt-6">
                 <div class="lg:flex justify-between mb-2">
                     <!-- pagination -->
                     <div class="flex space-x-5 items-center">
                         <el-pagination @current-change="handlePagination" layout="prev, pager, next"
-                            :total="products.length / itemsPerPage" />
+                            :total="totalPagination" />
                         <!-- buttons -->
                         <div v-if="$page.props.auth.user.permissions?.includes('Eliminar productos')"
                             class="mt-2 lg:mt-0">
@@ -237,6 +241,7 @@
 
 <script>
 import AppLayout from '@/Layouts/AppLayout.vue';
+import Loading from "@/Components/MyComponents/Loading.vue";
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import InputError from '@/Components/InputError.vue';
 import DialogModal from '@/Components/DialogModal.vue';
@@ -258,8 +263,9 @@ export default {
             disableMassiveActions: true,
             loading: false,
             inputSearch: '',
-            search: '',
+            search: null,
             // pagination
+            totalPagination: this.products.length / 3, //el componente toma 10 items por pagina pero aqui le pusimos 30, por eso se divide entre 3
             itemsPerPage: 30,
             start: 0,
             end: 30,
@@ -278,11 +284,12 @@ export default {
     components: {
         AppLayout,
         PrimaryButton,
-        Link,
+        FileUploader,
         CancelButton,
         DialogModal,
-        FileUploader,
         InputError,
+        Loading,
+        Link,
     },
     props: {
         products: Array,
@@ -295,6 +302,14 @@ export default {
         },
         handleSearch() {
             this.search = this.searchQuery;
+            this.searchedWord = this.searchQuery;
+            this.searchQuery = null;
+            this.totalPagination = 1;
+        },
+        closedTag() {
+            this.search = null;
+            this.searchedWord = null;
+            this.totalPagination = this.products.length / 3;
         },
         handleSelectionChange(val) {
             this.$refs.multipleTableRef.value = val;
@@ -402,12 +417,16 @@ export default {
             if (!this.search) {
                 return this.products.filter((item, index) => index >= this.start && index < this.end);
             } else {
-                return this.products.filter(
-                    (product) =>
-                        product.name.toLowerCase().includes(this.search.toLowerCase()) ||
-                        product.subcategory.category.name.toLowerCase().includes(this.search.toLowerCase()) ||
-                        product.part_number_supplier.toLowerCase().includes(this.search.toLowerCase())
-                )
+                // this.loading = true;
+                // console.log(this.loading);
+                const filteredProducts = this.products.filter((product) => 
+                    (product.name && product.name.toLowerCase().includes(this.search.toLowerCase())) ||
+                    product.subcategory.category.name.toLowerCase().includes(this.search.toLowerCase()) ||
+                    (product.part_number_supplier && product.part_number_supplier.toLowerCase().includes(this.search.toLowerCase()))
+                );
+                // console.log('hola');
+                // this.loading = false;
+                return filteredProducts;
             }
         }
     },
