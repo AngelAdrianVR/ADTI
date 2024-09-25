@@ -114,7 +114,7 @@ class SubcategoryController extends Controller
         array_unshift($preFilledColumns, 'Campo prellenado');
 
         // Añadir columnas fijas
-        $headers = array_merge($headers, ['Número de parte de fabricante', 'Descripción', 'Ubicación en almacén']);
+        $headers = array_merge($headers, ['Número de parte de fabricante', 'Número de parte interno', 'Descripción', 'Ubicación en almacén']);
         $values = array_merge($values, ['', '', '']);
         $preFilledColumns = array_merge($preFilledColumns, ['', '', '']);
 
@@ -213,6 +213,7 @@ class SubcategoryController extends Controller
                 // Reemplazar los valores correspondientes con los datos del producto
                 // $productData[array_search('Nombre del producto', $headers)] = $product->name;
                 $productData[array_search('Número de parte de fabricante', $headers)] = $product->part_number_supplier;
+                $productData[array_search('Número de parte interno', $headers)] = $product->part_number;
                 $productData[array_search('Descripción', $headers)] = $product->description;
                 $productData[array_search('Ubicación en almacén', $headers)] = $product->location;
 
