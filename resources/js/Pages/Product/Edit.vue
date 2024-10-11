@@ -584,17 +584,17 @@ export default {
                 //crea en la descripción con el breadCrumble agregando tambien el nombre de la categoría
                 this.form.description = this.categoryInfo.name + ' ' + this.form.bread_crumbles.join(' ');
 
-                if (highestLevelSubcategory && Array.isArray(highestLevelSubcategory.features)) {
-                    // Crear un array de objetos con las características y unidad de medida asignando null a cada una
-                    this.form.features = highestLevelSubcategory.features.map(feature => ({
-                        name: feature.name,       // Nombre de la característica
-                        value: null,              // Valor inicial de la característica
-                        measure_unit: feature.measure_unit // Unidad de medida predefinida
-                    }));
-                } else {
-                    // Si no hay características, inicializar features como un array vacío
-                    this.form.features = [];
-                }
+                // if (highestLevelSubcategory && Array.isArray(highestLevelSubcategory.features)) {
+                //     // Crear un array de objetos con las características y unidad de medida asignando null a cada una
+                //     this.form.features = highestLevelSubcategory.features.map(feature => ({
+                //         name: feature.name,       // Nombre de la característica
+                //         value: null,              // Valor inicial de la característica
+                //         measure_unit: feature.measure_unit // Unidad de medida predefinida
+                //     }));
+                // } else {
+                //     // Si no hay características, inicializar features como un array vacío
+                //     this.form.features = [];
+                // }
             }
         },
         saveImage(image) {
@@ -645,7 +645,7 @@ export default {
                 const response = await axios.get(route('categories.fetch-subcategories', this.form.category_id));
                 if (response.status === 200) {
                     this.categoryInfo = response.data.category;
-
+                    // console.log(this.categoryInfo);
                     // Encontrar el nivel más alto entre las subcategorías
                     this.highestLevel = Math.max(...this.categoryInfo.subcategories.map(sub => sub.level));
                 }
@@ -656,9 +656,13 @@ export default {
         //metodo para setear los valores de subcategorias que tiene el producto
         findSubcategoriesSelected() {
             this.product.bread_crumbles.forEach(crumb => {
-                const found = this.categoryInfo?.subcategories.find(subcategory => subcategory.name === crumb);
+                const found = this.categoryInfo?.subcategories.find(subcategory => 
+                    subcategory.name === crumb && 
+                    (this.form.subcategory_id.length === 0 || subcategory.prev_subcategory_id === this.form.subcategory_id.at(-1))
+                );
+                
                 if (found) {
-                    this.form.subcategory_id.push(found.id);
+                    this.form.subcategory_id.push(parseInt(found.id));
                 }
             });
 
