@@ -40,7 +40,7 @@ Route::get('/show-subcategory/{subcategory_id}', function ($subcategory_id) {
 
     $total_products = Product::where('subcategory_id', $subcategory_id)->count();
 
-    // return $total_products;
+    // return $subcategory;
     return Inertia::render('LandingPage/ShowSubcategory', [
         'subcategory' => $subcategory,
         'total_products' => $total_products // cantidad de productos que contiene esa subcategoría
