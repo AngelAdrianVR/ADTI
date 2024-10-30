@@ -73,6 +73,7 @@ class CategoryController extends Controller
 
     public function updateWithSubcategories(Request $request, Category $category)
     {
+        // dd($request->all());
         $validated = $request->validate([
             'category' => 'required|string|max:255',
             'key' => 'required|string|max:10',
@@ -116,25 +117,28 @@ class CategoryController extends Controller
             $subcategoryId = $subCategoryData['id'] ?? null;
 
             if ($subcategoryId && $existingSubcategories->has($subcategoryId)) {
-                // Actualizar subcategoría existente
                 $subcategory = $existingSubcategories->get($subcategoryId);
-                $subcategory->update([
-                    'name' => $subCategoryData['name'],
-                    'key' => $current_key,
-                    'level' => $level,
-                    'features' => $subCategoryData['features'] ?? null,
-                    'prev_subcategory_id' => $prevSubcategoryId,
-                ]);
-
-                // Actualizar la imagen de la subcategoría si se proporciona una nueva
-                if (isset($subCategoryData['image'])) {
-                    if ($subcategory->getFirstMedia()) {
+                //si existe el nombre, quiere decir que se editó esta subcategoria y se actualiza en la BDD
+                if (array_key_exists('name', $subCategoryData)) {
+                    // Actualizar subcategoría existente
+                    $subcategory->update([
+                        'name' => $subCategoryData['name'],
+                        'key' => $current_key,
+                        'level' => $level,
+                        'features' => $subCategoryData['features'] ?? null,
+                        'prev_subcategory_id' => $prevSubcategoryId,
+                    ]);
+    
+                    // Actualizar la imagen de la subcategoría si se proporciona una nueva
+                    if (isset($subCategoryData['image'])) {
+                        if ($subcategory->getFirstMedia()) {
+                            $subcategory->clearMediaCollection();
+                        }
+                        $path = $subCategoryData['image']->storeAs('temp', $subCategoryData['image']->getClientOriginalName());
+                        $subcategory->addMedia(storage_path('app/' . $path))->toMediaCollection();
+                    } else if ($subcategory->getFirstMedia() && boolval($subCategoryData['imageDeleted'])) {
                         $subcategory->clearMediaCollection();
                     }
-                    $path = $subCategoryData['image']->storeAs('temp', $subCategoryData['image']->getClientOriginalName());
-                    $subcategory->addMedia(storage_path('app/' . $path))->toMediaCollection();
-                } else if ($subcategory->getFirstMedia() && boolval($subCategoryData['imageDeleted'])) {
-                    $subcategory->clearMediaCollection();
                 }
 
                 // Remover la subcategoría del conjunto de existentes (ya no necesita ser eliminada)
@@ -200,7 +204,7 @@ class CategoryController extends Controller
         // borrar cada subcategoria y sus productos por separado para que se elimine correctamente la imagen relacionada
         foreach ($subcategories as $subcategory) {
             $products = $subcategory->products;
-            $products->each(fn ($product) => $product->delete());
+            $products->each(fn($product) => $product->delete());
             $subcategory->delete();
         }
 
