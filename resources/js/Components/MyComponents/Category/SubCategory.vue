@@ -2,7 +2,8 @@
     <section>
         <article class="flex items-center space-x-4">
             <InputLabel :value="getLabel" class="w-8" />
-            <el-input v-model="subCategory.name" placeholder="Ej. Movimiento lineal" :maxlength="255" clearable />
+            <el-input v-model="subCategory.name" @change="onNameChange" placeholder="Ej. Movimiento lineal"
+                ref="nameInput" :maxlength="255" clearable />
             <div class="flex items-center space-x-2">
                 <el-tooltip v-if="canAddSubCategory" content="Crear secuencia/rama de subcategoría" placement="top">
                     <button type="button" @click="handleAddSubCategory" class="hover:text-primary">
@@ -66,7 +67,8 @@
                 <figure
                     class="size-32 border border-grayD9 rounded-[3px] relative hover:cursor-pointer hover:bg-secondary hover:text-white">
                     <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
-                        title="Si quieres recuperarlas recarga la página. ¿Continuar?" @confirm="subCategory.features = []">
+                        title="Si quieres recuperarlas recarga la página. ¿Continuar?"
+                        @confirm="subCategory.features = []">
                         <template #reference>
                             <button type="button" class="absolute p-1 top-1 right-1 z-10 text-xs">
                                 <i class="fa-solid fa-xmark"></i>
@@ -215,14 +217,19 @@ export default {
             const file = event.target.files[0];
             if (file) {
                 this.subCategory.imageChanged = true;
+                this.subCategory.edited = true;
                 this.$emit('imageUploaded', file, this.getLabel);
             }
+        },
+        onNameChange() {
+            this.subCategory.edited = true;
         },
         handleImageUploaded(file, path) {
             this.$emit('imageUploaded', file, path);
         },
         removeImage() {
             this.subCategory.imageDeleted = true;
+            this.subCategory.edited = true;
             this.$emit('imageUploaded', null, this.getLabel);
         },
         openFeaturesModal() {
@@ -232,5 +239,12 @@ export default {
             this.$emit('openFeaturesModal', path);
         },
     },
+    mounted() {
+        if (!this.subCategory.id) {
+            this.$nextTick(() => {
+                this.$refs.nameInput.focus();
+            });
+        }
+    }
 };
 </script>

@@ -268,7 +268,7 @@ export default {
             image: null,
             imageChanged: false,
             imageDeleted: false,
-            subCategories: [{ id: null, name: '', subCategories: [], image: null, features: [] }],
+            subCategories: [{ id: null, name: '', subCategories: [], image: null, features: [], edited: false }],
         });
 
         const featureForm = useForm({
@@ -371,6 +371,7 @@ export default {
                     image: null,
                     imageChanged: false, // indicar por defecto que no se ha cambiado la imagen
                     imageDeleted: false, // indicar por defecto que no se ha eliminado la imagen
+                    edited: false, // indicar por defecto que no se ha cambiado ninguna otra propiedad
                     features: subcategory.features || [],
                 };
 
@@ -399,12 +400,31 @@ export default {
             this.form.subCategories = subCategories;
             this.loading = false;
         },
-        transformSubcategories(subCategories) { // Método recursivo para transformar las subcategorías
-            return subCategories.map(subCategory => ({
-                ...subCategory,
-                image: subCategory.imageChanged ? subCategory.image : null,
-                subCategories: this.transformSubcategories(subCategory.subCategories || []),
-            }));
+        // transformSubcategories(subCategories) { // Método recursivo para transformar las subcategorías
+        //     return subCategories.map(subCategory => ({
+        //         ...subCategory,
+        //         image: subCategory.imageChanged ? subCategory.image : null,
+        //         subCategories: this.transformSubcategories(subCategory.subCategories || []),
+        //     }));
+        // },
+        transformSubcategories(subCategories) { // no mandar toda la informacion que no se editó al servidor
+            return subCategories.map(subCategory => {
+                // Verificamos si la subcategoría ha sido editada o es nueva (id == null)
+                if (subCategory.edited || !subCategory.id) {
+                    return {
+                        ...subCategory,
+                        // Solo incluimos la imagen si ha cambiado
+                        image: subCategory.imageChanged ? subCategory.image : null,
+                        subCategories: this.transformSubcategories(subCategory.subCategories || []),
+                    };
+                } else {
+                    // Si no ha sido editada, solo enviamos el id
+                    return {
+                        id: subCategory.id,
+                        subCategories: this.transformSubcategories(subCategory.subCategories || [])
+                    };
+                }
+            });
         },
         update() {
             this.form.transform(data => ({
@@ -454,7 +474,7 @@ export default {
             this.form.imageDeleted = true;
         },
         addMainSubCategory() {
-            this.form.subCategories.push({ name: '', subCategories: [], image: null, features: [] });
+            this.form.subCategories.push({ name: '', subCategories: [], image: null, imageChanged: false, imageDeleted: false, image: null, features: [] });
         },
         addSubCategory(path, data = null) {
             const indexes = path.split('.').map(i => parseInt(i) - 1);
@@ -464,6 +484,9 @@ export default {
                     name: '',
                     subCategories: [],
                     image: null,
+                    imageChanged: false,
+                    imageDeleted: false,
+                    edited: false,
                     features: []
                 };
             }
@@ -530,6 +553,7 @@ export default {
                         subCategories[index].features = [];
                     }
                     subCategories[index].features = this.localFeatures;
+                    subCategories[index].edited = true;
                 } else {
                     subCategories = subCategories[index].subCategories;
                 }

@@ -94,9 +94,6 @@ export default {
 
             // tabla
             disableMassiveActions: true,
-            showScrollButton: false,
-            loading: false,
-            inputSearch: '',
             search: '',
 
             // pagination
