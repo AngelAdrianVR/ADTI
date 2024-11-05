@@ -30,7 +30,14 @@ class User extends Authenticatable
         'email',
         'password',
         'phone',
+        'birthdate',
+        'civil_state',
+        'address',
+        'rfc',
+        'curp',
+        'ssn',
         'org_props',
+        'is_active',
         'profile_photo_path',
     ];
 
@@ -64,6 +71,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'birthdate' => 'date',
             'password' => 'hashed',
             'org_props' => 'array',
         ];

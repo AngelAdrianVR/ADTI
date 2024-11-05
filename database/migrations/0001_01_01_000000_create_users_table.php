@@ -21,7 +21,14 @@ return new class extends Migration
             $table->foreignId('current_team_id')->nullable();
             $table->string('profile_photo_path', 2048)->nullable();
             $table->string('phone', 20)->nullable();
+            $table->date('birthdate')->nullable();
+            $table->string('civil_state')->nullable(); //estado civil (soltero, casado)
+            $table->string('address')->nullable();
+            $table->string('rfc')->nullable();
+            $table->string('curp')->nullable();
+            $table->string('ssn')->nullable(); //numero de seguro social
             $table->json('org_props')->nullable();
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
 
