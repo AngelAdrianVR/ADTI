@@ -96,9 +96,9 @@ const submit = () => {
 
             <div class="flex justify-between items-center mt-4 ml-6">
                 <el-checkbox v-model="form.remember" name="remember" label="Mantener sesión abierta" />
-                <Link v-if="canResetPassword" :href="route('password.request')" class="cursor-pointer text-sm text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2">
+                <!-- <Link v-if="canResetPassword" :href="route('password.request')" class="cursor-pointer text-sm text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2">
                     Olvidé mi contraseña
-                </Link>
+                </Link> -->
             </div>
 
             <div class="flex items-center justify-center mt-7">

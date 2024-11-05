@@ -10,13 +10,14 @@
         </button>
 
         <div v-if="selectedFiles.length">
-            <ul class="grid lg:grid-cols-3 md:grid-cols-2 grid-cols-1 gap-5 text-sm mt-2">
-                <li v-for="(file, index) in selectedFiles" :key="index" class="flex items-center justify-between px-2">
+            <ul class="grid lg:grid-cols-3 md:grid-cols-2 grid-cols-1 gap-3 text-sm mt-2">
+                <li v-for="(file, index) in selectedFiles" :key="index" class="flex items-center justify-between rounded-md p-2 border">
                     <p class="flex items-center">
+                        <!-- <i v-if="currentFiles" :class="getFileTypeIcon(file.file_name)"></i> -->
                         <i :class="getFileTypeIcon(file.name)"></i>
-                        <span class="ml-2">{{ file.name }}</span>
+                        <span class="ml-2 w-32 truncate">{{ file.name }}</span>
                     </p>
-                    <button type="button" @click="removeFile(index)"><i class="fa-solid fa-xmark text-xs ml-2"></i></button>
+                    <button type="button" @click="removeFile(index)"><i class="fa-solid fa-xmark text-xs ml-2 text-red-700"></i></button>
                 </li>
             </ul>
         </div>
@@ -39,6 +40,10 @@ export default {
             type: String,
             default: 'Todo'
         },
+        // currentFiles: {
+        //     type: Array,
+        //     default: null,
+        // },
     },
     emits: ['files-selected'],
     methods: {
@@ -92,6 +97,14 @@ export default {
             }
         },
     },
+    // mounted() {
+    //     if ( this.currentFiles ) {
+    //         // guarda en el arreglo de archivos seleccionados los que ya tiene el producto en caso de editar
+    //         this.selectedFiles = this.currentFiles;
+    //         // emite el evento para cargar los archivos al formulario
+    //         this.$emit('files-selected', this.selectedFiles);
+    //     }
+    // }
 };
 </script>
   

@@ -17,7 +17,6 @@ use Inertia\Inertia;
 Route::get('/', function () {
     $categories = Category::with('subcategories', 'media')->get();
 
-    // return $categories;
     return Inertia::render('Welcome', [
         'categories' => $categories,
     ]);
@@ -41,7 +40,7 @@ Route::get('/show-subcategory/{subcategory_id}', function ($subcategory_id) {
 
     $total_products = Product::where('subcategory_id', $subcategory_id)->count();
 
-    // return $total_products;
+    // return $subcategory;
     return Inertia::render('LandingPage/ShowSubcategory', [
         'subcategory' => $subcategory,
         'total_products' => $total_products // cantidad de productos que contiene esa subcategoría
@@ -84,6 +83,7 @@ Route::resource('users', UserController::class)->middleware('auth')->middleware(
 Route::post('users/update-with-media/{user}', [UserController::class, 'updateWithMedia'])->name('users.update-with-media')->middleware('auth');
 Route::put('users/reset-password/{user}', [UserController::class, 'resetPassword'])->name('users.reset-password')->middleware('auth');
 Route::post('users/massive-delete', [UserController::class, 'massiveDelete'])->name('users.massive-delete');
+Route::put('users/toggle-status/{user}', [UserController::class, 'toggleStatus'])->name('users.toggle-status');
 
 
 //products routes----------------------------------------------------------------------------------
@@ -95,6 +95,9 @@ Route::get('products-search', [ProductController::class, 'searchProduct'])->name
 Route::get('products-fetch-subcategory-products/{subcategory_id}', [ProductController::class, 'fetchSubcategoryProducts'])->name('products.fetch-subcategory-products');
 Route::post('products/import', [ProductController::class, 'import'])->name('products.import')->middleware('auth');
 Route::get('products-print-barcodes', [ProductController::class, 'printBarcodes'])->name('products.print-barcodes')->middleware('auth');
+Route::post('products/get-consecutivo/{subcategory_id}', [ProductController::class, 'getConsecutivo'])->name('products.get-consecutivo')->middleware('auth');
+Route::delete('products/delete-file/{file_id}', [ProductController::class, 'deleteFile'])->name('products.delete-file')->middleware('auth');
+Route::get('/products/{id}/next', [ProductController::class, 'getNextProduct']);
 
 
 //Category routes----------------------------------------------------------------------------------

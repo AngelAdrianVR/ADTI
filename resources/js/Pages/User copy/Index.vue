@@ -3,16 +3,11 @@
         <main class="px-2 lg:px-10 py-7">
             <h1 class="font-bold my-3 ml-4 text-lg">Usuarios</h1>
             <section class="md:flex justify-between items-center">
-                <article class="flex items-center space-x-5 lg:w-1/3">
-                    <div class="relative mb-3 md:mb-0 w-full">
-                        <input v-model="searchQuery" @keydown.enter="handleSearch" class="input w-full pl-9"
-                            placeholder="Buscar por nombre, puesto, correo o teléfono" type="search" ref="searchInput" />
-                        <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
-                    </div>
-                    <el-tag @close="closedTag" v-if="searchedWord" closable type="primary">
-                        {{ searchedWord }}
-                    </el-tag>
-                </article>
+                <div class="lg:w-1/3 relative">
+                    <input v-model="searchQuery" @keydown.enter="handleSearch" class="input w-full pl-9"
+                        placeholder="Buscar por nombre, puesto, correo o teléfono" type="search" ref="searchInput" />
+                    <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
+                </div>
                 <!-- buttons -->
                 <div class="flex items-center space-x-1">
                     <div class="my-4 lg:my-0 flex items-center justify-end space-x-3">
@@ -54,7 +49,7 @@
                             <p>Inactivos</p>
                         </div>
                     </template>
-                    <DisabledUsers :users="filteredTableData.filter(user => !user.is_active)" />
+                    <!-- <DisabledUsers :users="filteredRecurringIncomes" /> -->
                 </el-tab-pane>
             </el-tabs>
 
@@ -65,7 +60,6 @@
 <script>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import ActiveUsers from './Tabs/ActiveUsers.vue';
-import DisabledUsers from './Tabs/DisabledUsers.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 
 export default {
@@ -77,10 +71,11 @@ export default {
             searchedWord: null,
 
             // Tabs
+            // disableMassiveActions: true,
             activeTab: '1',
 
-            // pagination
-            itemsPerPage: 10,
+            // // pagination
+            // itemsPerPage: 10,
             start: 0,
             end: 10,
         }
@@ -88,18 +83,12 @@ export default {
     components: {
         AppLayout,
         ActiveUsers,
-        DisabledUsers,
         PrimaryButton,
     },
     props: {
         users: Array
     },
     methods: {
-        handleSearch() {
-            this.search = this.searchQuery;
-            this.searchedWord = this.searchQuery;
-            this.searchQuery = null;
-        },
         handleClick(tab) {
             // Obtén la URL actual
             const currentURL = new URL(window.location.href);
@@ -125,7 +114,7 @@ export default {
             this.closedTag();
         },
         closedTag() {
-            this.search = null
+            this.localUsers = this.users;
             this.searchedWord = null;
         },
         inputFocus() {
@@ -133,6 +122,103 @@ export default {
                 this.$refs.searchInput.focus();
             });
         },
+        // handleSearch() {
+        //     this.search = this.searchQuery;
+        // },
+        // handleSelectionChange(val) {
+        //     this.$refs.multipleTableRef.value = val;
+
+        //     if (!this.$refs.multipleTableRef.value.length) {
+        //         this.disableMassiveActions = true;
+        //     } else {
+        //         this.disableMassiveActions = false;
+        //     }
+        // },
+        // handlePagination(val) {
+        //     this.start = (val - 1) * this.itemsPerPage;
+        //     this.end = val * this.itemsPerPage;
+        // },
+        // tableRowClassName({ row, rowIndex }) {
+        //     return 'cursor-pointer text-xs';
+        // },
+        // handleRowClick(row) {
+        //     this.$inertia.visit(route('users.show', row));
+        // },
+        // handleCommand(command) {
+        //     const commandName = command.split('-')[0];
+        //     const rowId = command.split('-')[1];
+
+        //     if (commandName === 'clone') {
+        //         // this.$inertia.visit(route('users.' + commandName, rowId));
+        //     } else if ( commandName === 'toogleSatus' ) {
+        //         this.toogleStatus(rowId);
+        //     } else {
+        //         this.$inertia.get(route('users.' + commandName, rowId));
+        //     }
+            
+        // },
+        // async toogleStatus(userId) {
+        //     try {
+        //         const response = await axios.put(route('users.toggle-status', userId));
+        //         if ( response.status === 200 ) {
+        //             this.$notify({
+        //                 title: 'Correcto',
+        //                 message: '',
+        //                 type: 'success',
+        //                 position: "bottom-right",
+        //             }); 
+        //             this.users.find(user => user.id == userId).is_active = response.data.user.is_active;
+        //         }
+        //     } catch (error) {
+        //         this.$notify({
+        //             title: 'Correcto',
+        //             message: '',
+        //             type: 'success',
+        //             position: "bottom-right",
+        //         }); 
+        //     }
+        // },
+        // async deleteSelections() {
+        //     try {
+        //         const items_ids = this.$refs.multipleTableRef.value.map(item => item.id);
+        //         const response = await axios.post(route('users.massive-delete', {
+        //             items_ids
+        //         }));
+
+        //         if (response.status === 200) {
+        //             this.$notify({
+        //                 title: 'Correcto',
+        //                 message: '',
+        //                 type: 'success',
+        //                 position: "bottom-right",
+        //             });
+
+        //             // update list of quotes
+        //             let deletedIndexes = [];
+        //             this.users.forEach((user, index) => {
+        //                 if (items_ids.includes(user.id) && user.id != this.$page.props.auth.user.id) {
+        //                     deletedIndexes.push(index);
+        //                 }
+        //             });
+
+        //             // Ordenar los índices de forma descendente para evitar problemas de desplazamiento al eliminar elementos
+        //             deletedIndexes.sort((a, b) => b - a);
+
+        //             // Eliminar cotizaciones por índice
+        //             for (const index of deletedIndexes) {
+        //                 this.users.splice(index, 1);
+        //             }
+        //         }
+        //     } catch (err) {
+        //         this.$notify({
+        //             title: 'No se pudo completar la solicitud',
+        //             message: '',
+        //             type: 'error',
+        //             position: "bottom-right",
+        //         });
+        //         console.log(err);
+        //     }
+        // },
     },
     computed: {
         filteredTableData() {
@@ -151,14 +237,6 @@ export default {
     },
     mounted() {
         this.inputFocus();
-        // Obtener la URL actual
-        const currentURL = new URL(window.location.href);
-        // Extraer el valor de 'currentTab' de los parámetros de búsqueda
-        const currentTabFromURL = currentURL.searchParams.get('currentTab');
-
-        if (currentTabFromURL) {
-            this.activeTab = currentTabFromURL;
-        }
     }
 }
 </script>

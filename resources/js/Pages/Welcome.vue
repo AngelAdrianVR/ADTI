@@ -1,6 +1,6 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { router } from '@inertiajs/vue3';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
 import PublicCategoryCard from '@/Components/MyComponents/PublicLayout/PublicCategoryCard.vue';
@@ -15,6 +15,7 @@ const cascaderProps = {
 }
 
 const value = ref([]);
+const loadinPage = ref(true);
 
 const handleChange = (value) => { //el value es un arreglo que guarda las selecciones del cascader. el index equivale al nivel de profundidad
 //si value solo tiene 1 elemento significa que es categoría, si tiene mas, es subcategoría
@@ -44,6 +45,8 @@ const transformCategories = (categories) => {
     let level1 = [];
     let level2 = [];
     let level3 = [];
+    let level4 = [];
+    let level5 = [];
 
     category.subcategories.forEach(subcategory => {
       if (subcategory.level === 1) {
@@ -69,6 +72,22 @@ const transformCategories = (categories) => {
           prev_sub: subcategory.prev_subcategory_id,
           children: []
         });
+      } else if (subcategory.level === 4) {
+        level4.push({
+          id: subcategory.id,
+          value: subcategory.name,
+          label: subcategory.name,
+          prev_sub: subcategory.prev_subcategory_id,
+          children: []
+        });
+      } else if (subcategory.level === 5) {
+        level5.push({
+          id: subcategory.id,
+          value: subcategory.name,
+          label: subcategory.name,
+          prev_sub: subcategory.prev_subcategory_id,
+          children: []
+        });
       }
     });
 
@@ -84,17 +103,44 @@ const transformCategories = (categories) => {
       if (parent) parent.children.push(l3);
     });
 
+    // Añadir subcategorías de nivel 4 a las correspondientes de nivel 3
+    level4.forEach(l4 => {
+      const parent = level3.find(l3 => l3.id === l4.prev_sub);
+      if (parent) parent.children.push(l4);
+    });
+
+    // Añadir subcategorías de nivel 5 a las correspondientes de nivel 4
+    level5.forEach(l5 => {
+      const parent = level4.find(l4 => l4.id === l5.prev_sub);
+      if (parent) parent.children.push(l5);
+    });
+
     transformedCategory.children.push(...level1);
 
     return transformedCategory;
   });
 };
 
+// Utiliza la función con tus categorías
 const options = computed(() => transformCategories(props.categories));
 
+onMounted(() => {
+  // Después de 3 segundos, oculta el logo de carga
+    setTimeout(() => {
+      loadinPage.value = false;
+    }, 2000);
+});
 </script>
 
 <template>
+
+    <div v-if="loadinPage" class="absolute z-30 left-0 top-0 inset-0 bg-white flex flex-col items-center justify-center">
+      <figure class="rounded-3xl border p-3 shadow-md shadow-black/30 size-36 md:size-44 flex items-center justify-center">
+          <img class="w-full" src="@/../../public/images/logo_colors.webp" alt="Logo" />
+      </figure>
+        <i class="fa-solid fa-spinner text-primary fa-spin text-4xl mt-7"></i>
+    </div>
+
     <PublicLayout class="relative" :title="'Bienvenido'">
         <main class="lg:mx-40 p-4">
 
@@ -133,3 +179,4 @@ const options = computed(() => transformCategories(props.categories));
         </main>
     </PublicLayout>
 </template>
+

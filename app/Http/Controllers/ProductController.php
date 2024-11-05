@@ -10,20 +10,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 class ProductController extends Controller
 {
-    /* tipos de comentarios
-
-    * Importante
-    ! no usar hasta que..
-    ? no sé si usar este..
-    TODO: No sé para qué sirve jajaja
-    */
-
     public function index()
     {
-        $products = Product::with(['subcategory:id,name,category_id,prev_subcategory_id' => ['category:id,name']])->get(['id', 'name', 'description', 'part_number_supplier', 'location', 'subcategory_id', 'bread_crumbles']);
+        $products = Product::with(['subcategory:id,name,category_id,prev_subcategory_id' => ['category:id,name']])
+            ->latest('id')
+            ->get(['id', 'name', 'description', 'part_number_supplier', 'location', 'subcategory_id', 'bread_crumbles']);
 
         return inertia('Product/Index', compact('products'));
     }
@@ -46,13 +41,22 @@ class ProductController extends Controller
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
             'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
-            'part_number' => 'required|string|max:20',
-            'part_number_supplier' => 'required|string|max:20|unique:products,part_number_supplier',
+            'features_keys' => 'nullable|array',
+            'part_number' => 'required|string|max:17',
+            'part_number_supplier' => 'nullable|string|max:20|unique:products,part_number_supplier',
             'location' => 'nullable|string|max:100',
+            'currency' => 'required|string|max:255',
+            'line_cost' => 'nullable|numeric|min:0|max:99999',
         ]);
 
         $product = Product::create($request->except(['imageCover', 'subcategory_id']) +
             ['subcategory_id' => collect($request->subcategory_id)->last()]); //guarda el ultimo id del arreglo de subcategorías
+
+        //busca la cantidad de productos agregados a la subcategoría del producto recién agregado para agregarle su consecutivo 
+        $last_consecutivo = Product::where('subcategory_id', $product->subcategory_id)->count();
+
+        $product->consecutivo = $last_consecutivo;
+        $product->save();
 
 
         // Guardar la imagen de categoria temporalmente
@@ -84,6 +88,7 @@ class ProductController extends Controller
         $measure_units = MeasureUnit::all();
         $product->load(['media', 'subcategory.category']);
 
+        // return $product;
         return inertia('Product/Edit', compact('product', 'categories', 'measure_units'));
     }
 
@@ -95,9 +100,12 @@ class ProductController extends Controller
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
             'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
-            'part_number' => 'required|string|max:20',
-            'part_number_supplier' => 'required|string|max:20',
+            'features_keys' => 'nullable|array',
+            'part_number' => 'required|string|max:17',
+            'part_number_supplier' => 'nullable|string|max:20',
             'location' => 'nullable|string|max:100',
+            'currency' => 'required|string|max:255',
+            'line_cost' => 'nullable|numeric|min:0|max:99999',
         ]);
 
         $product->update($request->except(['imageCover', 'subcategory_id']) +
@@ -125,9 +133,12 @@ class ProductController extends Controller
             'subcategory_id' => 'required|array|min:1', //se recibe en arreglo porque se guardan todas las subcategorías
             'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
-            'part_number' => 'required|string|max:20',
-            'part_number_supplier' => 'required|string|max:20',
+            'features_keys' => 'nullable|array',
+            'part_number' => 'required|string|max:17',
+            'part_number_supplier' => 'nullable|string|max:20',
             'location' => 'nullable|string|max:100',
+            'currency' => 'required|string|max:255',
+            'line_cost' => 'nullable|numeric|min:0|max:99999',
         ]);
 
         $product->update($request->except(['imageCover', 'subcategory_id']) +
@@ -156,6 +167,15 @@ class ProductController extends Controller
         //
     }
 
+    public function deleteFile($file_id)
+    {
+        // Buscar el archivo por su ID
+        $media = Media::findOrFail($file_id);
+
+        // Eliminar el archivo
+        $media->delete();
+    }
+
     public function massiveDelete(Request $request)
     {
         foreach ($request->items_ids as $id) {
@@ -174,7 +194,8 @@ class ProductController extends Controller
         $products = Product::where(function ($q) use ($query) {
             $q->where('name', 'like', "%$query%")
                 ->orWhere('part_number', 'like', "%$query%")
-                ->orWhere('part_number_supplier', 'like', "%$query%");
+                ->orWhere('part_number_supplier', 'like', "%$query%")
+                ->orWhere('description', 'like', "%$query%");
         })
             ->get();
 
@@ -255,8 +276,8 @@ class ProductController extends Controller
                     $columnNames[] = $cell->getValue();
                 }
 
-                // Buscar la posición de la columna 'Nombre del producto'
-                $productNameColumnIndex = array_search('Nombre del producto', $columnNames);
+                // Buscar la posición de la columna 'Número de parte de fabricante'
+                $productNameColumnIndex = array_search('Número de parte de fabricante', $columnNames);
                 continue;
             }
 
@@ -269,10 +290,9 @@ class ProductController extends Controller
 
             // Validar los datos
             $validator = Validator::make($data, [
-                $columnNames[$productNameColumnIndex] => 'required|string|max:120',
+                $columnNames[$productNameColumnIndex] => 'nullable|string|max:255',
                 $columnNames[$productNameColumnIndex + 1] => $data[$columnNames[$productNameColumnIndex + 1]] ? 'string|max:255' : '',
                 $columnNames[$productNameColumnIndex + 2] => $data[$columnNames[$productNameColumnIndex + 2]] ? 'string|max:30' : '',
-                $columnNames[$productNameColumnIndex + 3] => $data[$columnNames[$productNameColumnIndex + 3]] ? 'string|max:30' : '',
             ]);
 
             // Si la validación falla, almacenar los errores
@@ -306,8 +326,8 @@ class ProductController extends Controller
                     $columnNames[] = $cell->getValue();
                 }
 
-                // Buscar la posición de la columna 'Nombre del producto'
-                $productNameColumnIndex = array_search('Nombre del producto', $columnNames);
+                // Buscar la posición de la columna 'Número de parte de fabricante'
+                $productNameColumnIndex = array_search('Número de parte de fabricante', $columnNames);
                 continue;
             }
 
@@ -332,7 +352,7 @@ class ProductController extends Controller
 
             // Obtener las características después de 'Ubicación en almacén'
             $features = [];
-            for ($i = $productNameColumnIndex + 4; $i < count($columnNames); $i += 2) {
+            for ($i = $productNameColumnIndex + 3; $i < count($columnNames); $i += 2) {
                 $features[] = [
                     'name' => $columnNames[$i],
                     'value' => $data[$i],
@@ -342,7 +362,8 @@ class ProductController extends Controller
 
             // Obtener el ID de la subcategoría final antes de 'Nombre del producto'
             $subCategoryName = $data[$productNameColumnIndex - 1];
-            $subcategory = Subcategory::where('name', $subCategoryName)->firstOrFail();
+            $firstSubcategory = Subcategory::where('name', $data[$productNameColumnIndex - 2])->first(); //obtiene la primera subcategoría
+            $subcategory = Subcategory::where('name', $subCategoryName)->where('prev_subcategory_id', $firstSubcategory->id)->firstOrFail(); //obtiene la ultima subcatogoría la cual tiene los productos que coincida con la subcategoría previa
 
             // Primero, recorre hasta llegar al nivel más alto (primer nivel de subcategoría)
             $currentSubcategory = $subcategory;
@@ -354,11 +375,10 @@ class ProductController extends Controller
 
             // Guardar el producto en la base de datos
             Product::create([
-                'name' => $data[$productNameColumnIndex],
-                'description' => $data[$productNameColumnIndex + 1], // Asumimos que la columna 'Descripción' está inmediatamente después de 'Nombre del producto'
+                'part_number_supplier' => $data[$productNameColumnIndex],
+                'description' => $data[$productNameColumnIndex + 1], // Asumimos que la columna 'Descripción' está inmediatamente después de 'Número de parte de fabricantes'
+                'location' => $data[$productNameColumnIndex + 2], // Asumimos que la columna 'Ubicación en almacén' está inmediatamente después de 'Descripción'
                 'part_number' => $partNumber,
-                'part_number_supplier' => $data[$productNameColumnIndex + 2], // Asumimos que la columna 'Número de parte de fabricante' está inmediatamente después de 'Descripción'
-                'location' => $data[$productNameColumnIndex + 3], // Asumimos que la columna 'Ubicación en almacén' está inmediatamente después de 'Número de parte de fabricante'
                 'bread_crumbles' => $subcategoryStack,
                 'features' => $features,
                 'subcategory_id' => $subcategory->id,
@@ -372,4 +392,20 @@ class ProductController extends Controller
 
         return inertia('Product/BarcodeTemplate', compact('products'));
     }
+
+    public function getConsecutivo($subcategory_id)
+    {
+        $last_consecutivo = Product::where('subcategory_id', $subcategory_id)->count();
+
+        return response()->json(['next_consecutivo' => $last_consecutivo ? $last_consecutivo + 1 : 1]);
+    }
+
+    public function getNextProduct($id)
+    {
+        $next = Product::where('id', '>', $id)->orderBy('id', 'asc')->first();
+        
+        // Si no existe un producto mayor, regresar el primero
+        return $next ?? Product::orderBy('id', 'asc')->first();
+    }
+    
 }

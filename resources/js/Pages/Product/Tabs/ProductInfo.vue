@@ -1,6 +1,10 @@
 <template>
     <main>
         <div class="flex mt-2">
+            <p class="text-[#6D6E72] w-48">Número de parte de fabricante:</p>
+            <p class="text-black font-bold">{{ product.part_number_supplier }}</p>
+        </div>
+        <div class="flex mt-2">
             <p class="text-[#6D6E72] w-48">Fecha de alta:</p>
             <p class="text-black">{{ formatDate(product.created_at) }}</p>
         </div>
@@ -9,39 +13,32 @@
             <p class="text-[#6D6E72] w-48">Número de parte interno:</p>
             <p class="text-black">{{ product.part_number }}</p>
         </div>
-
-        <div class="flex mt-2">
-            <p class="text-[#6D6E72] w-48">Número de parte de fabricante:</p>
-            <p class="text-black">{{ product.part_number_supplier }}</p>
-        </div>
-
-        <div class="flex mt-2">
+        <!-- <div class="flex mt-2">
             <p class="text-[#6D6E72] w-48">Nombre del producto:</p>
             <p class="text-black font-bold">{{ product.name }}</p>
-        </div>
-
+        </div> -->
         <div class="flex mt-2">
             <p class="text-[#6D6E72] w-48">Categoría:</p>
             <p class="text-black">{{ product.subcategory?.category?.name }}</p>
         </div>
-
         <div class="flex mt-2">
             <p class="text-[#6D6E72] w-48">Subcategorías:</p>
             <ul class="flex flex-col" v-for="(subcategory, index) in product.bread_crumbles" :key="subcategory">
                 <li><i v-if="index !==0" class="fa-solid fa-arrow-right text-sm mx-1"></i>{{ subcategory }}</li>
             </ul>
         </div>
-
         <div class="flex mt-2">
             <p class="text-[#6D6E72] w-48">Descripción:</p>
             <p class="text-black">{{ product.description }}</p>
         </div>
-
         <div class="flex mt-2">
             <p class="text-[#6D6E72] w-48">Ubicación en almacén:</p>
             <p class="text-black">{{ product.location }}</p>
         </div>
-
+        <div class="flex mt-2">
+            <p class="text-[#6D6E72] w-48">Precio de lista:</p>
+            <p class="text-black">{{ product.line_cost?.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",") }} {{ product.currency }}</p>
+        </div>
         <div class="flex mt-5">
             <p class="text-[#6D6E72] w-48">Características:</p>
             <!-- tabla de caracteristicas -->

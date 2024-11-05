@@ -48,25 +48,32 @@
                 <hr class="col-span-full border-grayD9">
                 <br>
 
-                <h1 class="font-bold ml-2 mb-2 col-span-full flex items-center space-x-3">
-                    <span>Subcategorías</span>
-                    <button type="button" @click="addMainSubCategory" class="text-primary text-sm font-normal">
-                        + Agregar subcategoría
-                    </button>
-                </h1>
-                <div class="space-y-2">
-                    <SubCategory v-for="(subCategory, index) in form.subCategories" :key="index"
-                        :subCategory="subCategory" :index="index" :parentIndex="''" @addSubCategory="addSubCategory"
-                        @removeSubCategory="removeSubCategory" @imageUploaded="handleImageUploaded"
-                        @openFeaturesModal="openFeaturesModal" />
-                </div>
-                <div class="col-span-full text-right mt-7">
-                    <PrimaryButton class="!rounded-full"
-                        :disabled="form.processing || subcategoryNameEmpty(form.subCategories)">
-                        <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
-                        Guardar cambios
-                    </PrimaryButton>
-                </div>
+                <section v-if="loading" class="flex flex-col items-center justify-center mb-12">
+                    <Loading />
+                    <span class="text-gray-600 text-sm">Cargando subcategorías...</span>
+                </section>
+                <section v-else>
+                    <h1 class="font-bold ml-2 mb-2 col-span-full flex items-center space-x-3">
+                        <span>Subcategorías</span>
+                        <button type="button" @click="addMainSubCategory" class="text-primary text-sm font-normal">
+                            + Agregar subcategoría
+                        </button>
+                    </h1>
+                    <div class="space-y-2">
+                        <SubCategory v-for="(subCategory, index) in form.subCategories" :key="index"
+                            :subCategory="subCategory" :index="index" :parentIndex="''" @addSubCategory="addSubCategory"
+                            @removeSubCategory="removeSubCategory" @imageUploaded="handleImageUploaded"
+                            @openFeaturesModal="openFeaturesModal" />
+                    </div>
+                    <div class="col-span-full text-right mt-7">
+                        <PrimaryButton class="!rounded-full"
+                            :disabled="form.processing || subcategoryNameEmpty(form.subCategories)">
+                            <i v-if="form.processing"
+                                class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
+                            Guardar cambios
+                        </PrimaryButton>
+                    </div>
+                </section>
             </form>
         </div>
         <div class="text-center mb-2">
@@ -163,7 +170,7 @@
                                     <el-input v-model="option.name" :placeholder="`Opción ${index2 + 1}`"
                                         class="!w-[65%]" />
                                     <el-input v-model="option.key" placeholder="Clave" class="!w-[30%]" />
-                                    <button @click="removeOption(index, index2)" type="button"
+                                    <button @click="removeOption(index, index2)" title="Eliminar opción" type="button"
                                         class="w-[5%] text-black">x</button>
                                 </div>
                                 <div class="col-span-full">
@@ -251,6 +258,7 @@ import InputFilePreview from "@/Components/MyComponents/InputFilePreview.vue";
 import SubCategory from "@/Components/MyComponents/Category/SubCategory.vue";
 import Back from "@/Components/MyComponents/Back.vue";
 import { useForm } from "@inertiajs/vue3";
+import Loading from '@/Components/MyComponents/Loading.vue';
 
 export default {
     data() {
@@ -258,7 +266,9 @@ export default {
             category: null,
             key: null,
             image: null,
-            subCategories: [{ id: null, name: '', subCategories: [], image: null, features: [] }],
+            imageChanged: false,
+            imageDeleted: false,
+            subCategories: [{ id: null, name: '', subCategories: [], image: null, features: [], edited: false }],
         });
 
         const featureForm = useForm({
@@ -275,6 +285,8 @@ export default {
             form,
             unitForm,
             featureForm,
+            // carga
+            loading: true,
             // modales
             showFeaturesModal: false,
             showNewFeatureModal: false,
@@ -295,6 +307,7 @@ export default {
         Back,
         SubCategory,
         DialogModal,
+        Loading,
     },
     props: {
         features: Array,
@@ -332,6 +345,7 @@ export default {
             return new File([buffer], filename, { type: mimeType });
         },
         async transformData(data) {
+            this.loading = true;
             // Inicializa la categoría principal
             this.form.category = data.name;
             this.form.key = data.key;
@@ -343,6 +357,8 @@ export default {
             } else {
                 this.image = null;
             }
+            this.form.imageChanged = false; // indicar por defecto que no se ha cambiado la imagen
+            this.form.imageDeleted = false; // indicar por defecto que no se ha eliminado la imagen
 
             // Organiza las subcategorías
             const map = new Map();
@@ -353,6 +369,9 @@ export default {
                     name: subcategory.name,
                     subCategories: [],
                     image: null,
+                    imageChanged: false, // indicar por defecto que no se ha cambiado la imagen
+                    imageDeleted: false, // indicar por defecto que no se ha eliminado la imagen
+                    edited: false, // indicar por defecto que no se ha cambiado ninguna otra propiedad
                     features: subcategory.features || [],
                 };
 
@@ -379,9 +398,40 @@ export default {
             });
 
             this.form.subCategories = subCategories;
+            this.loading = false;
+        },
+        // transformSubcategories(subCategories) { // Método recursivo para transformar las subcategorías
+        //     return subCategories.map(subCategory => ({
+        //         ...subCategory,
+        //         image: subCategory.imageChanged ? subCategory.image : null,
+        //         subCategories: this.transformSubcategories(subCategory.subCategories || []),
+        //     }));
+        // },
+        transformSubcategories(subCategories) { // no mandar toda la informacion que no se editó al servidor
+            return subCategories.map(subCategory => {
+                // Verificamos si la subcategoría ha sido editada o es nueva (id == null)
+                if (subCategory.edited || !subCategory.id) {
+                    return {
+                        ...subCategory,
+                        // Solo incluimos la imagen si ha cambiado
+                        image: subCategory.imageChanged ? subCategory.image : null,
+                        subCategories: this.transformSubcategories(subCategory.subCategories || []),
+                    };
+                } else {
+                    // Si no ha sido editada, solo enviamos el id
+                    return {
+                        id: subCategory.id,
+                        subCategories: this.transformSubcategories(subCategory.subCategories || [])
+                    };
+                }
+            });
         },
         update() {
-            this.form.post(route("categories.update-with-subcategories", this.category.id), {
+            this.form.transform(data => ({
+                ...data,
+                image: data.imageChanged ? data.image : null,
+                subCategories: this.transformSubcategories(data.subCategories),
+            })).post(route("categories.update-with-subcategories", this.category.id), {
                 method: '_put',
                 onSuccess: () => {
                     this.$notify({
@@ -416,13 +466,15 @@ export default {
             const file = event.target.files[0];
             if (file) {
                 this.form.image = file;
+                this.form.imageChanged = true;
             }
         },
         removeImage() {
             this.form.image = null;
+            this.form.imageDeleted = true;
         },
         addMainSubCategory() {
-            this.form.subCategories.push({ name: '', subCategories: [], image: null, features: [] });
+            this.form.subCategories.push({ name: '', subCategories: [], image: null, imageChanged: false, imageDeleted: false, image: null, features: [] });
         },
         addSubCategory(path, data = null) {
             const indexes = path.split('.').map(i => parseInt(i) - 1);
@@ -432,6 +484,9 @@ export default {
                     name: '',
                     subCategories: [],
                     image: null,
+                    imageChanged: false,
+                    imageDeleted: false,
+                    edited: false,
                     features: []
                 };
             }
@@ -498,6 +553,7 @@ export default {
                         subCategories[index].features = [];
                     }
                     subCategories[index].features = this.localFeatures;
+                    subCategories[index].edited = true;
                 } else {
                     subCategories = subCategories[index].subCategories;
                 }
