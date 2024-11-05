@@ -83,6 +83,7 @@ Route::resource('users', UserController::class)->middleware('auth')->middleware(
 Route::post('users/update-with-media/{user}', [UserController::class, 'updateWithMedia'])->name('users.update-with-media')->middleware('auth');
 Route::put('users/reset-password/{user}', [UserController::class, 'resetPassword'])->name('users.reset-password')->middleware('auth');
 Route::post('users/massive-delete', [UserController::class, 'massiveDelete'])->name('users.massive-delete');
+Route::put('users/toggle-status/{user}', [UserController::class, 'toggleStatus'])->name('users.toggle-status');
 
 
 //products routes----------------------------------------------------------------------------------

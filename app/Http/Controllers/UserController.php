@@ -37,6 +37,12 @@ class UserController extends Controller
             'name' => 'required|string|max:255|unique:users,name',
             'email' => 'required|string|max:255|unique:users',
             'phone' => 'required|string|max:15',
+            'birthdate' => 'nullable|date' ,
+            'civil_state' => 'nullable|string' ,
+            'address' => 'nullable|string' ,
+            'rfc' => 'nullable|string' ,
+            'curp' => 'nullable|string' ,
+            'ssn' => 'nullable|string' ,
             'org_props.position' => 'required|string|max:255',
             'roles' => 'required|array|min:1',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
@@ -150,5 +156,14 @@ class UserController extends Controller
                 $item?->delete();
             }
         }
+    }
+
+    public function toggleStatus(User $user)
+    {   
+        $user->update([
+            'is_active' => !$user->is_active
+        ]);
+
+        return response()->json(['user' => $user]);
     }
 }
