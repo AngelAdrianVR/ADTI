@@ -1,7 +1,7 @@
 <template>
     <AppLayout title="Detalles usuario">
         <header class="lg:px-9 px-1 mt-3">
-            <h1 class="font-bold text-base mt-10">Detalles del usuario</h1>
+            <h1 class="font-bold text-base mt-2">Detalles del usuario</h1>
             <section class="md:flex items-center justify-between mt-2">
                 <!-- buscador -->
                 <el-select @change="$inertia.get(route('users.show', selectedItem))" v-model="selectedItem"

@@ -54,6 +54,10 @@ class UserController extends Controller
             'org_props.email.required' => 'Campo obligatorio.',
         ]);
 
+        // agregar propiedades de vacaciones
+        $request->org_props['vacations'] = 0;
+        $request->org_props['updated_date_vacations'] = now()->toDateString();
+
         $user = User::create($request->all() + ['password' => bcrypt('123456')]);
 
         // guardar foto de perfil en caso de haberse seleccionado una
@@ -194,5 +198,15 @@ class UserController extends Controller
         ]);
 
         return response()->json(['user' => $user]);
+    }
+
+    public function updateVacations(Request $request, User $user)
+    {
+        $props = $user->org_props;
+        $props['vacations'] = $request->vacations;
+        
+        $user->update([
+            'org_props' => $props
+        ]);
     }
 }

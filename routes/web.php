@@ -84,6 +84,7 @@ Route::post('users/update-with-media/{user}', [UserController::class, 'updateWit
 Route::put('users/reset-password/{user}', [UserController::class, 'resetPassword'])->name('users.reset-password')->middleware('auth');
 Route::post('users/massive-delete', [UserController::class, 'massiveDelete'])->name('users.massive-delete');
 Route::put('users/toggle-status/{user}', [UserController::class, 'toggleStatus'])->name('users.toggle-status');
+Route::put('users/update-vacations/{user}', [UserController::class, 'updateVacations'])->name('users.update-vacations');
 
 
 //products routes----------------------------------------------------------------------------------
