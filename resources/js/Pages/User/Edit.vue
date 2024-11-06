@@ -2,24 +2,19 @@
     <AppLayout title="Editar usuario">
         <div class="px-3 md:px-16 py-8">
             <Back />
-
             <form @submit.prevent="update"
-                class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-2/3 xl:w-1/2 mx-auto mt-2 lg:grid lg:grid-cols-2 gap-3">
+                class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-2/3 xl:w-1/2 mx-auto mt-2 lg:grid lg:grid-cols-2 gap-x-3 gap-y-2">
                 <h1 class="font-bold ml-2 col-span-full">Editar usuario</h1>
+
+                <h2 class="font-bold mb-1 mt-2 col-span-full text-gray37">Datos personales</h2>
                 <div>
                     <InputLabel value="Nombre del usuario*" />
                     <el-input v-model="form.name" placeholder="Ej. Karla Figueroa" :maxlength="100" clearable />
                     <InputError :message="form.errors.name" />
                 </div>
                 <div>
-                    <InputLabel value="Puesto*" />
-                    <el-input v-model="form.org_props.position" placeholder="Ej. Administración" :maxlength="100"
-                        clearable />
-                    <InputError :message="form.errors['org_props.position']" />
-                </div>
-                <div>
-                    <InputLabel value="Correo electrónico*" />
-                    <el-input v-model="form.email" placeholder="Ej. admin@adti.com" :maxlength="100" clearable />
+                    <InputLabel value="Correo electrónico personal*" />
+                    <el-input v-model="form.email" placeholder="Ej. karla@gmail.com" :maxlength="100" clearable />
                     <InputError :message="form.errors.email" />
                 </div>
                 <div>
@@ -28,6 +23,100 @@
                         :formatter="(value) => `${value}`.replace(/(\d{2})(\d{4})(\d{4})/, '$1 $2 $3')"
                         :parser="(value) => value.replace(/\D/g, '')" maxlength="10" clearable />
                     <InputError :message="form.errors.phone" />
+                </div>
+                <div class="w-full">
+                    <InputLabel value="Fecha de nacimiento" />
+                    <el-date-picker v-model="form.birthdate" class="!w-full" type="date"
+                        placeholder="Selecciona la fecha de nacimiento" :size="size" />
+                    <InputError :message="form.errors.birthdate" />
+                </div>
+                <div>
+                    <InputLabel value="Estado civil" />
+                    <el-select class="w-1/2" filterable v-model="form.civil_state" placeholder="Seleccione"
+                        no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
+                        <el-option v-for="item in civilStates" :key="item" :label="item" :value="item" />
+                    </el-select>
+                    <InputError :message="form.errors.civil_state" />
+                </div>
+                <div>
+                    <InputLabel value="Domicilio" />
+                    <el-input v-model="form.address" placeholder="Ingresa el domicilio del usuario" :maxlength="255"
+                        clearable />
+                    <InputError :message="form.errors.address" />
+                </div>
+                <div>
+                    <InputLabel value="RFC" />
+                    <el-input v-model="form.rfc" placeholder="Ingresa el rfc del usuario" :maxlength="100" clearable />
+                    <InputError :message="form.errors.rfc" />
+                </div>
+                <div>
+                    <InputLabel value="CURP" />
+                    <el-input v-model="form.curp" placeholder="Ingresar curp del usuario" :maxlength="100" clearable />
+                    <InputError :message="form.errors.curp" />
+                </div>
+                <div>
+                    <InputLabel value="Número de seguro social" />
+                    <el-input v-model="form.ssn" placeholder="Ingresar el nss del usuario" :maxlength="100" clearable
+                        :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, '')"
+                        :parser="(value) => value.replace(/[^\d.]/g, '')" />
+                    <InputError :message="form.errors.ssn" />
+                </div>
+
+                <!-- Datos laborales -->
+                <h2 class="font-bold mt-3 col-span-full text-gray37">Datos laborales</h2>
+                <div class="w-full">
+                    <InputLabel value="Fecha de ingreso*" />
+                    <el-date-picker v-model="form.org_props.entry_date" class="!w-full" type="date"
+                        placeholder="Selecciona la fecha de ingreso" :size="size" />
+                    <InputError :message="form.errors['org_props.entry_date']" />
+                </div>
+                <div>
+                    <InputLabel value="Puesto*" />
+                    <el-input v-model="form.org_props.position" placeholder="Ej. Administración" :maxlength="100"
+                        clearable />
+                    <InputError :message="form.errors['org_props.position']" />
+                </div>
+                <div>
+                    <InputLabel value="Departamento" />
+                    <el-input v-model="form.org_props.department" placeholder="Ej. Producción" :maxlength="100"
+                        clearable />
+                    <InputError :message="form.errors['org_props.department']" />
+                </div>
+                <div>
+                    <InputLabel value="Correo electrónico empresarial*" />
+                    <el-input v-model="form.org_props.email" placeholder="ingresa el correo empresarial del usuario"
+                        :maxlength="100" clearable />
+                    <InputError :message="form.errors['org_props.email']" />
+                </div>
+                <div>
+                    <InputLabel value="Teléfono empresarial" />
+                    <el-input v-model="form.org_props.phone"
+                        placeholder="Ingresa el número de teléfono empresarial del usuario"
+                        :formatter="(value) => `${value}`.replace(/(\d{2})(\d{4})(\d{4})/, '$1 $2 $3')"
+                        :parser="(value) => value.replace(/\D/g, '')" maxlength="10" clearable />
+                    <InputError :message="form.errors['org_props.phone']" />
+                </div>
+                <div>
+                    <InputLabel value="Sueldo neto" />
+                    <el-input v-model="form.org_props.net_salary" placeholder="Ej. $10,000" class="input-with-select"
+                        :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
+                        :parser="(value) => value.replace(/[^\d.]/g, '')">
+                        <template #prepend>
+                            <p>$</p>
+                        </template>
+                    </el-input>
+                    <InputError :message="form.errors['org_props.net_salary']" />
+                </div>
+                <div>
+                    <InputLabel value="Sueldo bruto" />
+                    <el-input v-model="form.org_props.gross_salary" placeholder="Ej. $12,000" class="input-with-select"
+                        :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
+                        :parser="(value) => value.replace(/[^\d.]/g, '')">
+                        <template #prepend>
+                            <p>$</p>
+                        </template>
+                    </el-input>
+                    <InputError :message="form.errors['org_props.gross_salary']" />
                 </div>
                 <div class="col-span-full">
                     <InputLabel value="Foto del usuario" />
@@ -78,12 +167,26 @@ import { useForm } from "@inertiajs/vue3";
 export default {
     data() {
         const form = useForm({
+            //datos personales
             name: this.user.name,
-            org_props: {
-                position: this.user.org_props.position
-            },
             email: this.user.email,
             phone: this.user.phone,
+            birthdate: this.user.birthdate,
+            civil_state: this.user.civil_state,
+            address: this.user.address,
+            rfc: this.user.rfc,
+            curp: this.user.curp,
+            ssn: this.user.ssn,
+            //datos laborales
+            org_props: {
+                entry_date: this.user.org_props.entry_date,
+                position: this.user.org_props.position,
+                department: this.user.org_props.department,
+                email: this.user.org_props.email,
+                phone: this.user.org_props.phone,
+                gross_salary: this.user.org_props.gross_salary,
+                net_salary: this.user.org_props.net_salary,
+            },
             image: null,
             roles: this.user_roles,
             selectedImage: this.user.profile_photo_url

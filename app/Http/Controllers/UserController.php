@@ -15,14 +15,14 @@ class UserController extends Controller
 
         return inertia('User/Index', compact('users'));
     }
-    
+
     public function create()
     {
         $roles = Role::all();
 
         return inertia('User/Create', compact('roles'));
     }
-    
+
     public function edit(User $user)
     {
         $roles = Role::all();
@@ -35,17 +35,23 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255|unique:users,name',
-            'email' => 'required|string|max:255|unique:users',
-            'phone' => 'required|string|max:15',
-            'birthdate' => 'nullable|date' ,
-            'civil_state' => 'nullable|string' ,
-            'address' => 'nullable|string' ,
-            'rfc' => 'nullable|string' ,
-            'curp' => 'nullable|string' ,
-            'ssn' => 'nullable|string' ,
+            'email' => 'nullable|email|unique:users,email',
+            'phone' => 'nullable|string|max:15',
+            'birthdate' => 'nullable|date',
+            'civil_state' => 'nullable|string',
+            'address' => 'nullable|string',
+            'rfc' => 'nullable|string',
+            'curp' => 'nullable|string',
+            'ssn' => 'nullable|string',
+            'org_props.entry_date' => 'required|date',
             'org_props.position' => 'required|string|max:255',
+            'org_props.email' => 'required|string|max:255',
             'roles' => 'required|array|min:1',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ], [
+            'org_props.entry_date.required' => 'Campo obligatorio.',
+            'org_props.position.required' => 'Campo obligatorio.',
+            'org_props.email.required' => 'Campo obligatorio.',
         ]);
 
         $user = User::create($request->all() + ['password' => bcrypt('123456')]);
@@ -74,11 +80,22 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
-            'email' => 'required|string|max:255',
-            'phone' => 'required|string|max:15',
+            'email' => 'nullable|email|unique:users,email,' . $user->id,
+            'phone' => 'nullable|string|max:15',
+            'birthdate' => 'nullable|date',
+            'civil_state' => 'nullable|string',
+            'address' => 'nullable|string',
+            'rfc' => 'nullable|string',
+            'curp' => 'nullable|string',
+            'ssn' => 'nullable|string',
+            'org_props.entry_date' => 'required|date',
             'org_props.position' => 'required|string|max:255',
+            'org_props.email' => 'required|string|max:255',
             'roles' => 'required|array|min:1',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ], [
+            'org_props.entry_date.required' => 'Campo obligatorio.',
+            'org_props.position.required' => 'Campo obligatorio.',
+            'org_props.email.required' => 'Campo obligatorio.',
         ]);
 
         $user->update($request->all());
@@ -95,11 +112,23 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
-            'email' => 'required|string|max:255',
-            'phone' => 'required|string|max:15',
+            'email' => 'nullable|email|unique:users,email,' . $user->id,
+            'phone' => 'nullable|string|max:15',
+            'birthdate' => 'nullable|date',
+            'civil_state' => 'nullable|string',
+            'address' => 'nullable|string',
+            'rfc' => 'nullable|string',
+            'curp' => 'nullable|string',
+            'ssn' => 'nullable|string',
+            'org_props.entry_date' => 'required|date',
             'org_props.position' => 'required|string|max:255',
+            'org_props.email' => 'required|string|max:255',
             'roles' => 'required|array|min:1',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ], [
+            'org_props.entry_date.required' => 'Campo obligatorio.',
+            'org_props.position.required' => 'Campo obligatorio.',
+            'org_props.email.required' => 'Campo obligatorio.',
         ]);
 
         $user->update($request->all());
@@ -159,7 +188,7 @@ class UserController extends Controller
     }
 
     public function toggleStatus(User $user)
-    {   
+    {
         $user->update([
             'is_active' => !$user->is_active
         ]);
