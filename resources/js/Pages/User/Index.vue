@@ -57,7 +57,6 @@
                     <DisabledUsers :users="filteredTableData.filter(user => !user.is_active)" />
                 </el-tab-pane>
             </el-tabs>
-
         </main>
     </AppLayout>
 </template>

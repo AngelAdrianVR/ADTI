@@ -88,7 +88,7 @@
                         <p>Expediente digital</p>
                     </div>
                 </template>
-                <!-- <DisabledUsers :users="filteredTableData.filter(user => !user.is_active)" /> -->
+                <DigitalDocuments :user="user" />
             </el-tab-pane>
         </el-tabs>
     </AppLayout>
@@ -101,6 +101,7 @@ import Back from "@/Components/MyComponents/Back.vue";
 import SecondaryButton from "@/Components/SecondaryButton.vue";
 import axios from "axios";
 import General from "./Tabs/General.vue";
+import DigitalDocuments from "./Tabs/DigitalDocuments.vue";
 
 export default {
     data() {
@@ -116,6 +117,7 @@ export default {
         Back,
         SecondaryButton,
         General,
+        DigitalDocuments,
     },
     props: {
         user: Object,
