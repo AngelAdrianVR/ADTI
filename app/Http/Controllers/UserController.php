@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
@@ -15,14 +16,14 @@ class UserController extends Controller
 
         return inertia('User/Index', compact('users'));
     }
-    
+
     public function create()
     {
         $roles = Role::all();
 
         return inertia('User/Create', compact('roles'));
     }
-    
+
     public function edit(User $user)
     {
         $roles = Role::all();
@@ -35,18 +36,28 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255|unique:users,name',
-            'email' => 'required|string|max:255|unique:users',
-            'phone' => 'required|string|max:15',
-            'birthdate' => 'nullable|date' ,
-            'civil_state' => 'nullable|string' ,
-            'address' => 'nullable|string' ,
-            'rfc' => 'nullable|string' ,
-            'curp' => 'nullable|string' ,
-            'ssn' => 'nullable|string' ,
+            'email' => 'nullable|email|unique:users,email',
+            'phone' => 'nullable|string|max:15',
+            'birthdate' => 'nullable|date',
+            'civil_state' => 'nullable|string',
+            'address' => 'nullable|string',
+            'rfc' => 'nullable|string',
+            'curp' => 'nullable|string',
+            'ssn' => 'nullable|string',
+            'org_props.entry_date' => 'required|date',
             'org_props.position' => 'required|string|max:255',
+            'org_props.email' => 'required|string|max:255',
             'roles' => 'required|array|min:1',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ], [
+            'org_props.entry_date.required' => 'Campo obligatorio.',
+            'org_props.position.required' => 'Campo obligatorio.',
+            'org_props.email.required' => 'Campo obligatorio.',
         ]);
+
+        // agregar propiedades de vacaciones
+        $request->org_props['vacations'] = 0;
+        $request->org_props['updated_date_vacations'] = now()->toDateString();
 
         $user = User::create($request->all() + ['password' => bcrypt('123456')]);
 
@@ -66,6 +77,7 @@ class UserController extends Controller
     public function show(User $user)
     {
         $users = User::get(['id', 'name']);
+        $user->load(['media']);
 
         return inertia('User/Show', compact('user', 'users'));
     }
@@ -74,11 +86,22 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
-            'email' => 'required|string|max:255',
-            'phone' => 'required|string|max:15',
+            'email' => 'nullable|email|unique:users,email,' . $user->id,
+            'phone' => 'nullable|string|max:15',
+            'birthdate' => 'nullable|date',
+            'civil_state' => 'nullable|string',
+            'address' => 'nullable|string',
+            'rfc' => 'nullable|string',
+            'curp' => 'nullable|string',
+            'ssn' => 'nullable|string',
+            'org_props.entry_date' => 'required|date',
             'org_props.position' => 'required|string|max:255',
+            'org_props.email' => 'required|string|max:255',
             'roles' => 'required|array|min:1',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ], [
+            'org_props.entry_date.required' => 'Campo obligatorio.',
+            'org_props.position.required' => 'Campo obligatorio.',
+            'org_props.email.required' => 'Campo obligatorio.',
         ]);
 
         $user->update($request->all());
@@ -95,11 +118,23 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
-            'email' => 'required|string|max:255',
-            'phone' => 'required|string|max:15',
+            'email' => 'nullable|email|unique:users,email,' . $user->id,
+            'phone' => 'nullable|string|max:15',
+            'birthdate' => 'nullable|date',
+            'civil_state' => 'nullable|string',
+            'address' => 'nullable|string',
+            'rfc' => 'nullable|string',
+            'curp' => 'nullable|string',
+            'ssn' => 'nullable|string',
+            'org_props.entry_date' => 'required|date',
             'org_props.position' => 'required|string|max:255',
+            'org_props.email' => 'required|string|max:255',
             'roles' => 'required|array|min:1',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ], [
+            'org_props.entry_date.required' => 'Campo obligatorio.',
+            'org_props.position.required' => 'Campo obligatorio.',
+            'org_props.email.required' => 'Campo obligatorio.',
         ]);
 
         $user->update($request->all());
@@ -158,12 +193,42 @@ class UserController extends Controller
         }
     }
 
+    public function massiveDeleteMedia(Request $request)
+    {
+        foreach ($request->items_ids as $id) {
+            $item = Media::find($id);
+            $item?->delete();
+        }
+    }
+
     public function toggleStatus(User $user)
-    {   
+    {
         $user->update([
             'is_active' => !$user->is_active
         ]);
 
         return response()->json(['user' => $user]);
+    }
+
+    public function updateVacations(Request $request, User $user)
+    {
+        $props = $user->org_props;
+        $props['vacations'] = $request->vacations;
+        
+        $user->update([
+            'org_props' => $props
+        ]);
+    }
+
+    public function storeMedia(Request $request, User $user)
+    {        
+        $user->addAllMediaFromRequest()->each(fn($file) => $file->toMediaCollection('digitalFiles'));
+    }
+
+    public function updateMediaName(Request $request, Media $media)
+    {        
+        $media->name = $request->media_name;
+        $media->file_name = $request->media_name . ".$media->extension";
+        $media->save();
     }
 }

@@ -33,7 +33,7 @@
             </div>
         </div>
 
-        <DialogModal :show="showPermissionModal" @close="showPermissionModal = false">
+        <DialogModal :show="showPermissionModal" @close="showPermissionModal = false" maxWidth="md">
             <template #title>
                 <p v-if="editFlag">Editar permiso</p>
                 <p v-else>Crear nuevo permiso</p>
@@ -42,13 +42,13 @@
                 <div>
                     <form @submit.prevent="editFlag ? updatePermission() : storePermission()" ref="myform">
                         <div>
-                            <InputLabel value="Nombre del permiso *" class="ml-2" />
-                            <input v-model="form.name" class="input" type="text">
+                            <InputLabel value="Nombre del permiso *"/>
+                            <el-input v-model="form.name" placeholder="Nombre del permiso" clearable />
                             <InputError :message="form.errors.name" />
                         </div>
                         <div class="mt-3">
-                            <InputLabel value="Categoria del permiso *" class="ml-2" />
-                            <input v-model="form.category" class="input" type="text">
+                            <InputLabel value="Categoria del permiso *"/>
+                            <el-input v-model="form.category" placeholder="Nombre de la categoria" clearable />
                             <InputError :message="form.errors.category" />
                         </div>
                     </form>
