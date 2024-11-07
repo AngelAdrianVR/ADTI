@@ -36,6 +36,8 @@ class User extends Authenticatable implements HasMedia
         'ssn',
         'org_props',
         'is_active',
+        'inactivate_date',
+        'inactivate_reason',
         'profile_photo_path',
     ];
 
@@ -60,16 +62,12 @@ class User extends Authenticatable implements HasMedia
         'profile_photo_url',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'birthdate' => 'date',
+            'inactivate_date' => 'date',
             'password' => 'hashed',
             'org_props' => 'array',
         ];

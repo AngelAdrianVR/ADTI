@@ -22,6 +22,8 @@ return new class extends Migration
             $table->string('profile_photo_path', 2048)->nullable();
             $table->string('phone', 20)->nullable();
             $table->date('birthdate')->nullable();
+            $table->date('inactivate_date')->nullable();
+            $table->text('inactivate_reason')->nullable();
             $table->string('civil_state')->nullable(); //estado civil (soltero, casado)
             $table->string('address')->nullable();
             $table->string('rfc')->nullable();

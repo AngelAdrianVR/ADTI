@@ -31,10 +31,18 @@ class UserController extends Controller
 
         return inertia('User/Edit', compact('user', 'roles', 'user_roles'));
     }
+    
+    public function reactivation(User $user)
+    {
+        $roles = Role::all();
+        $user_roles = $user->roles->pluck('id');
+
+        return inertia('User/Reactivation', compact('user', 'roles', 'user_roles'));
+    }
 
     public function store(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255|unique:users,name',
             'email' => 'nullable|email|unique:users,email',
             'phone' => 'nullable|string|max:15',
@@ -46,7 +54,13 @@ class UserController extends Controller
             'ssn' => 'nullable|string',
             'org_props.entry_date' => 'required|date',
             'org_props.position' => 'required|string|max:255',
+            'org_props.department' => 'nullable|string|max:255',
+            'org_props.phone' => 'nullable|string|max:255',
+            'org_props.gross_salary' => 'nullable|numeric|min:1',
+            'org_props.net_salary' => 'nullable|numeric|min:1',
             'org_props.email' => 'required|string|max:255',
+            'org_props.vacations' => 'nullable',
+            'org_props.updated_date_vacations' => 'nullable',
             'roles' => 'required|array|min:1',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ], [
@@ -56,10 +70,10 @@ class UserController extends Controller
         ]);
 
         // agregar propiedades de vacaciones
-        $request->org_props['vacations'] = 0;
-        $request->org_props['updated_date_vacations'] = now()->toDateString();
+        $validated['org_props']['vacations'] = 0;
+        $validated['org_props']['updated_date_vacations'] = now()->toDateString();
 
-        $user = User::create($request->all() + ['password' => bcrypt('123456')]);
+        $user = User::create($validated + ['password' => bcrypt('123456')]);
 
         // guardar foto de perfil en caso de haberse seleccionado una
         if ($request->hasFile('image')) {
@@ -84,7 +98,7 @@ class UserController extends Controller
 
     public function update(Request $request, User $user)
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
             'email' => 'nullable|email|unique:users,email,' . $user->id,
             'phone' => 'nullable|string|max:15',
@@ -96,7 +110,13 @@ class UserController extends Controller
             'ssn' => 'nullable|string',
             'org_props.entry_date' => 'required|date',
             'org_props.position' => 'required|string|max:255',
+            'org_props.department' => 'nullable|string|max:255',
+            'org_props.phone' => 'nullable|string|max:255',
             'org_props.email' => 'required|string|max:255',
+            'org_props.vacations' => 'nullable',
+            'org_props.updated_date_vacations' => 'nullable',
+            'org_props.gross_salary' => 'nullable|numeric|min:1',
+            'org_props.net_salary' => 'nullable|numeric|min:1',
             'roles' => 'required|array|min:1',
         ], [
             'org_props.entry_date.required' => 'Campo obligatorio.',
@@ -116,7 +136,7 @@ class UserController extends Controller
 
     public function updateWithMedia(Request $request, User $user)
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
             'email' => 'nullable|email|unique:users,email,' . $user->id,
             'phone' => 'nullable|string|max:15',
@@ -128,7 +148,13 @@ class UserController extends Controller
             'ssn' => 'nullable|string',
             'org_props.entry_date' => 'required|date',
             'org_props.position' => 'required|string|max:255',
+            'org_props.department' => 'nullable|string|max:255',
+            'org_props.phone' => 'nullable|string|max:255',
             'org_props.email' => 'required|string|max:255',
+            'org_props.vacations' => 'nullable',
+            'org_props.updated_date_vacations' => 'nullable',
+            'org_props.gross_salary' => 'nullable|numeric|min:1',
+            'org_props.net_salary' => 'nullable|numeric|min:1',
             'roles' => 'required|array|min:1',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ], [
@@ -201,32 +227,37 @@ class UserController extends Controller
         }
     }
 
-    public function toggleStatus(User $user)
+    public function inactivate(Request $request, User $user)
     {
-        $user->update([
-            'is_active' => !$user->is_active
+        $request->validate([
+            'inactivate_date' => 'required|date',
+            'inactivate_reason' => 'required|string|max:300',
         ]);
 
-        return response()->json(['user' => $user]);
+        $user->update([
+            'is_active' => false,
+            'inactivate_date' => $request->inactivate_date,
+            'inactivate_reason' => $request->inactivate_reason,
+        ]);
     }
 
     public function updateVacations(Request $request, User $user)
     {
         $props = $user->org_props;
         $props['vacations'] = $request->vacations;
-        
+
         $user->update([
             'org_props' => $props
         ]);
     }
 
     public function storeMedia(Request $request, User $user)
-    {        
+    {
         $user->addAllMediaFromRequest()->each(fn($file) => $file->toMediaCollection('digitalFiles'));
     }
 
     public function updateMediaName(Request $request, Media $media)
-    {        
+    {
         $media->name = $request->media_name;
         $media->file_name = $request->media_name . ".$media->extension";
         $media->save();

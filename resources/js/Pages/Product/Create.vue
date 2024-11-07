@@ -90,7 +90,7 @@
                 <div class="mt-3 col-span-full">
                     <InputLabel value="Descripción del producto" class="ml-3 mb-1 text-sm" />
                     <el-input v-model="form.description" :autosize="{ minRows: 3, maxRows: 5 }" type="textarea"
-                        placeholder="Escribe una descripción del producto si es necesario" :maxlength="100"
+                        placeholder="Escribe una descripción del producto si es necesario" :maxlength="300"
                         show-word-limit clearable />
                     <InputError :message="form.errors.description" />
                 </div>
