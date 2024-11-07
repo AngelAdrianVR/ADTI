@@ -147,5 +147,8 @@ return [
         'part_number_supplier' => 'número de parte del fabricante',
         'abreviation' => 'abreviación',
         'description' => 'descripción',
+        'week_day' => 'día de la semana',
+        'day' => 'día',
+        'month' => 'mes',
     ],
 ];

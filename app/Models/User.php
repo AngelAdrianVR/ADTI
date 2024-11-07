@@ -74,4 +74,41 @@ class User extends Authenticatable implements HasMedia
             'org_props' => 'array',
         ];
     }
+
+    //relationships
+    public function payrolls()
+    {
+        return $this->belongsToMany(Payroll::class)
+            ->using(PayrollUser::class)
+            ->withPivot([
+                'id',
+                'date',
+                'check_in',
+                'pausas',
+                'check_out',
+                'late',
+                'extras_enabled',
+                'extra_hours',
+                'extra_minutes',
+                'additionals',
+            ])
+            ->withTimestamps();
+    }
+
+    // methods ------------------------------------------------------------------------------------
+    //metodo que recupera la siguiente insidencia
+    public function getNextAttendance()
+    {
+        $next = '';
+        $today_attendance = PayrollUser::where('user_id', $this->id)->whereDate('date', today())->first();
+        if (is_null($today_attendance)) {
+            $next = 'Registrar entrada';
+        } elseif (is_null($today_attendance->check_out)) {
+            $next = 'Registrar salida';
+        } else {
+            $next = 'Dia terminado';
+        }
+
+        return $next;
+    }
 }

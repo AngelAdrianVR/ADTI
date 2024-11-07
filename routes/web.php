@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\FeatureController;
+use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\MeasureUnitController;
+use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SubcategoryController;
@@ -127,12 +129,23 @@ Route::get('subcategories-get-products/{subcategory}', [SubcategoryController::c
 Route::resource('measure_units', MeasureUnitController::class)->middleware('auth');
 
 
-//features routes----------------------------------------------------------------------------------
+//payrolls routes--------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::resource('payrolls', PayrollController::class)->middleware('auth');
+
+
+//Holiday routes---------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::resource('holidays', HolidayController::class)->middleware('auth');
+Route::post('holidays/massive-delete', [HolidayController::class, 'massiveDelete'])->name('holidays.massive-delete');
+
+
+//features routes--------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------
 Route::resource('features', FeatureController::class)->middleware('auth');
 
 
-//settings routes----------------------------------------------------------------------------------
+//settings routes--------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------
 Route::resource('settings', SettingController::class)->middleware('auth');
 Route::put('role-permission/{role}/edit-role', [SettingController::class, 'updateRole'])->middleware('auth')->name('settings.role-permission.update-role');
