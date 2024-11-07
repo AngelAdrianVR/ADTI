@@ -18,7 +18,7 @@ const props = defineProps({
     },
     contentClasses: {
         type: Array,
-        default: () => ['py-1', 'bg-[#c5c5c5]', 'px-2', 'text-gray-700'],
+        default: () => ['py-1', 'bg-[#dbdbdb]', 'px-2', 'text-gray-700'],
     },
 });
 

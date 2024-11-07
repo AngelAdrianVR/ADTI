@@ -154,13 +154,6 @@ export default {
                             active: route().current('holidays.*'),
                             notifications: false,
                         },
-                        {
-                            label: 'Bonos',
-                            route: route('login'),
-                            show: true,
-                            active: route().current('dasboard'),
-                            notifications: false,
-                        },
                     ],
                     dropdown: true,
                     show: true

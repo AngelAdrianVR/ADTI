@@ -3,9 +3,12 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Log;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Jetstream\HasProfilePhoto;
 use Laravel\Sanctum\HasApiTokens;
@@ -108,5 +111,38 @@ class User extends Authenticatable implements HasMedia
         }
 
         return $next;
+    }
+
+    public function updateVacations()
+    {
+        $entryDate = Carbon::parse($this->org_props['entry_date']);
+        $yearsWorked = (int) $entryDate->diffInYears(now());
+
+        // Días de vacaciones según la antigüedad
+        $vacationDaysPerYear = match (true) {
+            $yearsWorked === 0 => 12,
+            $yearsWorked === 1 => 14,
+            $yearsWorked === 2 => 16,
+            $yearsWorked === 3 => 18,
+            $yearsWorked === 4 => 20,
+            $yearsWorked >= 5 && $yearsWorked <= 9 => 22,
+            $yearsWorked >= 10 && $yearsWorked <= 14 => 24,
+            $yearsWorked >= 15 && $yearsWorked <= 19 => 26,
+            $yearsWorked >= 20 && $yearsWorked <= 24 => 28,
+            $yearsWorked >= 25 && $yearsWorked <= 29 => 30,
+            default => 12,
+        };
+
+        // Calcula los días proporcionales para una semana (1/52 del total anual)
+        $weeklyVacationDays = round($vacationDaysPerYear / 52, 2);
+        
+        // Suma los días proporcionales a las vacaciones actuales
+        $org_props = $this->org_props;
+        $org_props['vacations'] = ($org_props['vacations'] ?? 0) + $weeklyVacationDays;
+
+        // Actualiza la fecha de la última actualización
+        $org_props['updated_date_vacations'] = now()->toDateString();
+        $this->org_props = $org_props;
+        $this->save();
     }
 }
