@@ -2,7 +2,7 @@
 
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\FeatureController;
-use App\Http\Controllers\HoliDayController;
+use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\MeasureUnitController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProductController;
@@ -134,9 +134,10 @@ Route::resource('measure_units', MeasureUnitController::class)->middleware('auth
 Route::resource('payrolls', PayrollController::class)->middleware('auth');
 
 
-//Holiday routes--------------------------------------------------------------------------------------
+//Holiday routes---------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------
-Route::resource('holidays', HoliDayController::class)->middleware('auth');
+Route::resource('holidays', HolidayController::class)->middleware('auth');
+Route::post('holidays/massive-delete', [HolidayController::class, 'massiveDelete'])->name('holidays.massive-delete');
 
 
 //features routes--------------------------------------------------------------------------------------

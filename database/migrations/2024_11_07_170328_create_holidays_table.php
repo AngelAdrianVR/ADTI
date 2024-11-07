@@ -11,11 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('holi_days', function (Blueprint $table) {
+        Schema::create('holidays', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->date('date');
-            $table->boolean('is_active');
+            $table->string('ordinal')->nullable();
+            $table->string('week_day')->nullable();
+            $table->string('month')->nullable();
+            $table->date('date')->nullable();
+            $table->boolean('is_custom_date')->default(false);
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
     }
@@ -25,6 +29,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('holi_days');
+        Schema::dropIfExists('holidays');
     }
 };
