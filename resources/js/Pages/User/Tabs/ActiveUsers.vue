@@ -2,7 +2,7 @@
     <div class="mx-2 lg:mx-10 mt-6">
         <div class="lg:flex justify-between mb-2">
             <!-- pagination -->
-            <div class="flex space-x-5 items-center">
+            <div class="flex space-x-2 items-center lg:ml-20">
                 <el-pagination @current-change="handlePagination" layout="prev, pager, next"
                     :total="users.length / itemsPerPage" />
                 <div v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')" class="mt-2 lg:mt-0">
@@ -16,7 +16,7 @@
                 </div>
             </div>
         </div>
-        <el-table :data="users" @row-click="handleRowClick" max-height="670" style="width: 90%"
+        <el-table :data="users" @row-click="handleRowClick" max-height="670" style="width: 90%" class="mx-auto"
             @selection-change="handleSelectionChange" ref="multipleTableRef" :row-class-name="tableRowClassName">
             <el-table-column type="selection" width="30" />
             <el-table-column prop="id" label="ID" width="80" />

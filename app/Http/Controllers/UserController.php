@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
@@ -192,6 +193,14 @@ class UserController extends Controller
         }
     }
 
+    public function massiveDeleteMedia(Request $request)
+    {
+        foreach ($request->items_ids as $id) {
+            $item = Media::find($id);
+            $item?->delete();
+        }
+    }
+
     public function toggleStatus(User $user)
     {
         $user->update([
@@ -209,5 +218,17 @@ class UserController extends Controller
         $user->update([
             'org_props' => $props
         ]);
+    }
+
+    public function storeMedia(Request $request, User $user)
+    {        
+        $user->addAllMediaFromRequest()->each(fn($file) => $file->toMediaCollection('digitalFiles'));
+    }
+
+    public function updateMediaName(Request $request, Media $media)
+    {        
+        $media->name = $request->media_name;
+        $media->file_name = $request->media_name . ".$media->extension";
+        $media->save();
     }
 }
