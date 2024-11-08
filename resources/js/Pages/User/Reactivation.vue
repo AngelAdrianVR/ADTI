@@ -4,8 +4,8 @@
             <Back />
             <form @submit.prevent="update"
                 class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-2/3 xl:w-1/2 mx-auto mt-2 lg:grid lg:grid-cols-2 gap-x-3 gap-y-2">
-                <h1 class="font-bold ml-2 col-span-full">Editar usuario</h1>
-
+                <h1 class="font-bold ml-2 col-span-full">Reactivar usuario</h1>
+                <p class="text-sm text-gray99 col-span-full px-10">Actualiza los datos que consideres relevantes para el usuario.</p>
                 <h2 class="font-bold mb-1 mt-2 col-span-full text-gray37">Datos personales</h2>
                 <div>
                     <InputLabel value="Nombre del usuario*" />
@@ -147,7 +147,7 @@
                 <div class="col-span-full text-right mt-7">
                     <PrimaryButton class="!rounded-full" :disabled="form.processing">
                         <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
-                        Guardar cambios
+                        Reactivar usuario
                     </PrimaryButton>
                 </div>
             </form>
@@ -177,6 +177,7 @@ export default {
             rfc: this.user.rfc,
             curp: this.user.curp,
             ssn: this.user.ssn,
+            is_active: true,
             //datos laborales
             org_props: {
                 entry_date: this.user.org_props.entry_date,

@@ -74,10 +74,8 @@ export default {
             search: '',
             searchQuery: null,
             searchedWord: null,
-
             // Tabs
             activeTab: '1',
-
             // pagination
             itemsPerPage: 10,
             start: 0,

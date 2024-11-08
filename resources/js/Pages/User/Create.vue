@@ -198,6 +198,8 @@ export default {
                 phone: null,
                 gross_salary: null,
                 net_salary: null,
+                vacations: null,
+                updated_date_vacations: null,
             },
             image: null,
             roles: [],

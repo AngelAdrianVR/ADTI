@@ -41,4 +41,9 @@ class PayrollController extends Controller
     {
         //
     }
+
+    public function prePayrollTemplate()
+    {
+        return inertia('Payroll/PrePayrollTemplate');
+    }
 }

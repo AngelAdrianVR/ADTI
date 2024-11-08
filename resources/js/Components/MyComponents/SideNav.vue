@@ -2,9 +2,9 @@
     <!-- sidebar -->
     <div class="h-screen hidden md:block shadow-lg relative">
         <i @click="updateSideNavSize(false)" v-if="small"
-            class="fa-solid fa-angle-right text-center text-xs pt-[2px] text-white rounded-full size-5 bg-primary absolute top-24 -right-3 cursor-pointer hover:scale-125 transition-transform ease-linear duration-150"></i>
+            class="fa-solid fa-angle-right text-center text-xs pt-[2px] text-white rounded-full size-5 bg-primary absolute top-24 -right-3 cursor-pointer hover:scale-125 transition-transform ease-linear duration-150 z-10"></i>
         <i @click="updateSideNavSize(true)" v-else
-            class="fa-solid fa-angle-left text-center text-xs pt-[2px] text-white rounded-full size-5 bg-primary absolute top-24 -right-3 cursor-pointer hover:scale-125 transition-transform ease-linear duration-150"></i>
+            class="fa-solid fa-angle-left text-center text-xs pt-[2px] text-white rounded-full size-5 bg-primary absolute top-24 -right-3 cursor-pointer hover:scale-125 transition-transform ease-linear duration-150 z-10"></i>
         <div class="bg-[#dbdbdb] h-full overflow-auto">
             <!-- Logo -->
             <div class="flex items-center justify-center mt-7">
@@ -152,13 +152,6 @@ export default {
                             route: route('holidays.index'),
                             show: true,
                             active: route().current('holidays.*'),
-                            notifications: false,
-                        },
-                        {
-                            label: 'Bonos',
-                            route: route('login'),
-                            show: true,
-                            active: route().current('dasboard'),
                             notifications: false,
                         },
                     ],

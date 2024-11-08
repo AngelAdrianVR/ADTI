@@ -24,7 +24,7 @@
         <div class="flex mt-2">
             <p class="text-[#6D6E72] w-48">Subcategorías:</p>
             <ul class="flex flex-col" v-for="(subcategory, index) in product.bread_crumbles" :key="subcategory">
-                <li><i v-if="index !==0" class="fa-solid fa-arrow-right text-sm mx-1"></i>{{ subcategory }}</li>
+                <li><i v-if="index !== 0" class="fa-solid fa-arrow-right text-sm mx-1"></i>{{ subcategory }}</li>
             </ul>
         </div>
         <div class="flex mt-2">
@@ -37,18 +37,21 @@
         </div>
         <div class="flex mt-2">
             <p class="text-[#6D6E72] w-48">Precio de lista:</p>
-            <p class="text-black">{{ product.line_cost?.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",") }} {{ product.currency }}</p>
+            <p class="text-black">{{ product.line_cost?.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",") }} {{
+                product.currency }}</p>
         </div>
         <div class="flex mt-5">
             <p class="text-[#6D6E72] w-48">Características:</p>
             <!-- tabla de caracteristicas -->
             <div v-if="product.features?.length" class="border border-gray-300 rounded overflow-hidden">
-                <div v-for="(feature, index) in product.features" :key="index" class="grid grid-cols-2 *:py-1 *:px-4" :class="{ 'bg-gray-200': index % 2 != 0 }">
+                <div v-for="(feature, index) in product.features" :key="index" class="grid grid-cols-2 *:py-1 *:px-4"
+                    :class="{ 'bg-gray-200': index % 2 != 0 }">
                     <div class="border-r border-gray-300 font-medium">
                         {{ feature.name }}
                     </div>
                     <div>
-                        {{ feature.value }} <span v-if="feature.measure_unit !== 'No aplica'" class="text-sm">{{ feature.measure_unit }}</span>
+                        {{ feature.value }} <span v-if="feature.measure_unit !== 'No aplica'" class="text-sm">{{
+                            feature.measure_unit }}</span>
                     </div>
                 </div>
             </div>
@@ -57,8 +60,10 @@
 
         <div class="flex mt-5">
             <p class="text-[#6D6E72] w-48">Descargables:</p>
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2" v-if="product.media.filter(media => media.collection_name === 'files')?.length > 0">
-                <FileView v-for="file in product.media.filter(media => media.collection_name !== 'imageCover')" :key="file" :file="file" />
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2"
+                v-if="product.media.filter(media => media.collection_name === 'files')?.length > 0">
+                <FileView v-for="file in product.media.filter(media => media.collection_name !== 'imageCover')"
+                    :key="file" :file="file" />
             </div>
             <p v-else class=" text-gray-400 mx-4 text-xs mt-1">No hay archivos adjuntos</p>
         </div>
@@ -72,16 +77,16 @@ import { format, parseISO } from 'date-fns';
 import es from 'date-fns/locale/es';
 
 export default {
-components:{    
-    FileView
-},
-props:{
-    product: Object
-},
-methods:{
-    formatDate(dateString) {
-        return format(parseISO(dateString), 'dd MMMM, yyyy', { locale: es });
+    components: {
+        FileView
     },
-}
+    props: {
+        product: Object
+    },
+    methods: {
+        formatDate(dateString) {
+            return format(parseISO(dateString), 'dd MMMM, yyyy', { locale: es });
+        },
+    }
 }
 </script>

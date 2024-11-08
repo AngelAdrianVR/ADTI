@@ -50,8 +50,8 @@
                                             d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
                                     </svg>
                                     Editar</el-dropdown-item>
-                                <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Eliminar usuarios')"
-                                    :command="'toogleSatus-' + scope.row.id">
+                                <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Inactivar usuarios')"
+                                    :command="'inactivate-' + scope.row.id">
                                     <svg class="size-4 mr-1" width="14" height="14" viewBox="0 0 14 14" fill="none"
                                         xmlns="http://www.w3.org/2000/svg">
                                         <mask id="mask0_14810_295" style="mask-type:alpha" maskUnits="userSpaceOnUse"
@@ -64,7 +64,8 @@
                                                 fill="currentColor" />
                                         </g>
                                     </svg>
-                                    {{ scope.row.is_active ? 'Dar de baja' : 'Reactivar' }}</el-dropdown-item>
+                                    Dar de baja
+                                </el-dropdown-item>
                             </el-dropdown-menu>
                         </template>
                     </el-dropdown>
@@ -72,16 +73,56 @@
             </el-table-column>
         </el-table>
     </div>
+    <DialogModal :show="showInactivatigModal" @close="showInactivatigModal = false" maxWidth="lg">
+        <template #title>
+            <h1>Baja del usuario</h1>
+        </template>
+        <template #content>
+            <form @submit.prevent="toogleStatus">
+                <div>
+                    <InputLabel value="Fecha de baja*" />
+                    <input v-model="form.inactivate_date" class="w-full input" type="date"
+                        placeholder="Selecciona la fecha de nacimiento" />
+                    <InputError :message="form.errors.inactivate_date" />
+                </div>
+                <div class="mt-3">
+                    <InputLabel value="Motivo de baja* " />
+                    <el-input v-model="form.inactivate_reason" :autosize="{ minRows: 2, maxRows: 6 }" type="textarea"
+                        placeholder="Escribe el motivo de baja " :maxlength="300" show-word-limit clearable />
+                    <InputError :message="form.errors.inactivate_reason" />
+                </div>
+                <div class="mt-3 flex justify-end">
+                    <PrimaryButton :disabled="form.processing">
+                        <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
+                        Guardar baja
+                    </PrimaryButton>
+                </div>
+            </form>
+        </template>
+    </DialogModal>
 </template>
 
 <script>
+import DialogModal from '@/Components/DialogModal.vue';
+import InputError from '@/Components/InputError.vue';
+import InputLabel from '@/Components/InputLabel.vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import { useForm } from '@inertiajs/vue3';
 import axios from 'axios';
+import { format } from "date-fns";
 
 export default {
     data() {
-        return {
-            disableMassiveActions: true,
+        const form = useForm({
+            inactivate_date: format(new Date(), "yyyy-MM-dd"), // Establece la fecha de hoy por defecto,
+            inactivate_reason: null,
+        });
 
+        return {
+            form,
+            disableMassiveActions: true,
+            showInactivatigModal: false,
+            inactivateUserId: null,
             // pagination
             itemsPerPage: 10,
             start: 0,
@@ -89,7 +130,10 @@ export default {
         }
     },
     components: {
-
+        DialogModal,
+        InputLabel,
+        InputError,
+        PrimaryButton,
     },
     props: {
         users: Array
@@ -121,35 +165,30 @@ export default {
             const commandName = command.split('-')[0];
             const rowId = command.split('-')[1];
 
-            if (commandName === 'clone') {
-                // this.$inertia.visit(route('users.' + commandName, rowId));
-            } else if (commandName === 'toogleSatus') {
-                this.toogleStatus(rowId);
+            if (commandName === 'inactivate') {
+                this.showInactivatigModal = true;
+                this.inactivateUserId = rowId;
             } else {
                 this.$inertia.get(route('users.' + commandName, rowId));
             }
 
         },
-        async toogleStatus(userId) {
-            try {
-                const response = await axios.put(route('users.toggle-status', userId));
-                if (response.status === 200) {
+        toogleStatus() {
+            this.form.put(route('users.inactivate', this.inactivateUserId), {
+                onSuccess: () => {
                     this.$notify({
                         title: 'Correcto',
                         message: '',
                         type: 'success',
                         position: "bottom-right",
                     });
-                    this.users.find(user => user.id == userId).is_active = response.data.user.is_active;
+                    this.showInactivatigModal = false;
+                    this.form.reset();
+                },
+                onError: (error) => {
+                    console.log(error);
                 }
-            } catch (error) {
-                this.$notify({
-                    title: 'Correcto',
-                    message: '',
-                    type: 'success',
-                    position: "bottom-right",
-                });
-            }
+            });
         },
         async deleteSelections() {
             try {
