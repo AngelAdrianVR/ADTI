@@ -3,6 +3,7 @@
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\FeatureController;
 use App\Http\Controllers\HolidayController;
+use App\Http\Controllers\KioskController;
 use App\Http\Controllers\MeasureUnitController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProductController;
@@ -133,6 +134,7 @@ Route::resource('measure_units', MeasureUnitController::class)->middleware('auth
 //payrolls routes--------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------
 Route::resource('payrolls', PayrollController::class)->middleware('auth');
+Route::get('pre-payroll', [PayrollController::class, 'prePayrollTemplate'])->name('payrolls.pre-payroll')->middleware('auth');
 
 
 //Holiday routes---------------------------------------------------------------------------------------
@@ -155,3 +157,8 @@ Route::delete('role-permission/{role}/destroy-role', [SettingController::class, 
 Route::put('role-permission/{permission}/edit-permission', [SettingController::class, 'updatePermission'])->middleware('auth')->name('settings.role-permission.update-permission');
 Route::post('role-permission/store-permission', [SettingController::class, 'storePermission'])->middleware('auth')->name('settings.role-permission.store-permission');
 Route::delete('role-permission/{permission}/destroy-permission', [SettingController::class, 'deletePermission'])->middleware('auth')->name('settings.role-permission.delete-permission');
+
+
+//kisko routes--------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::get('kiosk', [KioskController::class, 'index'])->name('kiosk.index')->middleware('auth');
