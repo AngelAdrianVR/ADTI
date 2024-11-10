@@ -3,10 +3,10 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 
-class PayrollUser extends Model
+class PayrollUser extends Pivot
 {
     use HasFactory;
 
@@ -15,24 +15,22 @@ class PayrollUser extends Model
     protected $fillable = [
         'date',
         'check_in',
-        'pausas',
         'check_out',
         'late',
-        'extras_enabled',
         'extra_hours',
         'extra_minutes',
         'user_id',
         'payroll_id',
-        // 'justification_event_id',
+        'incidence',
         'additionals',
+        'checked_in_platform'
     ];
 
     protected $casts = [
         'date' => 'date',
-        'check_in' => 'datetime:h:m',
-        'check_out' => 'datetime:h:m',
+        // 'check_in' => 'datetime:H:m',
+        // 'check_out' => 'datetime:H:m',
         'additionals' => 'array',
-        'pausas' => 'array',
     ];
 
     // relationships

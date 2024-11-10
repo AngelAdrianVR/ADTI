@@ -85,13 +85,13 @@ class User extends Authenticatable implements HasMedia
                 'id',
                 'date',
                 'check_in',
-                'pausas',
                 'check_out',
                 'late',
-                'extras_enabled',
                 'extra_hours',
                 'extra_minutes',
+                'incidence',
                 'additionals',
+                'checked_in_platform',
             ])
             ->withTimestamps();
     }

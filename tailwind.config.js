@@ -11,7 +11,6 @@ export default {
         './resources/views/**/*.blade.php',
         './resources/js/**/*.vue',
     ],
-
     theme: {
         extend: {
             fontFamily: {
@@ -23,6 +22,7 @@ export default {
                 secondary: '#6D6E72',
                 secondarylight: '#6D6E72',
                 redDanger: '#F80505',
+                grayCC: '#CCCCCC',
                 grayD9: '#D9D9D9',
                 gray99: '#999999',
                 gray9A: '#9A9A9A',

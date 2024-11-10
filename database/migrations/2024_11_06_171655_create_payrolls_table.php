@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('payrolls', function (Blueprint $table) {
             $table->id();
             $table->date('start_date');
-            $table->unsignedTinyInteger('week');
+            $table->unsignedTinyInteger('biweekly');
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });

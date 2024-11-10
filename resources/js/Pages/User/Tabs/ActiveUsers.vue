@@ -78,7 +78,7 @@
             <h1>Baja del usuario</h1>
         </template>
         <template #content>
-            <form @submit.prevent="toogleStatus">
+            <form @submit.prevent="inactiveUser">
                 <div>
                     <InputLabel value="Fecha de baja*" />
                     <input v-model="form.inactivate_date" class="w-full input" type="date"
@@ -173,7 +173,7 @@ export default {
             }
 
         },
-        toogleStatus() {
+        inactiveUser() {
             this.form.put(route('users.inactivate', this.inactivateUserId), {
                 onSuccess: () => {
                     this.$notify({

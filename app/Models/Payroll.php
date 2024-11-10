@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -11,14 +12,13 @@ class Payroll extends Model
 
     protected $fillable = [
         'start_date',
-        'week',
+        'biweekly',
         'is_active',
     ];
 
     protected $casts = [
         'start_date' => 'date'
     ];
-
 
     //Rellationships
     public function users()
@@ -29,13 +29,13 @@ class Payroll extends Model
                 'id',
                 'date',
                 'check_in',
-                'pausas',
                 'check_out',
                 'late',
-                'extras_enabled',
                 'extra_hours',
                 'extra_minutes',
+                'incidence',
                 'additionals',
+                'checked_in_platform',
             ])
             ->withTimestamps();
     }
@@ -46,44 +46,45 @@ class Payroll extends Model
     }
 
     // methods
-    // public function getProcessedAttendances($user_id)
-    // {
-    //     $attendances = PayrollUser::where('user_id', $user_id)
-    //         ->where('payroll_id', $this->id)
-    //         ->oldest('date')
-    //         ->get();
-    //     $user = User::find($user_id);
+    public function getProcessedAttendances($user_id)
+    {
+        $attendances = PayrollUser::where('user_id', $user_id)
+            ->where('payroll_id', $this->id)
+            ->oldest('date')
+            ->get();
+        $user = User::find($user_id);
 
-    //     $processed = [];
-    //     for ($i = 0; $i < 7; $i++) {
-    //         $current_date = $this->start_date->addDays($i);
-    //         $holiday = Holiday::whereMonth('date', $current_date->month)
-    //             ->whereDay('date', $current_date->day)
-    //             ->where('is_active', 1)->first();
-    //         $current = $attendances->firstWhere('date', $current_date);
-    //         $is_day_off = $user->employee_properties['work_days'][$current_date->dayOfWeek]['check_in'] == 0;
-    //         if ($current) {
-    //             $processed[] = $current;
-    //         } else {
-    //             $payroll_user = new PayrollUser(['date' => $current_date->toDateString()]);
-    //             // holiday
-    //             if ($holiday && !$is_day_off) {
-    //                 $payroll_user->justification_event_id = -$holiday->id;
-    //             } else {
-    //                 // day not passed yet
-    //                 if ($current_date->lessThan(Carbon::parse($user->employee_properties['join_date'])) || $current_date->greaterThan(now())) {
-    //                     $payroll_user->justification_event_id = 7;
-    //                 } else { //days passed
-    //                     if ($is_day_off) { //day off
-    //                         $payroll_user->justification_event_id = 6;
-    //                     } else { //absent
-    //                         $payroll_user->justification_event_id = 5;
-    //                     }
-    //                 }
-    //             }
-    //             $processed[] = $payroll_user;
-    //         }
-    //     }
-    //     return $processed;
-    // }
+        $processed = [];
+        for ($i = 0; $i < 14; $i++) {
+            $current_date = $this->start_date->addDays($i);
+            $holiday = Holiday::whereMonth('date', $current_date->month)
+                ->whereDay('date', $current_date->day)
+                ->where('is_active', 1)->first();
+            $current = $attendances->firstWhere('date', $current_date);
+            // dias de descanso siempre son los sabados y domingos
+            $is_day_off = $i === 4 || $i === 5 || $i === 11 || $i === 12;
+            if ($current) { //existe un registro de asistencia este dia
+                $processed[] = $current;
+            } else { // no hay registro, se crea uno procesado
+                $payroll_user = new PayrollUser(['date' => $current_date->toDateString()]);
+                // dia festivo
+                if ($holiday && !$is_day_off) {
+                    $payroll_user->incidence = $holiday->name;
+                } else {
+                    // dia todavia no pasa
+                    if ($current_date->lessThan(Carbon::parse($user->org_props['entry_date'])) || $current_date->greaterThan(now())) {
+                        $payroll_user->incidence = 'Sin registro aún';
+                    } else { //dias que ya pasaron
+                        if ($is_day_off) { //dia de escanso
+                            $payroll_user->incidence = 'Descanso';
+                        } else { //falta injustificada
+                            $payroll_user->incidence = 'Falta injustificada';
+                        }
+                    }
+                }
+                $processed[] = $payroll_user;
+            }
+        }
+        return $processed;
+    }
 }

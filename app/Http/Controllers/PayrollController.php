@@ -9,7 +9,9 @@ class PayrollController extends Controller
 {
     public function index()
     {
-        return inertia('Payroll/Index');
+        $payrolls = Payroll::latest()->get();
+
+        return inertia('Payroll/Index', compact('payrolls'));
     }
 
     public function create()
@@ -24,7 +26,36 @@ class PayrollController extends Controller
 
     public function show(Payroll $payroll)
     {
-        //
+        // Carga los usuarios junto con su información en el pivote
+        $payroll->load('users');
+
+        // Formatea los datos de los usuarios y sus incidencias
+        $formattedUsers = $payroll->users->groupBy('id')->map(function ($userGroup) use ($payroll) {
+            $user = $userGroup->first();
+
+            return [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'org_props' => $user->org_props,
+                    // Otros datos relevantes del usuario
+                ],
+                'incidences' => $payroll->getProcessedAttendances($user->id)
+            ];
+        })->values()->all(); // Reinicia índices principales
+
+        // Selecciona solo las propiedades específicas del objeto payroll
+        $payrollData = [
+            'id' => $payroll->id,
+            'start_date' => $payroll->start_date,
+            'biweekly' => $payroll->biweekly,
+            'is_active' => $payroll->is_active,
+        ];
+       
+        return inertia('Payroll/Show', [
+            'payroll' => $payrollData,
+            'users' => $formattedUsers,
+        ]);
     }
 
     public function edit(Payroll $payroll)
