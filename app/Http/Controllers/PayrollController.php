@@ -51,7 +51,10 @@ class PayrollController extends Controller
             'biweekly' => $payroll->biweekly,
             'is_active' => $payroll->is_active,
         ];
-       
+    //    return [
+    //     'payroll' => $payrollData,
+    //     'users' => $formattedUsers,
+    //    ];
         return inertia('Payroll/Show', [
             'payroll' => $payrollData,
             'users' => $formattedUsers,

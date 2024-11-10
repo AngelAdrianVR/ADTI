@@ -7,59 +7,51 @@ use Illuminate\Http\Request;
 
 class PayrollUserController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
         //
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
+    public function setIncidence(Request $request)
     {
-        //
+        // Busca o crea un registro en la tabla PayrollUser basado en el 'date' y el 'user_id'
+        $payrollUser = PayrollUser::firstOrCreate(
+            [
+                'date' => $request->date,
+                'user_id' => $request->user_id
+            ],
+            [
+                'payroll_id' => $request->payroll_id,
+                'incidence' => $request->incidence,
+                // 'additionals' => ,
+            ]
+        );
+
+        $payrollUser->incidence = $request->incidence;
+        $payrollUser->save();
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
+    public function setAttendance(Request $request)
     {
-        //
-    }
+        // Busca o crea un registro en la tabla PayrollUser basado en el 'date' y el 'user_id'
+        $payrollUser = PayrollUser::firstOrCreate(
+            [
+                'date' => $request->date,
+                'user_id' => $request->user_id
+            ],
+            [
+                'check_in' => $request->check_in,
+                'check_out' => $request->check_out,
+                'checked_in_platform' => $request->checked_in_platform,
+                'payroll_id' => $request->payroll_id,
+                // 'additionals' => ,
+            ]
+        );
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(PayrollUser $payrollUser)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(PayrollUser $payrollUser)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, PayrollUser $payrollUser)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(PayrollUser $payrollUser)
-    {
-        //
+        $payrollUser->check_in = $request->check_in;
+        $payrollUser->check_out = $request->check_out;
+        $payrollUser->checked_in_platform = $request->checked_in_platform;
+        $payrollUser->incidence = null;
+        $payrollUser->save();
     }
 }

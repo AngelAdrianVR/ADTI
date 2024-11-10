@@ -7,9 +7,9 @@
                     <path stroke-linecap="round" stroke-linejoin="round"
                         d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
                 </svg>
-                <span>{{ payroll.user.name }}</span>
+                <span>{{ payrollUser.user.name }}</span>
             </p>
-            <p class="text-gray99">{{ payroll.user.org_props.department }}</p>
+            <p class="text-gray99">{{ payrollUser.user.org_props.department }}</p>
         </div>
         <div>
             <table class="w-full table-fixed">
@@ -24,23 +24,33 @@
                     </tr>
                 </thead>
                 <tbody class="text-sm">
-                    <tr v-for="(item, index) in payroll.incidences" :key="index" class="*:text-start *:py-1">
+                    <tr v-for="(item, index) in payrollUser.incidences" :key="index" class="*:text-start *:py-1">
                         <td class="pl-8">{{ formatDate(item.date) }}</td>
                         <!-- Verificar si es día de descanso o falta injustificada -->
-                        <template v-if="!item.id">
+                        <template v-if="item.incidence">
                             <td colspan="4">
                                 <p class="text-center rounded-[5px] py-2" :class="getColors(item.incidence)">
                                     {{ item.incidence }}
                                 </p>
                             </td>
                         </template>
-                        <!-- Mostrar check_in y check_out si hay incidencia -->
                         <template v-else>
-                            <td>
-                                <input type="time" v-model="item.check_in" class="input w-2/3">
+                            <td class="relative">
+                                <div v-if="item.checked_in_platform" class="!absolute -left-5 top-3">
+                                    <el-tooltip content="Home office" placement="top">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                            stroke-width="1.5" stroke="currentColor" class="size-4 text-[#F29513]">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" />
+                                        </svg>
+                                    </el-tooltip>
+                                </div>
+                                <p>{{ formatTimeTo12Hour(item.check_in) }}</p>
+                                <!-- <input type="time" v-model="item.check_in" disabled class="input w-2/3"> -->
                             </td>
                             <td>
-                                <input type="time" v-model="item.check_out" class="input w-2/3">
+                                <p>{{ formatTimeTo12Hour(item.check_out) }}</p>
+                                <!-- <input type="time" v-model="item.check_out" disabled class="input w-2/3"> -->
                             </td>
                             <td>{{ calculateTimes(item).extra }}</td>
                             <td>{{ calculateTimes(item).total }}</td>
@@ -53,31 +63,31 @@
                                 </button>
                                 <template #dropdown>
                                     <el-dropdown-menu>
-                                        <el-dropdown-item v-if="!getIncidenceByDate(day)" :command="'1-' + day">
+                                        <el-dropdown-item v-if="item.incidence" :command="'1|' + item.date">
                                             Poner asistencia
                                         </el-dropdown-item>
-                                        <el-dropdown-item :command="'2-' + day">
+                                        <el-dropdown-item :command="'2|' + item.date">
                                             Home office
                                         </el-dropdown-item>
-                                        <el-dropdown-item :command="'3-' + day">
+                                        <el-dropdown-item :command="'Descanso|' + item.date">
                                             Descanso
                                         </el-dropdown-item>
-                                        <el-dropdown-item :command="'4-' + day">
+                                        <el-dropdown-item :command="'Falta injustificada|' + item.date">
                                             Falta injustificada
                                         </el-dropdown-item>
-                                        <el-dropdown-item :command="'5-' + day">
+                                        <el-dropdown-item :command="'Falta justificada|' + item.date">
                                             Falta justificada
                                         </el-dropdown-item>
-                                        <el-dropdown-item :command="'6-' + day">
+                                        <el-dropdown-item :command="'Incapacidad|' + item.date">
                                             Incapacidad
                                         </el-dropdown-item>
-                                        <el-dropdown-item :command="'7-' + day">
+                                        <el-dropdown-item :command="'Permiso sin goce|' + item.date">
                                             Permiso sin goce
                                         </el-dropdown-item>
-                                        <el-dropdown-item :command="'8-' + day">
+                                        <el-dropdown-item :command="'Permiso con goce|' + item.date">
                                             Permiso con goce
                                         </el-dropdown-item>
-                                        <el-dropdown-item :command="'9-' + day">
+                                        <el-dropdown-item :command="'Vacaciones|' + item.date">
                                             Vacaciones
                                         </el-dropdown-item>
                                     </el-dropdown-menu>
@@ -89,23 +99,78 @@
             </table>
         </div>
     </section>
+
+    <DialogModal :show="showAttendanceModal" @close="showAttendanceModal = false" maxWidth="lg">
+        <template #title>
+            <h1 v-if="form.checked_in_platform">Poner asistencia como home office</h1>
+            <h1 v-else>Poner asistencia</h1>
+        </template>
+        <template #content>
+            <form @submit.prevent="setAttendance" class="grid grid-cols-2 gap-3">
+                <div>
+                    <InputLabel value="Entrada" />
+                    <input type="time" v-model="form.check_in" class="input">
+                </div>
+                <div>
+                    <InputLabel value="Salida" />
+                    <input type="time" v-model="form.check_out" class="input">
+                </div>
+            </form>
+        </template>
+        <template #footer>
+            <div class="flex items-center space-x-2">
+                <!-- <CancelButton @click="form.reset(); showAttendanceModal = false" :disabled="form.processing">Cancelar</CancelButton> -->
+                <PrimaryButton @click="setAttendance" :disabled="form.processing">
+                    <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
+                    Poner asistencia
+                </PrimaryButton>
+            </div>
+        </template>
+    </DialogModal>
 </template>
 
 <script>
+import DialogModal from '@/Components/DialogModal.vue';
+import InputLabel from '@/Components/InputLabel.vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import { useForm } from '@inertiajs/vue3';
 import { format, parseISO, parse, isSameDay, differenceInMinutes, add } from 'date-fns';
 import es from 'date-fns/locale/es';
 
 export default {
     data() {
-        return {
+        const form = useForm({
+            check_in: null,
+            check_out: null,
+            checked_in_platform: false,
+            user_id: this.payrollUser.user.id,
+            payroll_id: this.payroll.id,
+            date: null,
+        });
 
+        return {
+            form,
+            showAttendanceModal: false,
         }
     },
+    components: {
+        DialogModal,
+        InputLabel,
+        PrimaryButton,
+    },
     props: {
+        payrollUser: Object,
         payroll: Object,
-        dates: Array,
     },
     methods: {
+        setAttendance() {
+            this.form.post(route('payrolls.set-attendance'), {
+                onSuccess: () => {
+                    this.form.reset();
+                    this.showAttendanceModal = false;
+                }
+            })
+        },
         getColors(incidence) {
             if (['Falta injustificada', 'Falta justificada'].includes(incidence)) {
                 return 'bg-[#FDB3B3] text-[#DB0909]';
@@ -120,23 +185,27 @@ export default {
             }
         },
         getIncidenceByDate(date) {
-            return this.payroll.incidences.find(i => isSameDay(i.date, date));
-        },
-        isSameDay(date1, date2) {
-            const parsedDate1 = typeof date1 === 'string' ? parseISO(date1) : date1;
-            const parsedDate2 = typeof date2 === 'string' ? parseISO(date2) : date2;
-            return isSameDay(parsedDate1, parsedDate2);
+            return this.payrollUser.incidences.find(i => isSameDay(i.date, date));
         },
         formatDate(dateString) {
             const date = parseISO(dateString);
             return format(add(date, { hours: 6 }), 'eee, dd MMM yyyy', { locale: es });
         },
-        isWeekend(index) {
-            // Considerando que los índices 4, 5, 11 y 12 son sábados y domingos
-            return index === 4 || index === 5 || index === 11 || index === 12;
+        formatTimeTo12Hour(timeString) {
+            // Verificar si el valor es un string de tiempo (por ejemplo, '12:18:00')
+            if (typeof timeString === 'string') {
+                // Crear un objeto Date usando una fecha arbitraria y la hora
+                const timeAsDate = new Date(`1970-01-01T${timeString}`);
+
+                // Formatear a 12 horas
+                return format(timeAsDate, 'hh:mm aa');
+            }
+
+            // Si no es un string, retorna un mensaje o lanza un error
+            return '-';
         },
         calculateTimes(incidence) {
-            if (!incidence.id) return { extra: '-', total: '-' };
+            if (!incidence.id || !incidence.check_in) return { extra: '-', total: '-' };
             // Formato de entrada para los tiempos de check_in y check_out
             const timeFormat = 'HH:mm:ss';
 
@@ -165,14 +234,22 @@ export default {
             };
         },
         handleCommand(command) {
-            const commandName = command.split('-')[0];
-            const rowId = command.split('-')[1];
+            const commandName = command.split('|')[0];
+            const date = command.split('|')[1];
 
-            if (commandName === '1') {
-                this.showInactivatigModal = true;
-                this.inactivateUserId = rowId;
-            } else {
-                this.$inertia.get(route('users.' + commandName, rowId));
+            // actualizar incidencia
+            if (['Descanso', 'Falta injustificada', 'Falta justificada', 'Incapacidad', 'Permiso sin goce', 'Permiso con goce'].includes(commandName)) {
+                this.$inertia.put(route('payrolls.set-incidence'), {
+                    date: date, user_id: this.payrollUser.user.id, payroll_id: this.payroll.id, incidence: commandName
+                });
+            } else if (commandName === '1') {
+                this.showAttendanceModal = true;
+                this.form.checked_in_platform = false;
+                this.form.date = date;
+            } else if (commandName === '2') {
+                this.showAttendanceModal = true;
+                this.form.checked_in_platform = true;
+                this.form.date = date;
             }
 
         },
