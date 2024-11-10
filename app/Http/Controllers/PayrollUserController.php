@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\PayrollUser;
+use App\Models\User;
 use Illuminate\Http\Request;
 
 class PayrollUserController extends Controller
@@ -27,8 +28,18 @@ class PayrollUserController extends Controller
             ]
         );
 
-        $payrollUser->incidence = $request->incidence;
-        $payrollUser->save();
+        // descontar vacaciones en caso de ser la incidencia
+        if ($request->incidence == 'Vacaciones') {
+            $user = User::find($request->user_id);
+            $props = $user->org_props;
+            $props['vacations'] = $props['vacations'] - 1;
+        }
+
+        // Solo actualiza si el registro ya existía
+        if (!$payrollUser->wasRecentlyCreated) {
+            $payrollUser->incidence = $request->incidence;
+            $payrollUser->save();
+        }
     }
 
     public function setAttendance(Request $request)
@@ -42,16 +53,17 @@ class PayrollUserController extends Controller
             [
                 'check_in' => $request->check_in,
                 'check_out' => $request->check_out,
-                'checked_in_platform' => $request->checked_in_platform,
                 'payroll_id' => $request->payroll_id,
                 // 'additionals' => ,
             ]
         );
 
-        $payrollUser->check_in = $request->check_in;
-        $payrollUser->check_out = $request->check_out;
-        $payrollUser->checked_in_platform = $request->checked_in_platform;
-        $payrollUser->incidence = null;
-        $payrollUser->save();
+        // Solo actualiza si el registro ya existía
+        if (!$payrollUser->wasRecentlyCreated) {
+            $payrollUser->check_in = $request->check_in;
+            $payrollUser->check_out = $request->check_out;
+            $payrollUser->incidence = null;
+            $payrollUser->save();
+        }
     }
 }

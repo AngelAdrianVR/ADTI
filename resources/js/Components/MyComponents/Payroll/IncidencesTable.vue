@@ -63,11 +63,8 @@
                                 </button>
                                 <template #dropdown>
                                     <el-dropdown-menu>
-                                        <el-dropdown-item v-if="item.incidence" :command="'1|' + item.date">
-                                            Poner asistencia
-                                        </el-dropdown-item>
-                                        <el-dropdown-item :command="'2|' + item.date">
-                                            Home office
+                                        <el-dropdown-item :command="'1|' + item.date">
+                                            {{ item.incidence ? 'Agregar asistencia' : 'Editar asistencia' }}
                                         </el-dropdown-item>
                                         <el-dropdown-item :command="'Descanso|' + item.date">
                                             Descanso
@@ -102,8 +99,7 @@
 
     <DialogModal :show="showAttendanceModal" @close="showAttendanceModal = false" maxWidth="lg">
         <template #title>
-            <h1 v-if="form.checked_in_platform">Poner asistencia como home office</h1>
-            <h1 v-else>Poner asistencia</h1>
+            <h1>Asistencia de <b class="text-primary">{{ formatDate(form.date) }}</b></h1>
         </template>
         <template #content>
             <form @submit.prevent="setAttendance" class="grid grid-cols-2 gap-3">
@@ -119,17 +115,40 @@
         </template>
         <template #footer>
             <div class="flex items-center space-x-2">
-                <!-- <CancelButton @click="form.reset(); showAttendanceModal = false" :disabled="form.processing">Cancelar</CancelButton> -->
+                <CancelButton @click="showAttendanceModal = false" :disabled="form.processing">Cancelar</CancelButton>
                 <PrimaryButton @click="setAttendance" :disabled="form.processing">
                     <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
-                    Poner asistencia
+                    Guardar
                 </PrimaryButton>
             </div>
         </template>
     </DialogModal>
+
+    <ConfirmationModal :show="showVacationsConfirmation" @close="showVacationsConfirmation = false" maxWidth="lg">
+        <template #title>
+            <h1>Vacaciones para <b class="text-primary">{{ formatDate(form.date) }}</b></h1>
+        </template>
+        <template #content>
+            <p>
+                Al continuar se descontará 1 día de las vacaciones registradas en el sistema para el usuario
+                seleccionado. ¿Deseas continuar?
+            </p>
+        </template>
+        <template #footer>
+            <div class="flex items-center space-x-2">
+                <CancelButton @click="showVacationsConfirmation = false" :disabled="form.processing">Cancelar</CancelButton>
+                <PrimaryButton @click="setIncidence" :disabled="form.processing">
+                    <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
+                    Continuar
+                </PrimaryButton>
+            </div>
+        </template>
+    </ConfirmationModal>
 </template>
 
 <script>
+import CancelButton from '@/Components/MyComponents/CancelButton.vue';
+import ConfirmationModal from '@/Components/ConfirmationModal.vue';
 import DialogModal from '@/Components/DialogModal.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -142,21 +161,24 @@ export default {
         const form = useForm({
             check_in: null,
             check_out: null,
-            checked_in_platform: false,
             user_id: this.payrollUser.user.id,
             payroll_id: this.payroll.id,
             date: null,
+            incidence: null,
         });
 
         return {
             form,
             showAttendanceModal: false,
+            showVacationsConfirmation: false,
         }
     },
     components: {
         DialogModal,
+        ConfirmationModal,
         InputLabel,
         PrimaryButton,
+        CancelButton,
     },
     props: {
         payrollUser: Object,
@@ -166,8 +188,14 @@ export default {
         setAttendance() {
             this.form.post(route('payrolls.set-attendance'), {
                 onSuccess: () => {
-                    this.form.reset();
                     this.showAttendanceModal = false;
+                }
+            })
+        },
+        setIncidence() {
+            this.form.put(route('payrolls.set-incidence'), {
+                onSuccess: () => {
+                    this.showVacationsConfirmation = false;
                 }
             })
         },
@@ -186,6 +214,11 @@ export default {
         },
         getIncidenceByDate(date) {
             return this.payrollUser.incidences.find(i => isSameDay(i.date, date));
+        },
+        isSameDay(date1, date2) {
+            const parsedDate1 = typeof date1 === 'string' ? parseISO(date1) : date1;
+            const parsedDate2 = typeof date2 === 'string' ? parseISO(date2) : date2;
+            return isSameDay(parsedDate1, parsedDate2);
         },
         formatDate(dateString) {
             const date = parseISO(dateString);
@@ -236,20 +269,23 @@ export default {
         handleCommand(command) {
             const commandName = command.split('|')[0];
             const date = command.split('|')[1];
+            this.form.date = date;
 
             // actualizar incidencia
             if (['Descanso', 'Falta injustificada', 'Falta justificada', 'Incapacidad', 'Permiso sin goce', 'Permiso con goce'].includes(commandName)) {
-                this.$inertia.put(route('payrolls.set-incidence'), {
-                    date: date, user_id: this.payrollUser.user.id, payroll_id: this.payroll.id, incidence: commandName
-                });
+                this.form.incidence = commandName;
+                this.setIncidence();
+            } else if (commandName === 'Vacaciones') {
+                this.form.incidence = commandName;
+                this.showVacationsConfirmation = true;
             } else if (commandName === '1') {
+                // cargar hora de entrada y salida si las tiene
+                const register = this.payrollUser.incidences.find(i => isSameDay(i.date, date));
+                if (register) {
+                    this.form.check_in = register.check_in;
+                    this.form.check_out = register.check_out;
+                }
                 this.showAttendanceModal = true;
-                this.form.checked_in_platform = false;
-                this.form.date = date;
-            } else if (commandName === '2') {
-                this.showAttendanceModal = true;
-                this.form.checked_in_platform = true;
-                this.form.date = date;
             }
 
         },
