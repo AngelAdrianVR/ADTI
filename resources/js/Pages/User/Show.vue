@@ -68,7 +68,7 @@
                         <p>Información general</p>
                     </div>
                 </template>
-                <General :user="user" />
+                <General :user="user" :vacations="vacations" />
             </el-tab-pane>
             <el-tab-pane name="2">
                 <template #label>
@@ -122,6 +122,7 @@ export default {
     props: {
         user: Object,
         users: Array,
+        vacations: Array,
     },
     methods: {
         handleClickInTab(tab) {

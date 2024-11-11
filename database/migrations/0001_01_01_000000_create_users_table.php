@@ -32,6 +32,7 @@ return new class extends Migration
             $table->string('ssn')->nullable(); //numero de seguro social
             $table->json('org_props')->nullable();
             $table->boolean('is_active')->default(true);
+            $table->boolean('home_office')->default(false);
             $table->timestamps();
         });
 

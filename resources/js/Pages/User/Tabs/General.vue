@@ -1,6 +1,6 @@
 <template>
     <section class="lg:flex mt-4 mb-10 mx-4 text-xs lg:text-sm">
-        <div class="lg:w-1/2 lg:border-r border-grayD9 grid grid-cols-2 gap-x-3 gap-y-2 lg:pr-16">
+        <div class="lg:w-1/2 lg:border-r border-grayD9 grid grid-cols-2 gap-x-3 gap-y-2 lg:pr-16 self-start">
             <h1 class="font-bold text-gray37 col-span-full">Datos personales</h1>
             <p class="text-[#6D6E72]">Correo electrónico personal:</p>
             <p>{{ user.email }}</p>
@@ -19,8 +19,23 @@
             <p class="text-[#6D6E72]">Número de seguro social:</p>
             <p>{{ user.ssn ?? '-' }}</p>
         </div>
-        <div class="lg:w-1/2 grid grid-cols-2 gap-x-3 gap-y-2 lg:pl-16 mt-2 lg:mt-0">
+        <div class="lg:w-1/2 grid grid-cols-2 gap-x-3 gap-y-2 lg:pl-16 mt-2 lg:mt-0 self-start">
             <h1 class="font-bold text-gray37 col-span-full">Datos laborales</h1>
+            <p class="text-[#6D6E72]">Home office:</p>
+            <p>
+                <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#373737" :title="user.home_office ? '¿Desactivar home office?' : '¿Activar home office?'"
+                    @confirm="$inertia.put(route('users.toggle-home-office', user.id))">
+                    <template #reference>
+                        <button>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                stroke="currentColor" class="size-4 mr-1" :class="user.home_office ? 'text-[#F29513]' : 'text-grayCC'">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" />
+                            </svg>
+                        </button>
+                    </template>
+                </el-popconfirm>
+            </p>
             <p class="text-[#6D6E72]">Código de empleado:</p>
             <p>{{ user.code }}</p>
             <p class="text-[#6D6E72]">Estatus:</p>
@@ -73,7 +88,8 @@
                                         <button type="button" @click="updateVacations"
                                             class="flex items-center justify-center bg-primary text-white size-5 text-[10px] rounded-full"
                                             :disabled="form.processing">
-                                            <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin text-white"></i>
+                                            <i v-if="form.processing"
+                                                class="fa-sharp fa-solid fa-circle-notch fa-spin text-white"></i>
                                             <i v-else class="fa-solid fa-check"></i>
                                         </button>
                                     </el-tooltip>
@@ -86,7 +102,7 @@
                             </div>
                             <p v-else>{{ Math.floor(user.org_props.vacations) }} dias</p>
                             <h2 class="text-gray37 font-semibold">Vacaciones tomadas</h2>
-                            <el-tree :data="data" :props="defaultProps">
+                            <el-tree :data="vacations" :props="defaultProps">
                                 <template #default="{ node, data }">
                                     <div class="w-full flex items-center justify-between text-xs">
                                         <p :title="node.label">{{ node.label }}</p>
@@ -114,36 +130,6 @@ export default {
 
         return {
             form,
-            data: [
-                {
-                    label: "2023",
-                    children: [
-                        {
-                            label: "vi, 13 sep"
-                        },
-                        {
-                            label: "mi, 25 sep"
-                        },
-                        {
-                            label: "lu, 07 oct"
-                        },
-                    ]
-                },
-                {
-                    label: "2024",
-                    children: [
-                        {
-                            label: "vi, 13 sep"
-                        },
-                        {
-                            label: "mi, 25 sep"
-                        },
-                        {
-                            label: "lu, 07 oct"
-                        },
-                    ]
-                },
-            ],
             defaultProps: {
                 children: 'children',
                 label: 'label',
@@ -156,6 +142,7 @@ export default {
     },
     props: {
         user: Object,
+        vacations: Array,
     },
     methods: {
         formatDate(dateString) {

@@ -43,6 +43,7 @@ class User extends Authenticatable implements HasMedia
         'inactivate_date',
         'inactivate_reason',
         'profile_photo_path',
+        'home_office',
     ];
 
     /**
@@ -108,7 +109,7 @@ class User extends Authenticatable implements HasMedia
         } elseif (is_null($today_attendance->check_out)) {
             $next = 'Registrar salida';
         } else {
-            $next = 'Dia terminado';
+            $next = 'Día terminado';
         }
 
         return $next;
@@ -136,7 +137,7 @@ class User extends Authenticatable implements HasMedia
 
         // Calcula los días proporcionales para una semana (1/52 del total anual)
         $weeklyVacationDays = round($vacationDaysPerYear / 52, 2);
-        
+
         // Suma los días proporcionales a las vacaciones actuales
         $org_props = $this->org_props;
         $org_props['vacations'] = ($org_props['vacations'] ?? 0) + $weeklyVacationDays;
@@ -145,5 +146,30 @@ class User extends Authenticatable implements HasMedia
         $org_props['updated_date_vacations'] = now()->toDateString();
         $this->org_props = $org_props;
         $this->save();
+    }
+
+    public function setAttendance()
+    {
+        $next = '';
+        $now_time = now()->subHours(6)->isoFormat('HH:mm');
+        $today_attendance = PayrollUser::firstOrCreate(['date' => today()->toDateString(), 'user_id' => $this->id], [
+            'payroll_id' => Payroll::firstWhere('is_active', true)->id,
+            'checked_in_platform' => true,
+            'late' => 0,
+        ]);
+
+        if (is_null($today_attendance->check_in)) {
+            $today_attendance->update([
+                'check_in' => $now_time,
+            ]);
+            $next = 'Registrar salida';
+        } elseif (is_null($today_attendance->check_out)) {
+            $today_attendance->update([
+                'check_out' => $now_time,
+            ]);
+            $next = 'Día terminado';
+        }
+
+        return $next;
     }
 }

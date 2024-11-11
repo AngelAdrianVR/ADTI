@@ -78,16 +78,12 @@ export default {
             this.templateView = true;
         },
         getDaysWithIncidence(payrollUser) {
-            const incidencesToShow = [
-                'Falta injustificada',
-                'Falta justificada',
-                'Incapacidad',
-                'Permiso con goce',
-                'Permiso sin goce',
-                'Vacaciones',
+            const incidencesToNotShow = [
+                'Descanso',
+                'Sin registro aún',
             ];
 
-            return payrollUser.incidences.filter(i => i.incidence && incidencesToShow.includes(i.incidence));
+            return payrollUser.incidences.filter(i => i.incidence && !incidencesToNotShow.includes(i.incidence));
         },
         getDaysWithExtraTime(payrollUser) {
             return payrollUser.incidences.filter(i => !i.incidence && (i.extra_hours || i.extra_minutes));

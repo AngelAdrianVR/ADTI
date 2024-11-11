@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\PayrollUser;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -31,7 +32,7 @@ class UserController extends Controller
 
         return inertia('User/Edit', compact('user', 'roles', 'user_roles'));
     }
-    
+
     public function reactivation(User $user)
     {
         $roles = Role::all();
@@ -94,7 +95,24 @@ class UserController extends Controller
         $users = User::get(['id', 'name']);
         $user->load(['media']);
 
-        return inertia('User/Show', compact('user', 'users'));
+        // Obtener vacaciones y agruparlas por año
+        $vacations = PayrollUser::where(['user_id' => $user->id, 'incidence' => 'Vacaciones'])
+            ->get()
+            ->groupBy(function ($vacation) {
+                return $vacation->date->format('Y'); // Agrupar por año
+            })
+            ->map(function ($vacations, $year) {
+                return [
+                    'label' => $year,
+                    'children' => $vacations->map(function ($vacation) {
+                        return [
+                            'label' => $vacation->date->isoFormat('dd, DD MMM')
+                        ];
+                    })->values()->all()
+                ];
+            })->values()->all();
+
+        return inertia('User/Show', compact('user', 'users', 'vacations'));
     }
 
     public function update(Request $request, User $user)
@@ -210,6 +228,11 @@ class UserController extends Controller
     {
         $user->update(['password' => bcrypt('123456')]);
     }
+    
+    public function toggleHomeOffice(User $user)
+    {
+        $user->update(['home_office' => !$user->home_office]);
+    }
 
     public function massiveDelete(Request $request)
     {
@@ -264,5 +287,20 @@ class UserController extends Controller
         $media->name = $request->media_name;
         $media->file_name = $request->media_name . ".$media->extension";
         $media->save();
+    }
+
+    public function getNextAttendance()
+    {
+        $next = auth()->user()->getNextAttendance();
+
+        return response()->json(compact('next'));
+    }
+
+    public function setAttendance()
+    {
+        $user = auth()->user();
+        $next = $user->setAttendance();
+
+        return response()->json(compact('next'));
     }
 }

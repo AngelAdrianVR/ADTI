@@ -62,16 +62,16 @@ class Payroll extends Model
             $holiday = Holiday::where('is_active', 1)
                 ->where(function ($query) use ($current_date) {
                     $query->where(function ($query) use ($current_date) {
-                        // Para días festivos fijos (no personalizados)
+                        // Días festivos fijos (no personalizados)
                         $query->where('is_custom_date', 0)
                             ->whereMonth('date', $current_date->month)
                             ->whereDay('date', $current_date->day);
                     })->orWhere(function ($query) use ($current_date) {
-                        // Para días festivos personalizados
+                        // Días festivos personalizados
                         $query->where('is_custom_date', 1)
-                            ->where('ordinal', $this->getOrdinalInMonth($current_date))
-                            ->where('week_day', $current_date->dayOfWeek)
-                            ->where('month', $current_date->month);
+                            ->where('ordinal', $this->getOrdinalTextInSpanish($current_date))
+                            ->where('week_day', $this->getWeekdayInSpanish($current_date))
+                            ->where('month', $this->getMonthInSpanish($current_date));
                     });
                 })->first();
 
@@ -88,7 +88,7 @@ class Payroll extends Model
 
                 if ($holiday && !$is_day_off) {
                     // Día festivo
-                    $payroll_user->incidence = $holiday->name;
+                    $payroll_user->incidence = "Día festivo ($holiday->name)";
                 } else {
                     // Verificar si la fecha ya pasó o si es futura
                     if ($current_date->lessThan(Carbon::parse($user->org_props['entry_date'])) || $current_date->greaterThan(now())) {
@@ -105,10 +105,51 @@ class Payroll extends Model
     }
 
     /**
-     * Obtener el ordinal (primero, segundo, etc.) del día en el mes.
+     * Obtener el ordinal (Primero, Segundo, etc.) en español del día en el mes.
      */
-    private function getOrdinalInMonth($date)
+    private function getOrdinalTextInSpanish($date)
     {
-        return (int) ceil($date->day / 7);
+        $ordinals = ['Primero', 'Segundo', 'Tercero', 'Cuarto', 'Quinto'];
+        $index = (int) ceil($date->day / 7) - 1;
+        return $ordinals[$index] ?? null;
+    }
+
+    /**
+     * Obtener el nombre del día de la semana en español.
+     */
+    private function getWeekdayInSpanish($date)
+    {
+        $weekDays = [
+            0 => 'Domingo',
+            1 => 'Lunes',
+            2 => 'Martes',
+            3 => 'Miércoles',
+            4 => 'Jueves',
+            5 => 'Viernes',
+            6 => 'Sábado'
+        ];
+        return $weekDays[$date->dayOfWeek] ?? null;
+    }
+
+    /**
+     * Obtener el nombre del mes en español.
+     */
+    private function getMonthInSpanish($date)
+    {
+        $months = [
+            1 => 'Enero',
+            2 => 'Febrero',
+            3 => 'Marzo',
+            4 => 'Abril',
+            5 => 'Mayo',
+            6 => 'Junio',
+            7 => 'Julio',
+            8 => 'Agosto',
+            9 => 'Septiembre',
+            10 => 'Octubre',
+            11 => 'Noviembre',
+            12 => 'Diciembre'
+        ];
+        return $months[$date->month] ?? null;
     }
 }
