@@ -152,5 +152,6 @@ return [
         'week_day' => 'día de la semana',
         'day' => 'día',
         'month' => 'mes',
+        'comments' => 'comentarios',
     ],
 ];

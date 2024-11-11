@@ -5,6 +5,7 @@ use App\Http\Controllers\FeatureController;
 use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\KioskController;
 use App\Http\Controllers\MeasureUnitController;
+use App\Http\Controllers\PayrollCommentController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PayrollUserController;
 use App\Http\Controllers\ProductController;
@@ -135,13 +136,18 @@ Route::resource('measure_units', MeasureUnitController::class)->middleware('auth
 //payrolls routes--------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------
 Route::resource('payrolls', PayrollController::class)->middleware('auth');
-Route::get('pre-payroll', [PayrollController::class, 'prePayrollTemplate'])->name('payrolls.pre-payroll')->middleware('auth');
+Route::get('payrolls/{payroll}/pre-payroll', [PayrollController::class, 'prePayrollTemplate'])->name('payrolls.pre-payroll')->middleware('auth');
 
 
 //payroll user routes--------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------
 Route::put('payroll-user/set-incidence', [PayrollUserController::class, 'setIncidence'])->name('payrolls.set-incidence')->middleware('auth');
 Route::post('payroll-user/set-attendance', [PayrollUserController::class, 'setAttendance'])->name('payrolls.set-attendance')->middleware('auth');
+
+
+//comentarios de nomina routes--------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::resource('payroll-comments', PayrollCommentController::class)->middleware('auth');
 
 
 //Holiday routes---------------------------------------------------------------------------------------

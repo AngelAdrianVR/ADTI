@@ -33,6 +33,8 @@ class PayrollUserController extends Controller
             $user = User::find($request->user_id);
             $props = $user->org_props;
             $props['vacations'] = $props['vacations'] - 1;
+            $user->org_props = $props;
+            $user->save();
         }
 
         // Solo actualiza si el registro ya existía

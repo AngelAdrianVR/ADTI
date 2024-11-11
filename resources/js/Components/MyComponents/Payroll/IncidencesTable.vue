@@ -11,7 +11,7 @@
             </p>
             <p class="text-gray99">{{ payrollUser.user.org_props.department }}</p>
         </div>
-        <div>
+        <div class="border-b">
             <table class="w-full table-fixed">
                 <thead class="border-b">
                     <tr class="*:text-start *:py-3">
@@ -95,7 +95,67 @@
                 </tbody>
             </table>
         </div>
+        <div class="px-8 py-2">
+            <section v-if="payrollUser.comments">
+                <div class="flex items-center justify-between">
+                    <h1 class="font-bold">Comentarios</h1>
+                    <div class="flex items-center space-x-1">
+                        <button type="button" @click="editComments"
+                            class="size-6 rounded-full bg-grayED flex items-center justify-center text-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                stroke="currentColor" class="size-4">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
+                            </svg>
+                        </button>
+                        <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
+                            title="Se borrará el comentario. ¿Continuar?"
+                            @confirm="deleteComments">
+                            <template #reference>
+                                <button type="button"
+                                    class="size-6 rounded-full bg-grayED flex items-center justify-center text-primary">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke-width="1.5" stroke="currentColor" class="size-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                                    </svg>
+                                </button>
+                            </template>
+                        </el-popconfirm>
+                    </div>
+                </div>
+                <p style="white-space: pre-line">{{ payrollUser.comments.comments }}</p>
+            </section>
+            <ThirthButton v-else @click="createComments" class="!py-1">Agregar comentarios</ThirthButton>
+        </div>
     </section>
+
+    <DialogModal :show="showCommentsModal" @close="showCommentsModal = false" maxWidth="lg">
+        <template #title>
+            <h1>Agregar comentarios para <b class="text-primary">{{ payrollUser.user.name }}</b></h1>
+        </template>
+        <template #content>
+            <div>
+                <InputLabel value="Comentarios" />
+                <el-input v-model="form.comments" :autosize="{ minRows: 3, maxRows: 6 }" type="textarea"
+                    placeholder="Escribe cualquier comentario" :maxlength="1200" show-word-limit clearable />
+                <InputError :message="form.errors.comments" />
+            </div>
+        </template>
+        <template #footer>
+            <div class="flex items-center space-x-2">
+                <CancelButton @click="showCommentsModal = false" :disabled="form.processing">Cancelar</CancelButton>
+                <PrimaryButton v-if="payrollUser.comments" @click="updateComments" :disabled="form.processing">
+                    <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
+                    Guardar cambios
+                </PrimaryButton>
+                <PrimaryButton v-else @click="storeComments" :disabled="form.processing">
+                    <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
+                    Guardar
+                </PrimaryButton>
+            </div>
+        </template>
+    </DialogModal>
 
     <DialogModal :show="showAttendanceModal" @close="showAttendanceModal = false" maxWidth="lg">
         <template #title>
@@ -136,7 +196,8 @@
         </template>
         <template #footer>
             <div class="flex items-center space-x-2">
-                <CancelButton @click="showVacationsConfirmation = false" :disabled="form.processing">Cancelar</CancelButton>
+                <CancelButton @click="showVacationsConfirmation = false" :disabled="form.processing">Cancelar
+                </CancelButton>
                 <PrimaryButton @click="setIncidence" :disabled="form.processing">
                     <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
                     Continuar
@@ -148,6 +209,7 @@
 
 <script>
 import CancelButton from '@/Components/MyComponents/CancelButton.vue';
+import ThirthButton from '@/Components/MyComponents/ThirthButton.vue';
 import ConfirmationModal from '@/Components/ConfirmationModal.vue';
 import DialogModal from '@/Components/DialogModal.vue';
 import InputLabel from '@/Components/InputLabel.vue';
@@ -155,6 +217,7 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import { useForm } from '@inertiajs/vue3';
 import { format, parseISO, parse, isSameDay, differenceInMinutes, add } from 'date-fns';
 import es from 'date-fns/locale/es';
+import InputError from '@/Components/InputError.vue';
 
 export default {
     data() {
@@ -165,20 +228,24 @@ export default {
             payroll_id: this.payroll.id,
             date: null,
             incidence: null,
+            comments: null,
         });
 
         return {
             form,
             showAttendanceModal: false,
             showVacationsConfirmation: false,
+            showCommentsModal: false,
         }
     },
     components: {
         DialogModal,
         ConfirmationModal,
         InputLabel,
+        InputError,
         PrimaryButton,
         CancelButton,
+        ThirthButton,
     },
     props: {
         payrollUser: Object,
@@ -191,6 +258,34 @@ export default {
                     this.showAttendanceModal = false;
                 }
             })
+        },
+        storeComments() {
+            this.form.post(route('payroll-comments.store'), {
+                onSuccess: () => {
+                    this.showCommentsModal = false;
+                }
+            })
+        },
+        createComments() {
+            this.form.comments = null;
+            this.showCommentsModal = true;
+        },
+        editComments() {
+            this.form.comments = this.payrollUser.comments.comments;
+            this.showCommentsModal = true;
+        },
+        updateComments() {
+            this.form.put(route('payroll-comments.update', this.payrollUser.comments.id), {
+                onSuccess: () => {
+                    this.showCommentsModal = false;
+                },
+                onError: (error) => {
+                    console.log(error);
+                }
+            });
+        },
+        deleteComments() {
+            this.form.delete(route('payroll-comments.destroy', this.payrollUser.comments.id));
         },
         setIncidence() {
             this.form.put(route('payrolls.set-incidence'), {
