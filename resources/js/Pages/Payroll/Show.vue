@@ -8,7 +8,7 @@
             </section>
         </header>
         <main class="mx-2 lg:mx-20 my-6 space-y-3">
-            <IncidencesTable v-for="(item, index) in users" :key="index" :payrollUser="item" :payroll="payroll" />
+            <IncidencesTable v-for="(item, index) in payrollUsers" :key="index" :payrollUser="item" :payroll="payroll" />
         </main>
     </AppLayout>
 </template>
@@ -34,7 +34,7 @@ export default {
     },
     props: {
         payroll: Object,
-        users: Array,
+        payrollUsers: Array,
     },
     methods: {
         openTemplate() {

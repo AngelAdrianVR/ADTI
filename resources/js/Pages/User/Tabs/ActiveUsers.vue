@@ -19,7 +19,7 @@
         <el-table :data="users" @row-click="handleRowClick" max-height="670" style="width: 90%" class="mx-auto"
             @selection-change="handleSelectionChange" ref="multipleTableRef" :row-class-name="tableRowClassName">
             <el-table-column type="selection" width="30" />
-            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="code" label="ID" width="90" />
             <el-table-column prop="name" label="Nombre" />
             <el-table-column prop="org_props.position" label="Puesto" />
             <el-table-column prop="email" label="Correo electrónico" />

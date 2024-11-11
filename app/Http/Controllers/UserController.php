@@ -43,6 +43,7 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'code' => 'nullable|string|max:10',
             'name' => 'required|string|max:255|unique:users,name',
             'email' => 'nullable|email|unique:users,email',
             'phone' => 'nullable|string|max:15',
@@ -99,6 +100,7 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         $validated = $request->validate([
+            'code' => 'nullable|string|max:10',
             'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
             'email' => 'nullable|email|unique:users,email,' . $user->id,
             'phone' => 'nullable|string|max:15',
@@ -137,6 +139,7 @@ class UserController extends Controller
     public function updateWithMedia(Request $request, User $user)
     {
         $validated = $request->validate([
+            'code' => 'nullable|string|max:10',
             'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
             'email' => 'nullable|email|unique:users,email,' . $user->id,
             'phone' => 'nullable|string|max:15',

@@ -21,8 +21,8 @@
         </div>
         <div class="lg:w-1/2 grid grid-cols-2 gap-x-3 gap-y-2 lg:pl-16 mt-2 lg:mt-0">
             <h1 class="font-bold text-gray37 col-span-full">Datos laborales</h1>
-            <p class="text-[#6D6E72]">ID:</p>
-            <p>{{ user.id }}</p>
+            <p class="text-[#6D6E72]">Código de empleado:</p>
+            <p>{{ user.code }}</p>
             <p class="text-[#6D6E72]">Estatus:</p>
             <p v-if="user.is_active" class="text-[#35AC11]">Activo</p>
             <p v-else class="text-[#cf3939]">Inactivo</p>

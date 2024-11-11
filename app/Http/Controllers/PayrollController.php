@@ -27,37 +27,9 @@ class PayrollController extends Controller
 
     public function show(Payroll $payroll)
     {
-        // Carga los usuarios junto con su información en el pivote
-        $payroll->load('users');
+        $processedData = $this->getUserProcessedInfo($payroll);
 
-        // Formatea los datos de los usuarios y sus incidencias
-        $formattedUsers = $payroll->users->groupBy('id')->map(function ($userGroup) use ($payroll) {
-            $user = $userGroup->first();
-
-            return [
-                'user' => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'org_props' => $user->org_props,
-                    // Otros datos relevantes del usuario
-                ],
-                'incidences' => $payroll->getProcessedAttendances($user->id),
-                'comments' => PayrollComment::firstWhere(['user_id' => $user->id, 'payroll_id' => $payroll->id]),
-            ];
-        })->values()->all(); // Reinicia índices principales
-
-        // Selecciona solo las propiedades específicas del objeto payroll
-        $payrollData = [
-            'id' => $payroll->id,
-            'start_date' => $payroll->start_date,
-            'biweekly' => $payroll->biweekly,
-            'is_active' => $payroll->is_active,
-        ];
-
-        return inertia('Payroll/Show', [
-            'payroll' => $payrollData,
-            'users' => $formattedUsers,
-        ]);
+        return inertia('Payroll/Show', $processedData);
     }
 
     public function edit(Payroll $payroll)
@@ -77,6 +49,13 @@ class PayrollController extends Controller
 
     public function prePayrollTemplate(Payroll $payroll)
     {
+        $processedData = $this->getUserProcessedInfo($payroll);
+
+        return inertia('Payroll/PrePayrollTemplate',  $processedData);
+    }
+
+    private function getUserProcessedInfo(Payroll $payroll)
+    {
         // Carga los usuarios junto con su información en el pivote
         $payroll->load('users');
 
@@ -87,6 +66,7 @@ class PayrollController extends Controller
             return [
                 'user' => [
                     'id' => $user->id,
+                    'code' => $user->code,
                     'name' => $user->name,
                     'org_props' => $user->org_props,
                     // Otros datos relevantes del usuario
@@ -104,9 +84,9 @@ class PayrollController extends Controller
             'is_active' => $payroll->is_active,
         ];
 
-        return inertia('Payroll/PrePayrollTemplate', [
+        return [
             'payroll' => $payrollData,
             'payrollUsers' => $formattedUsers,
-        ]);
+        ];
     }
 }

@@ -28,8 +28,6 @@ class PayrollUser extends Pivot
 
     protected $casts = [
         'date' => 'date',
-        // 'check_in' => 'string',
-        // 'check_out' => 'string',
         'additionals' => 'array',
     ];
 

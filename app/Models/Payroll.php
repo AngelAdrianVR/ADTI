@@ -56,35 +56,59 @@ class Payroll extends Model
 
         $processed = [];
         for ($i = 0; $i < 14; $i++) {
-            $current_date = $this->start_date->addDays($i);
-            $holiday = Holiday::whereMonth('date', $current_date->month)
-                ->whereDay('date', $current_date->day)
-                ->where('is_active', 1)->first();
+            $current_date = $this->start_date->copy()->addDays($i);
+
+            // Verificar festivo fijo
+            $holiday = Holiday::where('is_active', 1)
+                ->where(function ($query) use ($current_date) {
+                    $query->where(function ($query) use ($current_date) {
+                        // Para días festivos fijos (no personalizados)
+                        $query->where('is_custom_date', 0)
+                            ->whereMonth('date', $current_date->month)
+                            ->whereDay('date', $current_date->day);
+                    })->orWhere(function ($query) use ($current_date) {
+                        // Para días festivos personalizados
+                        $query->where('is_custom_date', 1)
+                            ->where('ordinal', $this->getOrdinalInMonth($current_date))
+                            ->where('week_day', $current_date->dayOfWeek)
+                            ->where('month', $current_date->month);
+                    });
+                })->first();
+
+            // Días de descanso (sábados y domingos)
+            $is_day_off = in_array($i, [4, 5, 11, 12]);
+
+            // Verificar si ya existe un registro de asistencia para este día
             $current = $attendances->firstWhere('date', $current_date);
-            // dias de descanso siempre son los sabados y domingos
-            $is_day_off = $i === 4 || $i === 5 || $i === 11 || $i === 12;
-            if ($current) { //existe un registro de asistencia este dia
+            if ($current) {
                 $processed[] = $current;
-            } else { // no hay registro, se crea uno procesado
+            } else {
+                // Crear un nuevo registro procesado
                 $payroll_user = new PayrollUser(['date' => $current_date->toDateString()]);
-                // dia festivo
+
                 if ($holiday && !$is_day_off) {
+                    // Día festivo
                     $payroll_user->incidence = $holiday->name;
                 } else {
-                    // dia todavia no pasa
+                    // Verificar si la fecha ya pasó o si es futura
                     if ($current_date->lessThan(Carbon::parse($user->org_props['entry_date'])) || $current_date->greaterThan(now())) {
                         $payroll_user->incidence = 'Sin registro aún';
-                    } else { //dias que ya pasaron
-                        if ($is_day_off) { //dia de escanso
-                            $payroll_user->incidence = 'Descanso';
-                        } else { //falta injustificada
-                            $payroll_user->incidence = 'Falta injustificada';
-                        }
+                    } else {
+                        // Días ya pasados
+                        $payroll_user->incidence = $is_day_off ? 'Descanso' : 'Falta injustificada';
                     }
                 }
                 $processed[] = $payroll_user;
             }
         }
         return $processed;
+    }
+
+    /**
+     * Obtener el ordinal (primero, segundo, etc.) del día en el mes.
+     */
+    private function getOrdinalInMonth($date)
+    {
+        return (int) ceil($date->day / 7);
     }
 }

@@ -76,6 +76,11 @@
 
                 <!-- Datos laborales -->
                 <h2 class="font-bold mt-3 col-span-full text-gray37">Datos laborales</h2>
+                <div>
+                    <InputLabel value="Código de empleado*" />
+                    <el-input v-model="form.code" placeholder="Ej. 305" :maxlength="10" clearable />
+                    <InputError :message="form.errors.code" />
+                </div>
                 <div class="w-full">
                     <InputLabel value="Fecha de ingreso*" />
                     <el-date-picker v-model="form.org_props.entry_date" class="!w-full" type="date"
@@ -188,8 +193,8 @@ export default {
             rfc: null,
             curp: null,
             ssn: null,
-
             //datos laborales
+            code: null,
             org_props: {
                 entry_date: null,
                 position: null,
