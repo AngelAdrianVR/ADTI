@@ -151,7 +151,7 @@ class User extends Authenticatable implements HasMedia
     public function setAttendance()
     {
         $next = '';
-        $now_time = now()->subHours(6)->isoFormat('HH:mm');
+        $now_time = now()->isoFormat('HH:mm');
         $today_attendance = PayrollUser::firstOrCreate(['date' => today()->toDateString(), 'user_id' => $this->id], [
             'payroll_id' => Payroll::firstWhere('is_active', true)->id,
             'checked_in_platform' => true,
@@ -162,11 +162,13 @@ class User extends Authenticatable implements HasMedia
             $today_attendance->update([
                 'check_in' => $now_time,
             ]);
+            $today_attendance->calculateLate();
             $next = 'Registrar salida';
         } elseif (is_null($today_attendance->check_out)) {
             $today_attendance->update([
                 'check_out' => $now_time,
             ]);
+            $today_attendance->calculateExtraTime();
             $next = 'Día terminado';
         }
 

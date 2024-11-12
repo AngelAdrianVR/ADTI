@@ -45,12 +45,13 @@
                                         </svg>
                                     </el-tooltip>
                                 </div>
-                                <p>{{ formatTimeTo12Hour(item.check_in) }}</p>
-                                <!-- <input type="time" v-model="item.check_in" disabled class="input w-2/3"> -->
+                                <el-tooltip v-if="item.late" :content="`${item.late} minutos tarde`" placement="top">
+                                    <span class="text-[#E95C10]">{{ formatTimeTo12Hour(item.check_in) }}</span>
+                                </el-tooltip>
+                                <p v-else>{{ formatTimeTo12Hour(item.check_in) }}</p>
                             </td>
                             <td>
                                 <p>{{ formatTimeTo12Hour(item.check_out) }}</p>
-                                <!-- <input type="time" v-model="item.check_out" disabled class="input w-2/3"> -->
                             </td>
                             <td>{{ calculateTimes(item).extra }}</td>
                             <td>{{ calculateTimes(item).total }}</td>
@@ -364,7 +365,7 @@ export default {
         handleCommand(command) {
             const commandName = command.split('|')[0];
             const date = command.split('|')[1];
-            this.form.date = date;
+            this.form.date = date.split('T')[0];
 
             // actualizar incidencia
             if (['Descanso', 'Falta injustificada', 'Falta justificada', 'Incapacidad', 'Permiso sin goce', 'Permiso con goce'].includes(commandName)) {

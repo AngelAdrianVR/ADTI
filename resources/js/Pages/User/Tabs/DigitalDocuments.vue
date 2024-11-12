@@ -22,7 +22,7 @@
             :default-sort="{ prop: 'file_name', order: 'descending' }" @selection-change="handleSelectionChange"
             ref="multipleTableRef" :row-class-name="tableRowClassName">
             <el-table-column type="selection" width="30" />
-            <el-table-column prop="file_name" label="Nombre del documento" sortable>
+            <el-table-column prop="file_name" label="Nombre del documento" width="210" sortable>
                 <template #default="scope">
                     <div v-if="editIndex == scope.row.id" class="flex items-center space-x-2">
                         <el-input v-model="form.media_name" placeholder="Llenar campo*" size="small" :maxlength="255"

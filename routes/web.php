@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\FeatureController;
 use App\Http\Controllers\HolidayController;
+use App\Http\Controllers\JobPositionController;
 use App\Http\Controllers\KioskController;
 use App\Http\Controllers\MeasureUnitController;
 use App\Http\Controllers\PayrollCommentController;
@@ -162,6 +164,16 @@ Route::post('holidays/massive-delete', [HolidayController::class, 'massiveDelete
 //features routes--------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------
 Route::resource('features', FeatureController::class)->middleware('auth');
+
+
+//departaments routes--------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::resource('departments', DepartmentController::class)->middleware('auth');
+
+
+//job posotions routes--------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::resource('job-positions', JobPositionController::class)->middleware('auth');
 
 
 //settings routes--------------------------------------------------------------------------------------

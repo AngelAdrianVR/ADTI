@@ -44,7 +44,7 @@
                 </div>
                 <div>
                     <InputLabel value="Estado civil" />
-                    <el-select class="w-1/2" filterable v-model="form.civil_state" placeholder="Seleccione"
+                    <el-select filterable v-model="form.civil_state" placeholder="Seleccione"
                         no-data-text="No hay opciones registradas" no-match-text="No se encontraron coincidencias">
                         <el-option v-for="item in civilStates" :key="item" :label="item" :value="item" />
                     </el-select>
@@ -69,8 +69,8 @@
                 <div>
                     <InputLabel value="Número de seguro social" />
                     <el-input v-model="form.ssn" placeholder="Ingresar el nss del usuario" :maxlength="100" clearable
-                    :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, '')"
-                    :parser="(value) => value.replace(/[^\d.]/g, '')" />
+                        :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, '')"
+                        :parser="(value) => value.replace(/[^\d.]/g, '')" />
                     <InputError :message="form.errors.ssn" />
                 </div>
 
@@ -89,14 +89,20 @@
                 </div>
                 <div>
                     <InputLabel value="Puesto*" />
-                    <el-input v-model="form.org_props.position" placeholder="Ej. Administración" :maxlength="100"
-                        clearable />
+                    <el-select filterable v-model="form.org_props.position" placeholder="Seleccione"
+                        no-data-text="No hay puestos registrados. Dirigete a configuraciones para agregar"
+                        no-match-text="No se encontraron coincidencias">
+                        <el-option v-for="item in job_positions" :key="item.id" :label="item.name" :value="item.name" />
+                    </el-select>
                     <InputError :message="form.errors['org_props.position']" />
                 </div>
                 <div>
                     <InputLabel value="Departamento" />
-                    <el-input v-model="form.org_props.department" placeholder="Ej. Producción" :maxlength="100"
-                        clearable />
+                    <el-select filterable v-model="form.org_props.department" placeholder="Seleccione"
+                        no-data-text="No hay departamentos registrados. Dirigete a configuraciones para agregar"
+                        no-match-text="No se encontraron coincidencias">
+                        <el-option v-for="item in departments" :key="item.id" :label="item.name" :value="item.name" />
+                    </el-select>
                     <InputError :message="form.errors['org_props.department']" />
                 </div>
                 <div>
@@ -228,6 +234,8 @@ export default {
     },
     props: {
         roles: Array,
+        departments: Array,
+        job_positions: Array,
     },
     methods: {
         store() {

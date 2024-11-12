@@ -67,5 +67,9 @@ class PayrollUserController extends Controller
             $payrollUser->incidence = null;
             $payrollUser->save();
         }
+
+        // calcular y actualizar retardo y horas extras
+        $payrollUser->calculateLate();
+        $payrollUser->calculateExtraTime();
     }
 }

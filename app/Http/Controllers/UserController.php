@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Department;
+use App\Models\JobPosition;
 use App\Models\PayrollUser;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -21,16 +23,20 @@ class UserController extends Controller
     public function create()
     {
         $roles = Role::all();
+        $departments = Department::latest()->get();
+        $job_positions = JobPosition::latest()->get();
 
-        return inertia('User/Create', compact('roles'));
+        return inertia('User/Create', compact('roles' ,'departments', 'job_positions'));
     }
 
     public function edit(User $user)
     {
         $roles = Role::all();
         $user_roles = $user->roles->pluck('id');
+        $departments = Department::latest()->get();
+        $job_positions = JobPosition::latest()->get();
 
-        return inertia('User/Edit', compact('user', 'roles', 'user_roles'));
+        return inertia('User/Edit', compact('user', 'roles', 'user_roles','departments', 'job_positions'));
     }
 
     public function reactivation(User $user)
@@ -228,7 +234,7 @@ class UserController extends Controller
     {
         $user->update(['password' => bcrypt('123456')]);
     }
-    
+
     public function toggleHomeOffice(User $user)
     {
         $user->update(['home_office' => !$user->home_office]);

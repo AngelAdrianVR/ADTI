@@ -20,11 +20,11 @@
             @selection-change="handleSelectionChange" ref="multipleTableRef" :row-class-name="tableRowClassName">
             <el-table-column type="selection" width="30" />
             <el-table-column prop="code" label="ID" width="90" />
-            <el-table-column prop="name" label="Nombre" />
-            <el-table-column prop="org_props.position" label="Puesto" />
-            <el-table-column prop="email" label="Correo electrónico" />
-            <el-table-column prop="phone" label="Teléfono" />
-            <el-table-column label="Home office">
+            <el-table-column prop="name" label="Nombre" width="110" />
+            <el-table-column prop="org_props.position" label="Puesto" width="110" />
+            <el-table-column prop="email" label="Correo electrónico" width="160" />
+            <el-table-column prop="phone" label="Teléfono" width="110" />
+            <el-table-column label="Home office" width="110">
                 <template #default="scope">
                     <span v-if="scope.row.home_office">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
