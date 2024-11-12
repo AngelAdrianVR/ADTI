@@ -2,12 +2,11 @@
     <PublicLayout :title="subcategory.name">
         <main class="px-2 lg:p-8 xl:px-48 py-7">
             <!-- Decorations  -->
-            <figure class="*:z-0">
+            <!-- <figure class="-z-20">
                 <img class="hidden lg:block absolute top-40 left-0" src="@/../../public/images/home_decoration1.png" alt="">
-                <!-- <img class="hidden lg:block absolute top-20 left-0" src="@/../../public/images/home_decoration2.png" alt=""> -->
+                <img class="hidden lg:block absolute top-20 left-0" src="@/../../public/images/home_decoration2.png" alt="">
                 <img class="hidden lg:block absolute top-20 right-0" src="@/../../public/images/home_decoration3.png" alt="">
-            </figure>
-            <!-- ------------ -->
+            </figure> -->
 
             <!-- bread crumbles -->
             <div class="flex items-center space-x-3 text-sm text-gray99 mb-5 mx-2 md:mx-6">

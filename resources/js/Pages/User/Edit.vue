@@ -27,7 +27,7 @@
                 <div class="w-full">
                     <InputLabel value="Fecha de nacimiento" />
                     <el-date-picker v-model="form.birthdate" class="!w-full" type="date"
-                        placeholder="Selecciona la fecha de nacimiento" :size="size" />
+                        placeholder="Selecciona la fecha de nacimiento" />
                     <InputError :message="form.errors.birthdate" />
                 </div>
                 <div>
@@ -72,7 +72,7 @@
                 <div class="w-full">
                     <InputLabel value="Fecha de ingreso*" />
                     <el-date-picker v-model="form.org_props.entry_date" class="!w-full" type="date"
-                        placeholder="Selecciona la fecha de ingreso" :size="size" />
+                        placeholder="Selecciona la fecha de ingreso" />
                     <InputError :message="form.errors['org_props.entry_date']" />
                 </div>
                 <div>
@@ -209,6 +209,8 @@ export default {
         return {
             //formularios
             form,
+            //generales
+            civilStates: ['Solter@', 'Casad@']
         }
     },
     components: {

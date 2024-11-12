@@ -239,6 +239,16 @@ onMounted(() => {
                     <div :class="{ 'block': showingNavigationDropdown, 'hidden': !showingNavigationDropdown }"
                         class="sm:hidden bg-gradient-to-r from-gray-600 to-secondary">
                         <div class="pt-2 pb-3 space-y-px">
+                            <ResponsiveNavLink :href="route('welcome')" :active="route().current('welcome')">
+                                <div class="flex items-center space-x-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke-width="1.5" stroke="currentColor" class="size-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" />
+                                    </svg>
+                                    <span class="text-xs">Página principal</span>
+                                </div>
+                            </ResponsiveNavLink>
                             <ResponsiveNavLink :href="route('dashboard')" :active="route().current('dashboard')">
                                 <div class="flex items-center space-x-2">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
