@@ -20,7 +20,7 @@
             @selection-change="handleSelectionChange" ref="multipleTableRef" :row-class-name="tableRowClassName">
             <el-table-column type="selection" width="30" />
             <el-table-column prop="code" label="ID" width="90" />
-            <el-table-column prop="name" label="Nombre" width="100" />
+            <el-table-column prop="name" label="Nombre" width="200" />
             <el-table-column prop="org_props.position" label="Puesto" width="100" />
             <el-table-column prop="phone" label="Teléfono" width="100" />
             <el-table-column prop="inactivate_date" label="Fecha de baja" width="130">
