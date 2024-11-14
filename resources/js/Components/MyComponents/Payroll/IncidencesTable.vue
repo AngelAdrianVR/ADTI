@@ -185,7 +185,7 @@
         </template>
     </DialogModal>
 
-    <ConfirmationModal :show="showVacationsConfirmation" @close="showVacationsConfirmation = false" maxWidth="lg">
+    <!-- <ConfirmationModal :show="showVacationsConfirmation" @close="showVacationsConfirmation = false" maxWidth="lg">
         <template #title>
             <h1>Vacaciones para <b class="text-primary">{{ formatDate(form.date) }}</b></h1>
         </template>
@@ -205,7 +205,7 @@
                 </PrimaryButton>
             </div>
         </template>
-    </ConfirmationModal>
+    </ConfirmationModal> -->
 </template>
 
 <script>
@@ -235,7 +235,7 @@ export default {
         return {
             form,
             showAttendanceModal: false,
-            showVacationsConfirmation: false,
+            // showVacationsConfirmation: false,
             showCommentsModal: false,
         }
     },
@@ -368,13 +368,15 @@ export default {
             this.form.date = date.split('T')[0];
 
             // actualizar incidencia
-            if (['Descanso', 'Falta injustificada', 'Falta justificada', 'Incapacidad', 'Permiso sin goce', 'Permiso con goce'].includes(commandName)) {
+            if (['Descanso', 'Falta injustificada', 'Falta justificada', 'Incapacidad', 'Permiso sin goce', 'Permiso con goce', 'Vacaciones'].includes(commandName)) {
                 this.form.incidence = commandName;
                 this.setIncidence();
-            } else if (commandName === 'Vacaciones') {
-                this.form.incidence = commandName;
-                this.showVacationsConfirmation = true;
-            } else if (commandName === '1') {
+             }
+            // else if (commandName === 'Vacaciones') {
+            //     this.form.incidence = commandName;
+            //     this.showVacationsConfirmation = true;
+            // } 
+            else if (commandName === '1') {
                 // cargar hora de entrada y salida si las tiene
                 const register = this.payrollUser.incidences.find(i => isSameDay(i.date, date));
                 if (register) {

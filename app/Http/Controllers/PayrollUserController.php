@@ -39,6 +39,14 @@ class PayrollUserController extends Controller
 
         // Solo actualiza si el registro ya existía
         if (!$payrollUser->wasRecentlyCreated) {
+            if ($payrollUser->incidence == 'Vacaciones') { //si originalmente eran vacaciones
+                $user = User::find($request->user_id);
+                $props = $user->org_props;
+                // volver a sumar el dia
+                $props['vacations'] = $props['vacations'] + 1;
+                $user->org_props = $props;
+                $user->save();
+            }
             $payrollUser->incidence = $request->incidence;
             $payrollUser->save();
         }
@@ -64,6 +72,14 @@ class PayrollUserController extends Controller
         if (!$payrollUser->wasRecentlyCreated) {
             $payrollUser->check_in = $request->check_in;
             $payrollUser->check_out = $request->check_out;
+            if ($payrollUser->incidence == 'Vacaciones') { //si originalmente eran vacaciones
+                $user = User::find($request->user_id);
+                $props = $user->org_props;
+                // volver a sumar el dia
+                $props['vacations'] = $props['vacations'] + 1;
+                $user->org_props = $props;
+                $user->save();
+            }
             $payrollUser->incidence = null;
             $payrollUser->save();
         }
