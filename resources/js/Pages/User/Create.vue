@@ -306,7 +306,7 @@ export default {
                 'Soltero(a)',
                 'Casado(a)',
                 'Unión libre',
-                'Divoricado(a)',
+                'Divorciado(a)',
                 'Viudo(a)',
                 'Separado(a)',
             ],

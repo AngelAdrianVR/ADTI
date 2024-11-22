@@ -17,6 +17,7 @@ const form = useForm({
     _method: 'PUT',
     name: props.user.name,
     email: props.user.email,
+    org_email: props.user.org_props?.email,
     photo: null,
 });
 
@@ -174,6 +175,16 @@ const clearPhotoFileInput = () => {
                         Se ha enviado un nuevo enlace de verificación a su dirección de correo electrónico.
                     </div>
                 </div>
+            </div>
+            <!-- correo empresarial -->
+            <div class="col-span-6 sm:col-span-4">
+                <InputLabel for="email" value="Correo electrónico empresarial" />
+                <TextInput
+                    v-model="form.org_email"
+                    type="email"
+                    class="mt-1 block w-full"
+                    disabled
+                />
             </div>
         </template>
 
