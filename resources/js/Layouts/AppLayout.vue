@@ -261,7 +261,8 @@ onMounted(() => {
                                     <span class="text-xs">Panel de inicio</span>
                                 </div>
                             </ResponsiveNavLink>
-                            <ResponsiveNavLink :href="route('products.index')" :active="route().current('products.*')">
+                            <ResponsiveNavLink v-if="$page.props.auth.user.permissions.includes('Ver productos')"
+                                :href="route('products.index')" :active="route().current('products.*')">
                                 <div class="flex items-center space-x-2">
                                     <svg width="13" height="13" viewBox="0 0 17 17" fill="none"
                                         xmlns="http://www.w3.org/2000/svg">
@@ -273,7 +274,8 @@ onMounted(() => {
                                     <span class="text-xs">Productos</span>
                                 </div>
                             </ResponsiveNavLink>
-                            <ResponsiveNavLink :href="route('users.index')" :active="route().current('users.*')">
+                            <ResponsiveNavLink v-if="$page.props.auth.user.permissions.includes('Ver usuarios')"
+                                :href="route('users.index')" :active="route().current('users.*')">
                                 <div class="flex items-center space-x-2">
                                     <svg width="13" height="13" viewBox="0 0 18 17" fill="none"
                                         xmlns="http://www.w3.org/2000/svg">
@@ -285,7 +287,8 @@ onMounted(() => {
                                     <span class="text-xs">Usuarios</span>
                                 </div>
                             </ResponsiveNavLink>
-                            <ResponsiveNavLink :href="route('payrolls.index')" :active="route().current('payrolls.*')">
+                            <ResponsiveNavLink v-if="$page.props.auth.user.permissions.includes('Ver incidencias')"
+                                :href="route('payrolls.index')" :active="route().current('payrolls.*')">
                                 <div class="flex items-center space-x-2">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                         stroke-width="1.5" stroke="currentColor" class="size-4">
@@ -295,7 +298,8 @@ onMounted(() => {
                                     <span class="text-xs">Incidencias</span>
                                 </div>
                             </ResponsiveNavLink>
-                            <ResponsiveNavLink :href="route('holidays.index')" :active="route().current('holidays.*')">
+                            <ResponsiveNavLink v-if="$page.props.auth.user.permissions.includes('Ver dias festivos')"
+                                :href="route('holidays.index')" :active="route().current('holidays.*')">
                                 <div class="flex items-center space-x-2">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                         stroke-width="1.5" stroke="currentColor" class="size-4">
@@ -305,7 +309,9 @@ onMounted(() => {
                                     <span class="text-xs">Días festivos</span>
                                 </div>
                             </ResponsiveNavLink>
-                            <ResponsiveNavLink :href="route('settings.index')" :active="route().current('settings.*')">
+                            <ResponsiveNavLink v-if="$page.props.auth.user?.permissions?.some(permission => {
+                                return ['Ver categorias', 'Ver roles', 'Ver permisos', 'Ver caracteristicas', 'Ver departamentos', 'Ver puestos'].includes(permission);
+                            })" :href="route('settings.index')" :active="route().current('settings.*')">
                                 <div class="flex items-center space-x-2">
                                     <svg width="13" height="13" viewBox="0 0 16 15" fill="none"
                                         xmlns="http://www.w3.org/2000/svg">

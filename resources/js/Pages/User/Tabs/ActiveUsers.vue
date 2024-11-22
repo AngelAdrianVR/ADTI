@@ -3,7 +3,7 @@
         <article class="flex items-center space-x-5 lg:w-1/3">
             <div class="relative md:mb-0 w-full">
                 <input v-model="searchQuery" @keydown.enter="handleSearch" class="input w-full pl-9"
-                    placeholder="Buscar por nombre, puesto, correo o teléfono" type="search" ref="searchInput" />
+                    placeholder="Buscar por ID, nombre, puesto, correo o teléfono" type="search" ref="searchInput" />
                 <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
             </div>
             <el-tag @close="closedTag" v-if="searchedWord" closable type="primary">
@@ -12,8 +12,8 @@
         </article>
         <!-- pagination -->
         <div class="flex space-x-2 items-center lg:ml-16 mt-4">
-            <el-pagination @current-change="handlePagination" layout="prev, pager, next"
-                :total="users.length" hide-on-single-page />
+            <el-pagination @current-change="handlePagination" layout="prev, pager, next" :total="users.length"
+                hide-on-single-page />
             <div v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')" class="mt-2 lg:mt-0">
                 <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5" title="¿Continuar?"
                     @confirm="deleteSelections">
@@ -24,12 +24,13 @@
                 </el-popconfirm>
             </div>
         </div>
-        <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 90%" class="mx-auto"
-            @selection-change="handleSelectionChange" ref="multipleTableRef" :row-class-name="tableRowClassName">
+        <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 90%"
+            class="mx-auto" @selection-change="handleSelectionChange" ref="multipleTableRef"
+            :row-class-name="tableRowClassName" :default-sort="{ prop: 'code', order: 'descending' }">
             <el-table-column v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')" type="selection"
                 width="30" />
-            <el-table-column prop="code" label="ID" width="90" />
-            <el-table-column prop="name" label="Nombre" width="200" />
+            <el-table-column prop="code" label="ID" width="90" sortable />
+            <el-table-column prop="name" label="Nombre" width="200" sortable />
             <el-table-column prop="org_props.position" label="Puesto" width="110" />
             <el-table-column prop="org_props.email" label="Correo electrónico empresarial" width="180" />
             <el-table-column prop="phone" label="Teléfono" width="110" />
@@ -180,6 +181,7 @@ export default {
             } else {
                 return this.users.filter(
                     (user) =>
+                        user.code?.toLowerCase().includes(this.search.toLowerCase()) ||
                         user.name?.toLowerCase().includes(this.search.toLowerCase()) ||
                         user.email?.toLowerCase().includes(this.search.toLowerCase()) ||
                         user.phone?.toLowerCase().includes(this.search.toLowerCase()) ||

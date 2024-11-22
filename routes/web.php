@@ -17,6 +17,7 @@ use App\Http\Controllers\UserController;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Subcategory;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -190,3 +191,12 @@ Route::delete('role-permission/{permission}/destroy-permission', [SettingControl
 //kisko routes--------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------
 Route::get('kiosk', [KioskController::class, 'index'])->name('kiosk.index')->middleware('auth');
+
+// artisan
+Route::get('/clear-all', function () {
+    Artisan::call('cache:clear');
+    Artisan::call('config:clear');
+    Artisan::call('route:clear');
+    Artisan::call('view:clear');
+    return 'cleared.';
+});

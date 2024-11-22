@@ -35,7 +35,7 @@
                     <i class="fa-solid fa-angle-left text-xs"></i>
                 </button>
             </div>
-            <svg class="absolute top-1 left-12" width="533" height="169" viewBox="0 0 533 169" fill="none"
+            <svg class="hidden lg:block absolute top-1 left-12" width="533" height="169" viewBox="0 0 533 169" fill="none"
                 xmlns="http://www.w3.org/2000/svg">
                 <path d="M41.0025 168.5C-115 -99.5 212.506 253.5 532.003 1" stroke="#D9D9D9" />
             </svg>
