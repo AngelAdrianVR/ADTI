@@ -71,10 +71,8 @@
                     </el-table-column>
                 </el-table>
             </div>
-            <!-- tabla -->
 
-            <!-- -------------- Modal Create starts----------------------- -->
-            <DialogModal :show="showModal" @close="showModal = false">
+            <DialogModal :show="showModal" @close="showModal = false" maxWidth="lg">
                 <template #title>
                     <p v-if="editFlag">Editar Día festivo "{{ itemClicked.name }}"</p>
                     <p v-else>Crear día festivo</p>
@@ -142,11 +140,10 @@
                             style="--el-switch-on-color: #1676A2; --el-switch-off-color: #CCCCCC" active-text="Activo"
                             inactive-text="Inactivo" />
 
-                        <div class="flex items-center space-x-3">
+                        <div class="flex items-center space-x-1">
                             <CancelButton @click="showModal = false; form.reset(); editFlag = false;" :disabled="form.processing">
                                 Cancelar
                             </CancelButton>
-
                             <PrimaryButton @click="editFlag ? update() : store()" :disabled="form.processing">
                                 <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
                                 {{ editFlag ? 'Actualizar' : 'Crear' }}
@@ -155,7 +152,6 @@
                     </div>
                 </template>
             </DialogModal>
-            <!-- --------------------------- Modal Create ends ------------------------------------ -->
         </main>
     </AppLayout>
 </template>

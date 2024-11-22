@@ -19,11 +19,22 @@
         <el-table :data="users" @row-click="handleRowClick" max-height="670" style="width: 90%" class="mx-auto"
             @selection-change="handleSelectionChange" ref="multipleTableRef" :row-class-name="tableRowClassName">
             <el-table-column type="selection" width="30" />
-            <el-table-column prop="id" label="ID" width="80" />
-            <el-table-column prop="name" label="Nombre" />
-            <el-table-column prop="org_props.position" label="Puesto" />
-            <el-table-column prop="email" label="Correo electrónico" />
-            <el-table-column prop="phone" label="Teléfono" />
+            <el-table-column prop="code" label="ID" width="90" />
+            <el-table-column prop="name" label="Nombre" width="200" />
+            <el-table-column prop="org_props.position" label="Puesto" width="110" />
+            <el-table-column prop="email" label="Correo electrónico" width="160" />
+            <el-table-column prop="phone" label="Teléfono" width="110" />
+            <el-table-column label="Acceso remoto" width="110">
+                <template #default="scope">
+                    <span v-if="scope.row.home_office">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                            stroke="currentColor" class="size-4 text-[#F29513] mr-1">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" />
+                        </svg>
+                    </span>
+                </template>
+            </el-table-column>
             <el-table-column align="right">
                 <template #default="scope">
                     <el-dropdown trigger="click" @command="handleCommand">
@@ -49,8 +60,19 @@
                                         <path stroke-linecap="round" stroke-linejoin="round"
                                             d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
                                     </svg>
-                                    Editar</el-dropdown-item>
-                                <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Inactivar usuarios')"
+                                    Editar
+                                </el-dropdown-item>
+                                <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Editar usuarios')"
+                                    :command="'homeOffice-' + scope.row.id">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke-width="1.5" stroke="currentColor" class="size-4 mr-1">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" />
+                                    </svg>
+                                    {{ scope.row.home_office ? 'Desactivar acceso remoto' : 'Activar acceso remoto' }}
+                                </el-dropdown-item>
+                                <el-dropdown-item
+                                    v-if="$page.props.auth.user.permissions.includes('Inactivar usuarios')"
                                     :command="'inactivate-' + scope.row.id">
                                     <svg class="size-4 mr-1" width="14" height="14" viewBox="0 0 14 14" fill="none"
                                         xmlns="http://www.w3.org/2000/svg">
@@ -78,7 +100,7 @@
             <h1>Baja del usuario</h1>
         </template>
         <template #content>
-            <form @submit.prevent="toogleStatus">
+            <form @submit.prevent="inactiveUser">
                 <div>
                     <InputLabel value="Fecha de baja*" />
                     <input v-model="form.inactivate_date" class="w-full input" type="date"
@@ -168,12 +190,14 @@ export default {
             if (commandName === 'inactivate') {
                 this.showInactivatigModal = true;
                 this.inactivateUserId = rowId;
+            } else if (commandName === 'homeOffice') {
+                this.$inertia.put(route('users.toggle-home-office', rowId));
             } else {
                 this.$inertia.get(route('users.' + commandName, rowId));
             }
 
         },
-        toogleStatus() {
+        inactiveUser() {
             this.form.put(route('users.inactivate', this.inactivateUserId), {
                 onSuccess: () => {
                     this.$notify({

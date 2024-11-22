@@ -14,15 +14,17 @@
                         @click="$inertia.get(route('users.edit', user.id))" :disabled="loading">Editar</PrimaryButton>
                     <el-popconfirm v-if="$page.props.auth.user.permissions.includes('Resetear contraseñas')"
                         confirm-button-text="Si" cancel-button-text="No" icon-color="#6D6E72"
-                        :title="'¿Desea continuar?'" @confirm="resetPassword()">
+                        title="La contraseña del usuario será reseteada a '123456' ¿Desea continuar?" @confirm="resetPassword()">
                         <template #reference>
-                            <SecondaryButton class="!rounded-full !p-2" :disabled="loading">
+                            <SecondaryButton class="!rounded-full" :disabled="loading">
                                 Resetear contraseña
                             </SecondaryButton>
                         </template>
                     </el-popconfirm>
-                    <SecondaryButton @click="$inertia.get(route('users.create'))" class="!rounded-full !p-2"
-                        :disabled="loading"><i class="fa-solid fa-plus text-xs size-4"></i></SecondaryButton>
+                    <el-tooltip content="Crear nuevo usuario" placement="top">
+                        <SecondaryButton @click="$inertia.get(route('users.create'))" class="!rounded-full !p-2"
+                            :disabled="loading"><i class="fa-solid fa-plus text-xs size-4"></i></SecondaryButton>
+                    </el-tooltip>
                 </div>
             </section>
         </header>
@@ -68,7 +70,7 @@
                         <p>Información general</p>
                     </div>
                 </template>
-                <General :user="user" />
+                <General :user="user" :vacations="vacations" />
             </el-tab-pane>
             <el-tab-pane name="2">
                 <template #label>
@@ -122,6 +124,7 @@ export default {
     props: {
         user: Object,
         users: Array,
+        vacations: Array,
     },
     methods: {
         handleClickInTab(tab) {

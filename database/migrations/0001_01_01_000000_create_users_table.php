@@ -13,6 +13,7 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
+            $table->string('code')->nullable();
             $table->string('name')->unique();
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
@@ -31,6 +32,7 @@ return new class extends Migration
             $table->string('ssn')->nullable(); //numero de seguro social
             $table->json('org_props')->nullable();
             $table->boolean('is_active')->default(true);
+            $table->boolean('home_office')->default(false);
             $table->timestamps();
         });
 

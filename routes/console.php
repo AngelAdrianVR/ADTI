@@ -9,3 +9,8 @@ use Illuminate\Support\Facades\Schedule;
 // })->purpose('Display an inspiring quote')->hourly();
 
 Schedule::command('users:update-vacations')->daily();
+Schedule::command('payrolls:close')->weeklyOn(2, '00:00') // El martes a la medianoche
+    ->when(function () {
+        // Solo ejecuta si la semana es par (es decir, cada dos semanas)
+        return now()->weekOfYear % 2 === 0;
+    });
