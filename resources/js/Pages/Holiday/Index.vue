@@ -2,7 +2,6 @@
     <AppLayout title="Días festivos">
         <main class="px-2 md:px-10 pt-1 pb-16">
             <h1 class="font-bold my-3 ml-4 text-lg">Días festivos</h1>
-
             <section class="md:flex justify-between items-center">
                 <article class="flex items-center space-x-5 lg:w-1/3">
                     <div class="mb-3 md:mb-0 w-full relative">
@@ -18,7 +17,7 @@
                 
                 <div class="my-4 lg:my-0 flex items-center justify-end space-x-3">
                     <PrimaryButton v-if="$page.props.auth.user.permissions?.includes('Crear dias festivos')" 
-                        @click="editFlag = false; showModal = true;">Agregar día festivo</PrimaryButton>
+                        @click="editFlag = false; showModal = true">Agregar día festivo</PrimaryButton>
                 </div>
             </section>
 
@@ -30,7 +29,6 @@
                         <el-pagination @current-change="handlePagination" layout="prev, pager, next"
                             :total="holidays.length" hide-on-single-page />
                     </div>
-
                     <!-- buttons -->
                     <div v-if="$page.props.auth.user.permissions?.includes('Eliminar dias festivos')" >
                         <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
@@ -44,7 +42,7 @@
                 </div>
                 <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 100%"
                     @selection-change="handleSelectionChange" ref="multipleTableRef" :row-class-name="tableRowClassName">
-                    <el-table-column v-if="$page.props.auth.user.permissions?.includes('Crear dias festivos')"  type="selection" width="45" />
+                    <el-table-column v-if="$page.props.auth.user.permissions?.includes('Eliminar dias festivos')"  type="selection" width="40" />
                     <el-table-column prop="id" label="ID" width="70" />
                     <el-table-column label="Nombre">
                         <template #default="scope">

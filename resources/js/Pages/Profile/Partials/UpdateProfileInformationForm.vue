@@ -144,7 +144,7 @@ const clearPhotoFileInput = () => {
 
             <!-- Email -->
             <div class="col-span-6 sm:col-span-4">
-                <InputLabel for="email" value="Correo electrónico" />
+                <InputLabel for="email" value="Correo electrónico personal" />
                 <TextInput
                     id="email"
                     v-model="form.email"
