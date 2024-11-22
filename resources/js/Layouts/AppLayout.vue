@@ -339,7 +339,7 @@ onMounted(() => {
                                         {{ $page.props.auth.user.name }}
                                     </div>
                                     <div class="font-medium text-sm text-gray-100">
-                                        {{ $page.props.auth.user.email }}
+                                        {{ $page.props.auth.user.org_props?.email ?? '*Sin correo empresarial' }}
                                     </div>
                                 </div>
                             </div>
