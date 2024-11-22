@@ -56,7 +56,7 @@
                             <td>{{ calculateTimes(item).extra }}</td>
                             <td>{{ calculateTimes(item).total }}</td>
                         </template>
-                        <td class="pr-8 w-16">
+                        <td v-if="$page.props.auth.user.permissions.includes('Editar incidencias')" class="pr-8 w-16">
                             <el-dropdown trigger="click" @command="handleCommand">
                                 <button @click.stop
                                     class="el-dropdown-link mr-3 justify-center items-center size-8 rounded-full text-primary hover:bg-grayED transition-all duration-200 ease-in-out">
@@ -100,7 +100,7 @@
             <section v-if="payrollUser.comments">
                 <div class="flex items-center justify-between">
                     <h1 class="font-bold">Comentarios</h1>
-                    <div class="flex items-center space-x-1">
+                    <div v-if="$page.props.auth.user.permissions.includes('Editar incidencias')" class="flex items-center space-x-1">
                         <button type="button" @click="editComments"
                             class="size-6 rounded-full bg-grayED flex items-center justify-center text-primary">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"

@@ -14,16 +14,21 @@
                         {{ searchedWord }}
                     </el-tag>
                 </article>
-                <el-dropdown split-button type="primary" @click="$inertia.get(route('products.create'))" trigger="click"
+                <el-dropdown v-if="$page.props.auth.user.permissions?.includes('Crear productos') && $page.props.auth.user?.permissions?.some(permission => {
+                    return ['Importar productos', 'Exportar productos'].includes(permission);
+                })" split-button type="primary" @click="$inertia.get(route('products.create'))" trigger="click"
                     @command="handleDropdownCommand">
                     Crear producto
                     <template #dropdown>
                         <el-dropdown-menu>
-                            <el-dropdown-item command="import">Importar productos</el-dropdown-item>
-                            <el-dropdown-item command="export">Exportar productos</el-dropdown-item>
+                            <el-dropdown-item v-if="$page.props.auth.user.permissions?.includes('Importar productos')"
+                                command="import">Importar productos</el-dropdown-item>
+                            <el-dropdown-item v-if="$page.props.auth.user.permissions?.includes('Exportar productos')"
+                                command="export">Exportar productos</el-dropdown-item>
                         </el-dropdown-menu>
                     </template>
                 </el-dropdown>
+                <PrimaryButton v-else-if="$page.props.auth.user.permissions?.includes('Crear productos')" @click="$inertia.get(route('products.create'))">Crear producto</PrimaryButton>
             </section>
 
             <Loading v-if="loading" class="mt-4 lg:mt-20" />
@@ -58,7 +63,6 @@
                     :row-class-name="tableRowClassName">
                     <el-table-column type="selection" width="30" />
                     <el-table-column prop="part_number_supplier" label="Num. de parte fabricante" width="200" />
-                    <el-table-column prop="name" label="Nombre" width="150" />
                     <el-table-column prop="subcategory.category.name" label="Categoría" width="150" />
                     <el-table-column label="Subcategorías" width="150">
                         <template #default="scope">
@@ -107,7 +111,6 @@
                     </el-table-column>
                 </el-table>
             </div>
-            <!-- tabla ends -->
         </main>
 
         <!-- modal de exportacion -->
@@ -418,7 +421,7 @@ export default {
             } else {
                 // this.loading = true;
                 // console.log(this.loading);
-                const filteredProducts = this.products.filter((product) => 
+                const filteredProducts = this.products.filter((product) =>
                     (product.name && product.name.toLowerCase().includes(this.search.toLowerCase())) ||
                     product.subcategory.category.name.toLowerCase().includes(this.search.toLowerCase()) ||
                     (product.part_number_supplier && product.part_number_supplier.toLowerCase().includes(this.search.toLowerCase()))

@@ -21,7 +21,7 @@
         <el-table :data="user.media" @row-click="handleRowClick" max-height="670" style="width: 90%" class="mx-auto"
             :default-sort="{ prop: 'file_name', order: 'descending' }" @selection-change="handleSelectionChange"
             ref="multipleTableRef" :row-class-name="tableRowClassName">
-            <el-table-column type="selection" width="30" />
+            <el-table-column v-if="$page.props.auth.user.permissions?.includes('Eliminar expedientes de usuarios')" type="selection" width="30" />
             <el-table-column prop="file_name" label="Nombre del documento" width="360" sortable>
                 <template #default="scope">
                     <div v-if="editIndex == scope.row.id" class="flex items-center space-x-2">
