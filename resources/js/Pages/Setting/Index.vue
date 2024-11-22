@@ -5,7 +5,7 @@
         </header>
         <main class="px-2 lg:px-14">
             <el-tabs v-model="activeTab" @tab-click="handleClick">
-                <el-tab-pane name="1">
+                <el-tab-pane v-if="$page.props.auth.user.permissions.includes('Ver categorias')" name="1">
                     <template #label>
                         <div class="flex items-center">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
@@ -18,7 +18,7 @@
                     </template>
                     <Categories />
                 </el-tab-pane>
-                <el-tab-pane name="2">
+                <el-tab-pane v-if="$page.props.auth.user.permissions.includes('Ver roles')" name="2">
                     <template #label>
                         <div class="flex items-center">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
@@ -32,7 +32,7 @@
                     </template>
                     <Roles :roles="roles" :permissions="permissions" />
                 </el-tab-pane>
-                <el-tab-pane name="3">
+                <el-tab-pane v-if="$page.props.auth.user.permissions.includes('Ver permisos')" name="3">
                     <template #label>
                         <div class="flex items-center">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
@@ -45,7 +45,7 @@
                     </template>
                     <Permissions :permissions="permissions" />
                 </el-tab-pane>
-                <el-tab-pane name="4">
+                <el-tab-pane v-if="$page.props.auth.user.permissions.includes('Ver caracteristicas')" name="4">
                     <template #label>
                         <div class="flex items-center">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
@@ -58,7 +58,7 @@
                     </template>
                     <Features :features="features" />
                 </el-tab-pane>
-                <el-tab-pane name="5">
+                <el-tab-pane v-if="$page.props.auth.user.permissions.includes('Ver departamentos')" name="5">
                     <template #label>
                         <div class="flex items-center">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
@@ -71,7 +71,7 @@
                     </template>
                     <Departments :departments="departments" />
                 </el-tab-pane>
-                <el-tab-pane name="6">
+                <el-tab-pane v-if="$page.props.auth.user.permissions.includes('Ver puestos')" name="6">
                     <template #label>
                         <div class="flex items-center">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"

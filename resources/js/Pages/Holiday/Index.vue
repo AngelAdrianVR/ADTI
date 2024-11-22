@@ -32,7 +32,7 @@
                     </div>
 
                     <!-- buttons -->
-                    <div>
+                    <div v-if="$page.props.auth.user.permissions?.includes('Eliminar dias festivos')" >
                         <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
                             title="¿Continuar?" @confirm="deleteSelections">
                             <template #reference>
@@ -44,7 +44,7 @@
                 </div>
                 <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 100%"
                     @selection-change="handleSelectionChange" ref="multipleTableRef" :row-class-name="tableRowClassName">
-                    <el-table-column type="selection" width="45" />
+                    <el-table-column v-if="$page.props.auth.user.permissions?.includes('Crear dias festivos')"  type="selection" width="45" />
                     <el-table-column prop="id" label="ID" width="70" />
                     <el-table-column label="Nombre">
                         <template #default="scope">
@@ -348,8 +348,8 @@ methods:{
         }
     },
     handleRowClick(row) {
+        if (!this.$page.props.auth.user.permissions?.includes('Editar dias festivos')) return;
         this.itemClicked = row;
-        console.log(this.itemClicked);
         this.editFlag = true;
         this.showModal = true;
 

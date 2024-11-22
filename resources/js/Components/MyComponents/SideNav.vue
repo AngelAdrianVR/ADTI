@@ -30,13 +30,16 @@
                                 <button v-if="menu.show" :active="menu.active" :title="menu.label"
                                     class="w-full pl-2 rounded-lg my-[5px] size-10 transition ease-linear duration-200">
                                     <p :class="menu.active ? 'bg-[#c5c5c5] text-primary' : 'hover:text-primary hover:bg-[#c5c5c5] text-gray-700'"
-                                        class="rounded-lg size-10 flex items-center justify-center" v-html="menu.icon"></p>
+                                        class="rounded-lg size-10 flex items-center justify-center" v-html="menu.icon">
+                                    </p>
                                 </button>
-                                <i v-if="menu.notifications" class="fa-solid fa-circle fa-flip text-primary text-[10px] absolute bottom-7 right-1"></i>
+                                <i v-if="menu.notifications"
+                                    class="fa-solid fa-circle fa-flip text-primary text-[10px] absolute bottom-7 right-1"></i>
                             </template>
                             <template #content>
                                 <template v-for="option in menu.options" :key="option">
-                                    <DropdownNavLink v-if="option.show" :href="option.route" :notifications="option.notifications" :active="option.active">
+                                    <DropdownNavLink v-if="option.show" :href="option.route"
+                                        :notifications="option.notifications" :active="option.active">
                                         {{ option.label }}
                                     </DropdownNavLink>
                                 </template>
@@ -49,36 +52,38 @@
                 <section v-else v-for="(menu, index) in menus" :key="index">
                     <!-- Con submenues -->
                     <div v-if="menu.show">
-                        <Accordion v-if="menu.options.length" :icon="menu.icon" :active="menu.active" :title="menu.label" :id="index">
+                        <Accordion v-if="menu.options.length" :icon="menu.icon" :active="menu.active"
+                            :title="menu.label" :id="index">
                             <!-- Opciones del menu -->
                             <template #content>
                                 <div class="relative" v-for="(option, index2) in menu.options" :key="index2">
                                     <Link :href="option.route" class="flex items-center">
-                                        <button v-if="option.show" :active="option.active" :title="option.label"
-                                            class="w-full pl-2 ml-8 font-bold rounded-lg size-7 mb-1 transition ease-linear duration-200 text-left text-xs"
-                                            :class="option.active ? 'bg-[#c5c5c5] text-primary' : 'hover:text-primary hover:bg-[#c5c5c5] text-gray-700'">
-                                            <p class="truncate">{{ option.label }}</p>
-                                        </button>
-                                    
-                                        <!-- Adorno lateral de subcategorias-->
-                                        <i v-if="option.active" class="absolute left-[13px] top-[5px] fa-solid fa-circle text-[7px] z-10 bg-[#dbdbdb] text-gray-700 p-1"></i>
-                                        <div class="border-l border-[#999999] absolute left-5 h-full"></div>
+                                    <button v-if="option.show" :active="option.active" :title="option.label"
+                                        class="w-full pl-2 ml-8 font-bold rounded-lg size-7 mb-1 transition ease-linear duration-200 text-left text-xs"
+                                        :class="option.active ? 'bg-[#c5c5c5] text-primary' : 'hover:text-primary hover:bg-[#c5c5c5] text-gray-700'">
+                                        <p class="truncate">{{ option.label }}</p>
+                                    </button>
+
+                                    <!-- Adorno lateral de subcategorias-->
+                                    <i v-if="option.active"
+                                        class="absolute left-[13px] top-[5px] fa-solid fa-circle text-[7px] z-10 bg-[#dbdbdb] text-gray-700 p-1"></i>
+                                    <div class="border-l border-[#999999] absolute left-5 h-full"></div>
                                     </Link>
 
                                 </div>
                             </template>
                         </Accordion>
-                        
+
                         <!-- Sin submenues -->
-                        <button v-else-if="menu.show" :active="menu.active"
-                            :title="menu.label"
+                        <button v-else-if="menu.show" :active="menu.active" :title="menu.label"
                             class="w-full pl-2 rounded-full my-1 size-10 transition ease-linear duration-200 relative">
                             <Link :href="menu.route" class="flex items-center rounded-lg"
                                 :class="menu.active ? 'bg-[#c5c5c5] text-primary' : 'hover:text-primary hover:bg-[#c5c5c5] text-gray-700'">
-                                <p class="rounded-lg size-10 flex items-center justify-center" v-html="menu.icon"></p>
-                                <span class="font-bold text-sm mr-2">{{ menu.label }}</span>
+                            <p class="rounded-lg size-10 flex items-center justify-center" v-html="menu.icon"></p>
+                            <span class="font-bold text-sm mr-2">{{ menu.label }}</span>
                             </Link>
-                            <i v-if="menu.notifications" class="fa-solid fa-circle fa-flip text-primary text-[10px] absolute bottom-7 right-1"></i>
+                            <i v-if="menu.notifications"
+                                class="fa-solid fa-circle fa-flip text-primary text-[10px] absolute bottom-7 right-1"></i>
                         </button>
                     </div>
                 </section>
@@ -126,7 +131,7 @@ export default {
                     active: route().current('products.*'),
                     options: [],
                     dropdown: false,
-                    show: true
+                    show: this.$page.props.auth.user.permissions.includes('Ver productos'),
                 },
                 {
                     label: 'RRHH',
@@ -136,27 +141,29 @@ export default {
                         {
                             label: 'Usuarios',
                             route: route('users.index'),
-                            show: true,
+                            show: this.$page.props.auth.user.permissions.includes('Ver usuarios'),
                             active: route().current('users.*'),
                             notifications: false,
                         },
                         {
                             label: 'Incidencias',
                             route: route('payrolls.index'),
-                            show: true,
+                            show: this.$page.props.auth.user.permissions.includes('Ver incidencias'),
                             active: route().current('payrolls.*'),
                             notifications: false,
                         },
                         {
                             label: 'Días festivos',
                             route: route('holidays.index'),
-                            show: true,
+                            show: this.$page.props.auth.user.permissions.includes('Ver dias festivos'),
                             active: route().current('holidays.*'),
                             notifications: false,
                         },
                     ],
                     dropdown: true,
-                    show: true
+                    show: this.$page.props.auth.user?.permissions?.some(permission => {
+                        return ['Ver usuarios', 'Ver incidencias', 'Ver dias festivos'].includes(permission);
+                    }),
                 },
                 {
                     label: 'Configuraciones',
@@ -165,7 +172,9 @@ export default {
                     active: route().current('settings.*') || route().current('categories.*'),
                     options: [],
                     dropdown: false,
-                    show: true
+                    show: this.$page.props.auth.user?.permissions?.some(permission => {
+                        return ['Ver categorias', 'Ver roles', 'Ver permisos', 'Ver caracteristicas', 'Ver departamentos', 'Ver puestos'].includes(permission);
+                    }),
                 },
 
                 //ejemplo para usar submenues
@@ -204,7 +213,7 @@ export default {
         Link,
     },
     methods: {
-        updateSideNavSize(is_small){
+        updateSideNavSize(is_small) {
             this.small = is_small;
             localStorage.setItem('is_sidenav_small', is_small);
         }
