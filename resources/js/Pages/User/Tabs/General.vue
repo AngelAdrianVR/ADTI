@@ -3,7 +3,7 @@
         <div class="lg:w-1/2 lg:border-r border-grayD9 grid grid-cols-2 gap-x-3 gap-y-2 lg:pr-16 self-start">
             <h1 class="font-bold text-gray37 col-span-full">Datos personales</h1>
             <p class="text-[#6D6E72]">Correo electrónico personal:</p>
-            <p>{{ user.email }}</p>
+            <p>{{ user.email ?? '-' }}</p>
             <p class="text-[#6D6E72]">Teléfono:</p>
             <p>{{ user.phone ?? '-' }}</p>
             <p class="text-[#6D6E72]">Fecha de nacimiento:</p>
@@ -44,22 +44,26 @@
             <p v-if="user.is_active" class="text-[#35AC11]">Activo</p>
             <p v-else class="text-[#cf3939]">Inactivo</p>
             <p class="text-[#6D6E72]">Fecha de ingreso:</p>
-            <p>{{ formatDate(user.org_props.entry_date) }}</p>
+            <p>{{ user.org_props.entry_date
+                ? formatDate(user.org_props.entry_date)
+                : '-' }}</p>
             <p class="text-[#6D6E72]">Departamento:</p>
-            <p>{{ user.org_props.department }}</p>
+            <p>{{ user.org_props.department ?? '-' }}</p>
             <p class="text-[#6D6E72]">Puesto:</p>
-            <p>{{ user.org_props.position }}</p>
+            <p>{{ user.org_props.position ?? '-' }}</p>
             <p class="text-[#6D6E72]">Correo electrónico empresarial:</p>
-            <p>{{ user.org_props.email }}</p>
+            <p>{{ user.org_props.email ?? '-' }}</p>
             <p v-if="$page.props.auth.user.permissions.includes('Ver sueldos')" class="text-[#6D6E72]">Sueldo neto:</p>
             <p v-if="$page.props.auth.user.permissions.includes('Ver sueldos')">${{ user.org_props.net_salary ?
                 parseFloat(user.org_props.net_salary).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                 : '0.0' }}</p>
-            <p v-if="$page.props.auth.user.permissions.includes('Ver sueldos')" class="text-[#6D6E72]">Complemento catorcenal:</p>
+            <p v-if="$page.props.auth.user.permissions.includes('Ver sueldos')" class="text-[#6D6E72]">Complemento
+                catorcenal:</p>
             <p v-if="$page.props.auth.user.permissions.includes('Ver sueldos')">${{ user.org_props.biweekly_complement ?
                 parseFloat(user.org_props.biweekly_complement).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                 : '0.0' }}</p>
-            <p v-if="$page.props.auth.user.permissions.includes('Ver sueldos')" class="text-[#6D6E72]">Complemento mensual:</p>
+            <p v-if="$page.props.auth.user.permissions.includes('Ver sueldos')" class="text-[#6D6E72]">Complemento
+                mensual:</p>
             <p v-if="$page.props.auth.user.permissions.includes('Ver sueldos')">${{ user.org_props.biweekly_complement ?
                 parseFloat(user.org_props.month_complement).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                 : '0.0' }}</p>

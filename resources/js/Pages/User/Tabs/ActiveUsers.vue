@@ -18,11 +18,11 @@
         </div>
         <el-table :data="users" @row-click="handleRowClick" max-height="670" style="width: 90%" class="mx-auto"
             @selection-change="handleSelectionChange" ref="multipleTableRef" :row-class-name="tableRowClassName">
-            <el-table-column type="selection" width="30" />
+            <el-table-column v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')" type="selection" width="30" />
             <el-table-column prop="code" label="ID" width="90" />
             <el-table-column prop="name" label="Nombre" width="200" />
             <el-table-column prop="org_props.position" label="Puesto" width="110" />
-            <el-table-column prop="email" label="Correo electrónico" width="160" />
+            <el-table-column prop="org_props.email" label="Correo electrónico empresarial" width="180" />
             <el-table-column prop="phone" label="Teléfono" width="110" />
             <el-table-column label="Acceso remoto" width="110">
                 <template #default="scope">
