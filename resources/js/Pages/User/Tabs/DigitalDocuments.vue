@@ -6,7 +6,7 @@
         <!-- pagination -->
         <div class="flex space-x-2 items-center ml-16">
             <el-pagination @current-change="handlePagination" layout="prev, pager, next"
-                :total="user.media.length / itemsPerPage" />
+                :total="user.media.length" hide-on-single-page />
             <div v-if="$page.props.auth.user.permissions?.includes('Eliminar expedientes de usuarios')"
                 class="mt-2 lg:mt-0">
                 <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5" title="¿Continuar?"

@@ -28,7 +28,7 @@
                     <!-- pagination -->
                     <div>
                         <el-pagination @current-change="handlePagination" layout="prev, pager, next"
-                            :total="holidays.length" />
+                            :total="holidays.length" hide-on-single-page />
                     </div>
 
                     <!-- buttons -->
