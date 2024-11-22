@@ -6,7 +6,7 @@
                 <div class="lg:flex justify-between ml-16">
                     <!-- pagination -->
                     <el-pagination @current-change="handlePagination" layout="prev, pager, next"
-                        :total="payrolls.length / itemsPerPage" />
+                        :total="payrolls.length" hide-on-single-page />
                 </div>
                 <el-table :data="payrolls" @row-click="handleRowClick" max-height="670" style="width: 90%"
                     class="mx-auto mt-2" ref="multipleTableRef" :row-class-name="tableRowClassName">

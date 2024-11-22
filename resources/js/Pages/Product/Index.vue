@@ -39,7 +39,7 @@
                     <!-- pagination -->
                     <div class="flex space-x-5 items-center">
                         <el-pagination @current-change="handlePagination" layout="prev, pager, next"
-                            :total="totalPagination" />
+                            :total="totalPagination" hide-on-single-page/>
                         <!-- buttons -->
                         <div v-if="$page.props.auth.user.permissions?.includes('Eliminar productos')"
                             class="mt-2 lg:mt-0">
