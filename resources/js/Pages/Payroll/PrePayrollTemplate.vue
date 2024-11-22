@@ -102,7 +102,7 @@ export default {
         },
         formatDateShort(dateString) {
             const date = parseISO(dateString);
-            return format(add(date, { hours: 6 }), 'dd MMM yyyy', { locale: es });
+            return format(add(date, { hours: 6 }), 'eeee, dd MMM yyyy', { locale: es });
         },
         formatDateToYear(dateString) {
             const date = parseISO(dateString);

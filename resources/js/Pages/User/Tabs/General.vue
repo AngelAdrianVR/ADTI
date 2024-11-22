@@ -7,7 +7,7 @@
             <p class="text-[#6D6E72]">Teléfono:</p>
             <p>{{ user.phone ?? '-' }}</p>
             <p class="text-[#6D6E72]">Fecha de nacimiento:</p>
-            <p>{{ formatDate(user.birthdate) }}</p>
+            <p>{{ user.birthdate ? formatDate(user.birthdate) : "-" }}</p>
             <p class="text-[#6D6E72]">Estado civil:</p>
             <p>{{ user.civil_state ?? '-' }}</p>
             <p class="text-[#6D6E72]">Domicilio:</p>
@@ -21,14 +21,16 @@
         </div>
         <div class="lg:w-1/2 grid grid-cols-2 gap-x-3 gap-y-2 lg:pl-16 mt-2 lg:mt-0 self-start">
             <h1 class="font-bold text-gray37 col-span-full">Datos laborales</h1>
-            <p class="text-[#6D6E72]">Home office:</p>
+            <p class="text-[#6D6E72]">Acceso remoto:</p>
             <p>
-                <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#373737" :title="user.home_office ? '¿Desactivar home office?' : '¿Activar home office?'"
+                <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#373737"
+                    :title="user.home_office ? '¿Desactivar acceso remoto?' : '¿Activar acceso remoto?'"
                     @confirm="$inertia.put(route('users.toggle-home-office', user.id))">
                     <template #reference>
                         <button>
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                                stroke="currentColor" class="size-4 mr-1" :class="user.home_office ? 'text-[#F29513]' : 'text-grayCC'">
+                                stroke="currentColor" class="size-4 mr-1"
+                                :class="user.home_office ? 'text-[#F29513]' : 'text-grayCC'">
                                 <path stroke-linecap="round" stroke-linejoin="round"
                                     d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" />
                             </svg>
@@ -37,7 +39,7 @@
                 </el-popconfirm>
             </p>
             <p class="text-[#6D6E72]">Código de empleado:</p>
-            <p>{{ user.code }}</p>
+            <p>{{ user.code ?? "-" }}</p>
             <p class="text-[#6D6E72]">Estatus:</p>
             <p v-if="user.is_active" class="text-[#35AC11]">Activo</p>
             <p v-else class="text-[#cf3939]">Inactivo</p>
@@ -49,10 +51,18 @@
             <p>{{ user.org_props.position }}</p>
             <p class="text-[#6D6E72]">Correo electrónico empresarial:</p>
             <p>{{ user.org_props.email }}</p>
-            <p class="text-[#6D6E72]">Sueldo bruto:</p>
-            <p>${{ parseFloat(user.org_props.gross_salary).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",") }}</p>
-            <p class="text-[#6D6E72]">Sueldo neto:</p>
-            <p>${{ parseFloat(user.org_props.net_salary).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",") }}</p>
+            <p v-if="$page.props.auth.user.permissions.includes('Ver sueldos')" class="text-[#6D6E72]">Sueldo neto:</p>
+            <p v-if="$page.props.auth.user.permissions.includes('Ver sueldos')">${{ user.org_props.net_salary ?
+                parseFloat(user.org_props.net_salary).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                : '0.0' }}</p>
+            <p v-if="$page.props.auth.user.permissions.includes('Ver sueldos')" class="text-[#6D6E72]">Complemento catorcenal:</p>
+            <p v-if="$page.props.auth.user.permissions.includes('Ver sueldos')">${{ user.org_props.biweekly_complement ?
+                parseFloat(user.org_props.biweekly_complement).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                : '0.0' }}</p>
+            <p v-if="$page.props.auth.user.permissions.includes('Ver sueldos')" class="text-[#6D6E72]">Complemento mensual:</p>
+            <p v-if="$page.props.auth.user.permissions.includes('Ver sueldos')">${{ user.org_props.biweekly_complement ?
+                parseFloat(user.org_props.month_complement).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                : '0.0' }}</p>
             <p class="text-[#6D6E72]">Vacaciones:</p>
             <el-dropdown trigger="click">
                 <button class="focus:border-0 focus:outline-none">

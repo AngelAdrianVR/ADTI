@@ -120,8 +120,8 @@
                         :parser="(value) => value.replace(/\D/g, '')" maxlength="10" clearable />
                     <InputError :message="form.errors['org_props.phone']" />
                 </div>
-                <div>
-                    <InputLabel value="Sueldo neto" />
+                <div v-if="$page.props.auth.user.permissions.includes('Ver sueldos')">
+                    <InputLabel value="Sueldo neto mensual" />
                     <el-input v-model="form.org_props.net_salary" placeholder="Ej. $10,000" class="input-with-select"
                         :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
                         :parser="(value) => value.replace(/[^\d.]/g, '')">
@@ -131,16 +131,29 @@
                     </el-input>
                     <InputError :message="form.errors['org_props.net_salary']" />
                 </div>
-                <div>
-                    <InputLabel value="Sueldo bruto" />
-                    <el-input v-model="form.org_props.gross_salary" placeholder="Ej. $12,000" class="input-with-select"
+                <div v-if="$page.props.auth.user.permissions.includes('Ver sueldos')">
+                    <InputLabel value="Complemento catorcenal" />
+                    <el-input v-model="form.org_props.biweekly_complement" placeholder="Ej. $12,000"
+                        class="input-with-select"
                         :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
                         :parser="(value) => value.replace(/[^\d.]/g, '')">
                         <template #prepend>
                             <p>$</p>
                         </template>
                     </el-input>
-                    <InputError :message="form.errors['org_props.gross_salary']" />
+                    <InputError :message="form.errors['org_props.biweekly_complement']" />
+                </div>
+                <div v-if="$page.props.auth.user.permissions.includes('Ver sueldos')">
+                    <InputLabel value="Complemento mensual" />
+                    <el-input v-model="form.org_props.month_complement" placeholder="Ej. $16,000"
+                        class="input-with-select"
+                        :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
+                        :parser="(value) => value.replace(/[^\d.]/g, '')">
+                        <template #prepend>
+                            <p>$</p>
+                        </template>
+                    </el-input>
+                    <InputError :message="form.errors['org_props.month_complement']" />
                 </div>
                 <div class="col-span-full">
                     <InputLabel value="Foto del usuario" />
@@ -194,7 +207,8 @@
                         Cancelar
                     </CancelButton>
                     <PrimaryButton @click="storePosition" class="!rounded-full" :disabled="auxForm.processing">
-                        <i v-if="auxForm.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
+                        <i v-if="auxForm.processing"
+                            class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
                         Crear
                     </PrimaryButton>
                 </div>
@@ -217,7 +231,8 @@
                         Cancelar
                     </CancelButton>
                     <PrimaryButton @click="storeDepartment" class="!rounded-full" :disabled="auxForm.processing">
-                        <i v-if="auxForm.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
+                        <i v-if="auxForm.processing"
+                            class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
                         Crear
                     </PrimaryButton>
                 </div>
@@ -258,8 +273,9 @@ export default {
                 department: this.user.org_props.department,
                 email: this.user.org_props.email,
                 phone: this.user.org_props.phone,
-                gross_salary: this.user.org_props.gross_salary,
                 net_salary: this.user.org_props.net_salary,
+                biweekly_complement: this.user.org_props.biweekly_complement,
+                month_complement: this.user.org_props.month_complement,
                 vacations: this.user.org_props.vacations,
                 updated_date_vacations: this.user.org_props.updated_date_vacations,
             },

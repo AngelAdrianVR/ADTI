@@ -37,7 +37,7 @@
                         <template v-else>
                             <td class="relative">
                                 <div v-if="item.checked_in_platform" class="!absolute -left-5 top-3">
-                                    <el-tooltip content="Home office" placement="top">
+                                    <el-tooltip content="Acceso remoto" placement="top">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                             stroke-width="1.5" stroke="currentColor" class="size-4 text-[#F29513]">
                                             <path stroke-linecap="round" stroke-linejoin="round"
@@ -110,8 +110,7 @@
                             </svg>
                         </button>
                         <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
-                            title="Se borrará el comentario. ¿Continuar?"
-                            @confirm="deleteComments">
+                            title="Se borrará el comentario. ¿Continuar?" @confirm="deleteComments">
                             <template #reference>
                                 <button type="button"
                                     class="size-6 rounded-full bg-grayED flex items-center justify-center text-primary">
@@ -371,7 +370,7 @@ export default {
             if (['Descanso', 'Falta injustificada', 'Falta justificada', 'Incapacidad', 'Permiso sin goce', 'Permiso con goce', 'Vacaciones'].includes(commandName)) {
                 this.form.incidence = commandName;
                 this.setIncidence();
-             }
+            }
             // else if (commandName === 'Vacaciones') {
             //     this.form.incidence = commandName;
             //     this.showVacationsConfirmation = true;
@@ -380,9 +379,11 @@ export default {
                 // cargar hora de entrada y salida si las tiene
                 const register = this.payrollUser.incidences.find(i => isSameDay(i.date, date));
                 if (register) {
-                    this.form.check_in = register.check_in;
-                    this.form.check_out = register.check_out;
+                    // eliminar segundos
+                    this.form.check_in = register.check_in ? register.check_in.split(':').slice(0, 2).join(':') : null;
+                    this.form.check_out = register.check_out ? register.check_out.split(':').slice(0, 2).join(':') : null;
                 }
+
                 this.showAttendanceModal = true;
             }
 

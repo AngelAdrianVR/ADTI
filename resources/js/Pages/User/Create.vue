@@ -133,7 +133,7 @@
                     <InputError :message="form.errors['org_props.phone']" />
                 </div>
                 <div>
-                    <InputLabel value="Sueldo neto" />
+                    <InputLabel value="Sueldo neto mensual" />
                     <el-input v-model="form.org_props.net_salary" placeholder="Ej. $10,000" class="input-with-select"
                         :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
                         :parser="(value) => value.replace(/[^\d.]/g, '')">
@@ -144,15 +144,26 @@
                     <InputError :message="form.errors['org_props.net_salary']" />
                 </div>
                 <div>
-                    <InputLabel value="Sueldo bruto" />
-                    <el-input v-model="form.org_props.gross_salary" placeholder="Ej. $12,000" class="input-with-select"
+                    <InputLabel value="Complemento catorcenal" />
+                    <el-input v-model="form.org_props.biweekly_complement" placeholder="Ej. $12,000" class="input-with-select"
                         :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
                         :parser="(value) => value.replace(/[^\d.]/g, '')">
                         <template #prepend>
                             <p>$</p>
                         </template>
                     </el-input>
-                    <InputError :message="form.errors['org_props.gross_salary']" />
+                    <InputError :message="form.errors['org_props.biweekly_complement']" />
+                </div>
+                <div>
+                    <InputLabel value="Complemento mensual" />
+                    <el-input v-model="form.org_props.month_complement" placeholder="Ej. $16,000" class="input-with-select"
+                        :formatter="(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
+                        :parser="(value) => value.replace(/[^\d.]/g, '')">
+                        <template #prepend>
+                            <p>$</p>
+                        </template>
+                    </el-input>
+                    <InputError :message="form.errors['org_props.month_complement']" />
                 </div>
                 <div class="col-span-full">
                     <InputLabel value="Foto del usuario" />
@@ -269,7 +280,8 @@ export default {
                 department: null,
                 email: null,
                 phone: null,
-                gross_salary: null,
+                biweekly_complement: null,
+                month_complement: null,
                 net_salary: null,
                 vacations: null,
                 updated_date_vacations: null,
