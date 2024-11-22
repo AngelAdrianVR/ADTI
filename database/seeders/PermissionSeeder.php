@@ -44,6 +44,11 @@ class PermissionSeeder extends Seeder
                 'Editar caracteristicas',
                 'Eliminar caracteristicas',
             ],
+            'DIAS FESTIVOS' => [
+                'Crear dias festivos',
+                'Editar dias festivos',
+                'Eliminar dias festivos',
+            ],
         ];
 
         $roles = [

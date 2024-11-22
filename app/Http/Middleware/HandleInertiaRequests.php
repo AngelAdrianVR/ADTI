@@ -40,13 +40,15 @@ class HandleInertiaRequests extends Middleware
             'auth.user.permissions' => function () use ($request) {
                 if ($request->user()) {
                     return $request->user()->getAllPermissions()->pluck('name');
-                    // if ($request->user()->hasRole('Super admin')) {
-                    //     return Permission::all()->pluck('name');
-                    // } else {
-                    // return $request->user()->getAllPermissions()->pluck('name');
-                    // }
                 }
                 return [];
+            },
+            'auth.user.nextAttendance' => function () use ($request) {
+                if ($request->user()) {
+                    return $request->user()->getNextAttendance();
+                }
+
+                return null;
             },
         ]);
     }

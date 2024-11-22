@@ -259,11 +259,10 @@ export default {
             // buscador
             searchQuery: null,
             searchedWord: null,
+            search: null,
             // tabla
             disableMassiveActions: true,
             loading: false,
-            inputSearch: '',
-            search: null,
             // pagination
             totalPagination: this.products.length / 3, //el componente toma 10 items por pagina pero aqui le pusimos 30, por eso se divide entre 3
             itemsPerPage: 30,

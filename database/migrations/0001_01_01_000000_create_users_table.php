@@ -13,6 +13,7 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
+            $table->string('code')->nullable();
             $table->string('name')->unique();
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
@@ -21,7 +22,17 @@ return new class extends Migration
             $table->foreignId('current_team_id')->nullable();
             $table->string('profile_photo_path', 2048)->nullable();
             $table->string('phone', 20)->nullable();
+            $table->date('birthdate')->nullable();
+            $table->date('inactivate_date')->nullable();
+            $table->text('inactivate_reason')->nullable();
+            $table->string('civil_state')->nullable(); //estado civil (soltero, casado)
+            $table->string('address')->nullable();
+            $table->string('rfc')->nullable();
+            $table->string('curp')->nullable();
+            $table->string('ssn')->nullable(); //numero de seguro social
             $table->json('org_props')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->boolean('home_office')->default(false);
             $table->timestamps();
         });
 

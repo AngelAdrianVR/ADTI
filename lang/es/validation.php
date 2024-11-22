@@ -147,5 +147,11 @@ return [
         'part_number_supplier' => 'número de parte del fabricante',
         'abreviation' => 'abreviación',
         'description' => 'descripción',
+        'inactivate_date' => 'fecha de baja',
+        'inactivate_reason' => 'motivo de baja',
+        'week_day' => 'día de la semana',
+        'day' => 'día',
+        'month' => 'mes',
+        'comments' => 'comentarios',
     ],
 ];

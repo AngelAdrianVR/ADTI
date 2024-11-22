@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Department;
 use App\Models\Feature;
+use App\Models\JobPosition;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -16,11 +18,13 @@ class SettingController extends Controller
             return $data->category;
         });
         $features = Feature::latest()->get();
+        $departments = Department::latest()->get();
+        $job_positions = JobPosition::latest()->get();
 
         // mandar el unmero de tab por defecto desde la url
         $currentTab = request('currentTab');
 
-        return inertia('Setting/Index', compact('roles', 'permissions', 'currentTab', 'features'));
+        return inertia('Setting/Index', compact('roles', 'permissions', 'currentTab', 'features', 'departments', 'job_positions'));
     }
 
     public function storeRole(Request $request)

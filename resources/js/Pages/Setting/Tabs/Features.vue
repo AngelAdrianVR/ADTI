@@ -60,7 +60,7 @@
             </table>
         </section>
 
-        <DialogModal :show="showFeatureModal" @close="showFeatureModal = false">
+        <DialogModal :show="showFeatureModal" @close="showFeatureModal = false" maxWidth="lg">
             <template #title>
                 <p v-if="indexFeatureToEdit">Editar Característica</p>
                 <p v-else>Crear nuevo Característica</p>

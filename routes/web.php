@@ -1,8 +1,15 @@
 <?php
 
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\FeatureController;
+use App\Http\Controllers\HolidayController;
+use App\Http\Controllers\JobPositionController;
+use App\Http\Controllers\KioskController;
 use App\Http\Controllers\MeasureUnitController;
+use App\Http\Controllers\PayrollCommentController;
+use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\PayrollUserController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SubcategoryController;
@@ -80,9 +87,18 @@ Route::middleware([
 //users routes----------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 Route::resource('users', UserController::class)->middleware('auth')->middleware('auth');
+Route::get('users/reactivatation/{user}', [UserController::class, 'reactivation'])->name('users.reactivatation')->middleware('auth');
+Route::get('users-get-next-attendance', [UserController::class, 'getNextAttendance'])->middleware('auth')->name('users.get-next-attendance');
 Route::post('users/update-with-media/{user}', [UserController::class, 'updateWithMedia'])->name('users.update-with-media')->middleware('auth');
-Route::put('users/reset-password/{user}', [UserController::class, 'resetPassword'])->name('users.reset-password')->middleware('auth');
 Route::post('users/massive-delete', [UserController::class, 'massiveDelete'])->name('users.massive-delete');
+Route::post('users/massive-delete-media', [UserController::class, 'massiveDeleteMedia'])->name('users.massive-delete-media');
+Route::post('users/store-media/{user}', [UserController::class, 'storeMedia'])->name('users.store-media');
+Route::post('users-set-attendance', [UserController::class, 'setAttendance'])->middleware('auth')->name('users.set-attendance');
+Route::put('users/reset-password/{user}', [UserController::class, 'resetPassword'])->name('users.reset-password')->middleware('auth');
+Route::put('users/inactivate/{user}', [UserController::class, 'inactivate'])->name('users.inactivate');
+Route::put('users/update-vacations/{user}', [UserController::class, 'updateVacations'])->name('users.update-vacations');
+Route::put('users/update-media-name/{media}', [UserController::class, 'updateMediaName'])->name('users.update-media-name');
+Route::put('users/toggle-home-office/{user}', [UserController::class, 'toggleHomeOffice'])->name('users.toggle-home-office');
 
 
 //products routes----------------------------------------------------------------------------------
@@ -122,12 +138,45 @@ Route::get('subcategories-get-products/{subcategory}', [SubcategoryController::c
 Route::resource('measure_units', MeasureUnitController::class)->middleware('auth');
 
 
-//features routes----------------------------------------------------------------------------------
+//payrolls routes--------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::resource('payrolls', PayrollController::class)->middleware('auth');
+Route::get('payrolls/{payroll}/pre-payroll', [PayrollController::class, 'prePayrollTemplate'])->name('payrolls.pre-payroll')->middleware('auth');
+
+
+//payroll user routes--------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::put('payroll-user/set-incidence', [PayrollUserController::class, 'setIncidence'])->name('payrolls.set-incidence')->middleware('auth');
+Route::post('payroll-user/set-attendance', [PayrollUserController::class, 'setAttendance'])->name('payrolls.set-attendance')->middleware('auth');
+
+
+//comentarios de nomina routes--------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::resource('payroll-comments', PayrollCommentController::class)->middleware('auth');
+
+
+//Holiday routes---------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::resource('holidays', HolidayController::class)->middleware('auth');
+Route::post('holidays/massive-delete', [HolidayController::class, 'massiveDelete'])->name('holidays.massive-delete');
+
+
+//features routes--------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------
 Route::resource('features', FeatureController::class)->middleware('auth');
 
 
-//settings routes----------------------------------------------------------------------------------
+//departaments routes--------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::resource('departments', DepartmentController::class)->middleware('auth');
+
+
+//job posotions routes--------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::resource('job-positions', JobPositionController::class)->middleware('auth');
+
+
+//settings routes--------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------
 Route::resource('settings', SettingController::class)->middleware('auth');
 Route::put('role-permission/{role}/edit-role', [SettingController::class, 'updateRole'])->middleware('auth')->name('settings.role-permission.update-role');
@@ -136,3 +185,8 @@ Route::delete('role-permission/{role}/destroy-role', [SettingController::class, 
 Route::put('role-permission/{permission}/edit-permission', [SettingController::class, 'updatePermission'])->middleware('auth')->name('settings.role-permission.update-permission');
 Route::post('role-permission/store-permission', [SettingController::class, 'storePermission'])->middleware('auth')->name('settings.role-permission.store-permission');
 Route::delete('role-permission/{permission}/destroy-permission', [SettingController::class, 'deletePermission'])->middleware('auth')->name('settings.role-permission.delete-permission');
+
+
+//kisko routes--------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------
+Route::get('kiosk', [KioskController::class, 'index'])->name('kiosk.index')->middleware('auth');
