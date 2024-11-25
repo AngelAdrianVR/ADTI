@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\Schedule;
 //     $this->comment(Inspiring::quote());
 // })->purpose('Display an inspiring quote')->hourly();
 
-Schedule::command('users:update-vacations')->daily();
 Schedule::command('payrolls:close')
     ->tuesdays() // Revisa cada día a medianoche
     ->when(function () {
@@ -24,3 +23,4 @@ Schedule::command('payrolls:close')
         // Calcula si han pasado al menos 12 días desde start_date
         return now()->diffInDays(Carbon::parse($activePayroll->start_date)) >= 12;
     });
+Schedule::command('users:update-vacations')->daily();
