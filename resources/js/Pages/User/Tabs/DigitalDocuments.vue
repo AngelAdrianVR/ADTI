@@ -1,5 +1,5 @@
 <template>
-    <section class="mt-4 mb-10 mx-4 text-xs lg:text-sm">
+    <section class="mt-4 mb-10 mx-4 text-xs lg:text-sm min-h-72">
         <div class="flex justify-end lg:mx-20">
             <PrimaryButton @click="showUploadModal = true">Subir formatos</PrimaryButton>
         </div>

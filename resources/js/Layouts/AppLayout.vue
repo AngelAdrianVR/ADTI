@@ -16,6 +16,7 @@ defineProps({
 
 const showingNavigationDropdown = ref(false);
 const nextAttendance = ref("");
+const isPaused = ref(false);
 
 const getAttendanceTextButton = async () => {
     try {
@@ -26,11 +27,48 @@ const getAttendanceTextButton = async () => {
     }
 };
 
+const getPauseStatus = async () => {
+    try {
+        const response = await axios.get(route("users.get-pause-status"));
+        isPaused.value = response.data.status;
+    } catch (error) {
+        console.error(error);
+    }
+};
+
+const setPause = async () => {
+    try {
+        const response = await axios.get(route("users.set-pause"));
+        if (response.status === 200) {
+            isPaused.value = response.data.status;
+            ElNotification.success({
+                title: "Éxito",
+                message: response.data.message,
+            });
+        }
+    } catch (error) {
+        console.error(error);
+        if (error?.response.status === 422) {
+            ElNotification.error({
+                message: error.response.data.message,
+                type: "error",
+            });
+        } else {
+            ElNotification.error({
+                message: 'Hubo algún problema en el servior, repórtalo con soporte',
+                type: "error",
+            });
+        }
+    }
+};
+
 const setAttendance = async () => {
     try {
         const response = await axios.post(route("users.set-attendance"));
         if (response.status === 200) {
             nextAttendance.value = response.data.next;
+            // resetear si habia alguna pausa
+            isPaused.value = null;
             ElNotification.success({
                 title: "Registro correcto",
                 message: "",
@@ -58,6 +96,7 @@ const logout = () => {
 
 onMounted(() => {
     getAttendanceTextButton();
+    getPauseStatus();
 });
 </script>
 
@@ -90,7 +129,21 @@ onMounted(() => {
                             </div>
                             <div class="hidden sm:flex sm:items-center sm:ms-6">
                                 <!-- registro asistencia -->
-                                <section v-if="$page.props.auth.user.home_office" class="mr-4">
+                                <section v-if="$page.props.auth.user.home_office"
+                                    class="mr-4 flex items-center space-x-2">
+                                    <!-- pausa -->
+                                    <p v-if="isPaused" class="text-xs mt-1">Pausaste a las {{ isPaused }}</p>
+                                    <el-popconfirm v-if="isPaused !== false && nextAttendance == 'Registrar salida'"
+                                        confirm-button-text="Si" cancel-button-text="No" icon-color="#373737"
+                                        :title="isPaused ? '¿Reanudar?' : '¿Pausar tiempo?'" @confirm="setPause">
+                                        <template #reference>
+                                            <button v-if="nextAttendance == 'Registrar salida'"
+                                                class="size-7 text-xs rounded-full text-primary bg-[#DBF0FA]">
+                                                <i v-if="isPaused" class="fa-solid fa-play"></i>
+                                                <i v-else class="fa-solid fa-pause"></i>
+                                            </button>
+                                        </template>
+                                    </el-popconfirm>
                                     <el-popconfirm v-if="nextAttendance != 'Día terminado'" confirm-button-text="Si"
                                         cancel-button-text="No" icon-color="#373737" :title="'¿Continuar?'"
                                         @confirm="setAttendance()">
@@ -179,11 +232,24 @@ onMounted(() => {
                                     </Dropdown>
                                 </div>
                             </div>
-
                             <!-- Hamburger -->
                             <div class="-me-2 flex items-center sm:hidden">
                                 <!-- registro asistencia -->
-                                <section v-if="$page.props.auth.user.home_office" class="mr-4">
+                                <section v-if="$page.props.auth.user.home_office"
+                                    class="mr-4 flex items-center space-x-2">
+                                    <!-- pausa -->
+                                    <p v-if="isPaused" class="text-xs mt-1">Pausaste a las {{ isPaused }}</p>
+                                    <el-popconfirm v-if="isPaused !== false && nextAttendance == 'Registrar salida'"
+                                        confirm-button-text="Si" cancel-button-text="No" icon-color="#373737"
+                                        :title="isPaused ? '¿Reanudar?' : '¿Pausar tiempo?'" @confirm="setPause">
+                                        <template #reference>
+                                            <button v-if="nextAttendance == 'Registrar salida'"
+                                                class="size-7 text-xs rounded-full text-primary bg-[#DBF0FA]">
+                                                <i v-if="isPaused" class="fa-solid fa-play"></i>
+                                                <i v-else class="fa-solid fa-pause"></i>
+                                            </button>
+                                        </template>
+                                    </el-popconfirm>
                                     <el-popconfirm v-if="nextAttendance != 'Día terminado'" confirm-button-text="Si"
                                         cancel-button-text="No" icon-color="#373737" :title="'¿Continuar?'"
                                         @confirm="setAttendance()">

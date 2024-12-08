@@ -33,6 +33,7 @@ return new class extends Migration
             $table->json('org_props')->nullable();
             $table->boolean('is_active')->default(true);
             $table->boolean('home_office')->default(false);
+            $table->string('paused')->nullable();
             $table->timestamps();
         });
 

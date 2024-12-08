@@ -37,24 +37,26 @@
             <div v-else class="mx-2 lg:mx-10 mt-6">
                 <div class="lg:flex justify-between mb-2">
                     <!-- pagination -->
-                    <div class="flex space-x-5 items-center">
+                    <div class="lg:flex space-x-5 items-center">
                         <el-pagination @current-change="handlePagination" layout="prev, pager, next"
                             :total="totalPagination" hide-on-single-page/>
                         <!-- buttons -->
-                        <div v-if="$page.props.auth.user.permissions?.includes('Eliminar productos')"
-                            class="mt-2 lg:mt-0">
-                            <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
-                                title="¿Continuar?" @confirm="deleteSelections">
-                                <template #reference>
-                                    <el-button type="danger" plain class="mb-3"
-                                        :disabled="disableMassiveActions">Eliminar</el-button>
-                                </template>
-                            </el-popconfirm>
-                        </div>
-                        <div class="mt-2 lg:mt-0">
-                            <el-button @click="printBarcodes" type="primary" plain class="mb-3"
-                                :disabled="disableMassiveActions">
-                                Imprimir códigos</el-button>
+                        <div class="flex items-center space-x-2">
+                            <div v-if="$page.props.auth.user.permissions?.includes('Eliminar productos')"
+                                class="mt-2 lg:mt-0">
+                                <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
+                                    title="¿Continuar?" @confirm="deleteSelections">
+                                    <template #reference>
+                                        <el-button type="danger" plain class="mb-3"
+                                            :disabled="disableMassiveActions">Eliminar</el-button>
+                                    </template>
+                                </el-popconfirm>
+                            </div>
+                            <div class="mt-2 lg:mt-0">
+                                <el-button @click="printBarcodes" type="primary" plain class="mb-3"
+                                    :disabled="disableMassiveActions">
+                                    Imprimir códigos</el-button>
+                            </div>
                         </div>
                     </div>
                 </div>

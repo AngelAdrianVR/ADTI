@@ -13,7 +13,7 @@ class UpdateUserVacations extends Command
 
     public function handle()
     {
-        $users = User::whereNotIn('id', [1,2])->get(); // todos menos los directivos
+        $users = User::whereNotIn('id', [1,2,4,5])->get(); // todos menos los directivos y soporte dtw
 
         foreach ($users as $user) {
             $lastUpdate = Carbon::parse($user->org_props['updated_date_vacations']);

@@ -313,4 +313,24 @@ class UserController extends Controller
 
         return response()->json(compact('next'));
     }
+
+    public function getPauseStatus()
+    {
+        $status = auth()->user()->paused;
+
+        return response()->json(compact('status'));
+    }
+
+    public function setPause()
+    {
+        $user = auth()->user();
+
+        $is_paused = $user->setPause();
+
+        $message = $is_paused
+            ? "Se ha pausado tu tiempo laboral"
+            : "Se ha reanudado tu tiempo laboral";
+
+        return response()->json(['message' => $message, 'status' => $is_paused]);
+    }
 }
