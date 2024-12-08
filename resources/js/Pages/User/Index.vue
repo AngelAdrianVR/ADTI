@@ -125,11 +125,11 @@ export default {
         //     this.search = null
         //     this.searchedWord = null;
         // },
-        inputFocus() {
-            this.$nextTick(() => {
-                this.$refs.searchInput.focus();
-            });
-        },
+        // inputFocus() {
+        //     this.$nextTick(() => {
+        //         this.$refs.searchInput.focus();
+        //     });
+        // },
     },
     // computed: {
     //     filteredTableData() {
@@ -148,7 +148,7 @@ export default {
     //     }
     // },
     mounted() {
-        this.inputFocus();
+        // this.inputFocus();
         // Obtener la URL actual
         const currentURL = new URL(window.location.href);
         // Extraer el valor de 'currentTab' de los parámetros de búsqueda

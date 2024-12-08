@@ -1,7 +1,7 @@
 <template>
     <section class="border border-grayCC rounded-[10px]">
-        <div class="bg-grayED mt-4 px-8 py-1">
-            <p class="flex items-center space-x-1">
+        <div class="bg-grayED mt-4 px-2 md:px-8 py-1">
+            <p class="flex items-center space-x-1 text-sm lg:text-base">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
                     stroke="currentColor" class="size-4">
                     <path stroke-linecap="round" stroke-linejoin="round"
@@ -10,22 +10,32 @@
                 <span>{{ payrollUser.user.name }}</span>
             </p>
             <p class="text-gray99">{{ payrollUser.user.org_props.department }}</p>
+            <p v-if="payrollUser.user.paused" class="flex justify- space-x-1 text-red-400 text-xs">
+                <span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                        stroke="currentColor" class="size-4">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M14.25 9v6m-4.5 0V9M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
+                </span>
+                <span>Pausó desde las {{ payrollUser.user.paused }}</span>
+            </p>
         </div>
         <div class="border-b">
-            <table class="w-full table-fixed">
+            <table class="w-full table-fixed text-[11px] md:text-base">
                 <thead class="border-b">
                     <tr class="*:text-start *:py-3">
-                        <th class="pl-8">DÍA</th>
+                        <th class="pl-2 md:pl-8">DÍA</th>
                         <th>ENTRADA</th>
                         <th>SALIDA</th>
                         <th>T. EXTRA</th>
                         <th>HORAS TOTALES</th>
-                        <th class="pr-8 w-16"></th>
+                        <th class="pr-2 md:pr-8 w-8 md:w-16"></th>
                     </tr>
                 </thead>
-                <tbody class="text-sm">
+                <tbody class="text-xs lg:text-sm">
                     <tr v-for="(item, index) in payrollUser.incidences" :key="index" class="*:text-start *:py-1">
-                        <td class="pl-8">{{ formatDate(item.date) }}</td>
+                        <td class="pl-2 md:pl-8">{{ formatDate(item.date) }}</td>
                         <!-- Verificar si es día de descanso o falta injustificada -->
                         <template v-if="item.incidence">
                             <td colspan="4">
@@ -35,8 +45,25 @@
                             </td>
                         </template>
                         <template v-else>
-                            <td class="relative">
-                                <div v-if="item.checked_in_platform" class="!absolute -left-5 top-3">
+                            <td>
+                                <div class="flex items-center space-x-1">
+                                    <div v-if="item.checked_in_platform">
+                                        <el-tooltip content="Acceso remoto" placement="top">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                                stroke-width="1.5" stroke="currentColor" class="size-4 text-[#F29513]">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                    d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" />
+                                            </svg>
+                                        </el-tooltip>
+                                    </div>
+                                    <el-tooltip v-if="item.late" :content="`${item.late} minutos tarde`" placement="top">
+                                        <span class="text-[#E95C10]">{{ formatTimeTo12Hour(item.check_in) }}</span>
+                                    </el-tooltip>
+                                    <p v-else>{{ formatTimeTo12Hour(item.check_in) }}</p>
+                                </div>
+                            </td>
+                            <!-- <td class="relative">
+                                <div v-if="item.checked_in_platform" class="!absolute -left-14 md:-left-24 lg:-left-5 lg:top-4 xl:top-3">
                                     <el-tooltip content="Acceso remoto" placement="top">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                             stroke-width="1.5" stroke="currentColor" class="size-4 text-[#F29513]">
@@ -49,17 +76,17 @@
                                     <span class="text-[#E95C10]">{{ formatTimeTo12Hour(item.check_in) }}</span>
                                 </el-tooltip>
                                 <p v-else>{{ formatTimeTo12Hour(item.check_in) }}</p>
-                            </td>
+                            </td> -->
                             <td>
                                 <p>{{ formatTimeTo12Hour(item.check_out) }}</p>
                             </td>
                             <td>{{ calculateTimes(item).extra }}</td>
                             <td>{{ calculateTimes(item).total }}</td>
                         </template>
-                        <td v-if="$page.props.auth.user.permissions.includes('Editar incidencias')" class="pr-8 w-16">
+                        <td v-if="$page.props.auth.user.permissions.includes('Editar incidencias')" class="">
                             <el-dropdown trigger="click" @command="handleCommand">
                                 <button @click.stop
-                                    class="el-dropdown-link mr-3 justify-center items-center size-8 rounded-full text-primary hover:bg-grayED transition-all duration-200 ease-in-out">
+                                    class="el-dropdown-link justify-center items-center size-8 rounded-full text-primary hover:bg-grayED transition-all duration-200 ease-in-out">
                                     <i class="fa-solid fa-ellipsis-vertical"></i>
                                 </button>
                                 <template #dropdown>
@@ -96,11 +123,12 @@
                 </tbody>
             </table>
         </div>
-        <div class="px-8 py-2">
+        <div class="px-2 md:px-8 py-2 text-xs md:text-base">
             <section v-if="payrollUser.comments">
                 <div class="flex items-center justify-between">
                     <h1 class="font-bold">Comentarios</h1>
-                    <div v-if="$page.props.auth.user.permissions.includes('Editar incidencias')" class="flex items-center space-x-1">
+                    <div v-if="$page.props.auth.user.permissions.includes('Editar incidencias')"
+                        class="flex items-center space-x-1">
                         <button type="button" @click="editComments"
                             class="size-6 rounded-full bg-grayED flex items-center justify-center text-primary">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
@@ -335,7 +363,7 @@ export default {
         calculateTimes(incidence) {
             if (!incidence.id || !incidence.check_in) return { extra: '-', total: '-' };
             // Formato de entrada para los tiempos de check_in y check_out
-            const timeFormat = 'HH:mm:ss';
+            const timeFormat = 'HH:mm';
 
             // Convertimos check_in y check_out a objetos de fecha
             const checkInDate = parse(incidence.check_in, timeFormat, new Date());

@@ -69,7 +69,7 @@ class PayrollController extends Controller
                     'code' => $user->code,
                     'name' => $user->name,
                     'org_props' => $user->org_props,
-                    // Otros datos relevantes del usuario
+                    'paused' => $user->paused,
                 ],
                 'incidences' => $payroll->getProcessedAttendances($user->id),
                 'comments' => PayrollComment::firstWhere(['user_id' => $user->id, 'payroll_id' => $payroll->id]),
