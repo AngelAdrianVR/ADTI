@@ -70,7 +70,7 @@ class PayrollUser extends Pivot
                 $check_in = Carbon::createFromFormat('H:i', trim($this->check_in));
                 $check_out = Carbon::createFromFormat('H:i', trim($this->check_out));
             } catch (\Carbon\Exceptions\InvalidFormatException $e) {
-                logger()->error('Formato de hora inválido en check_in o check_out', [
+                logger()->error('Error al calcular tiempo extra. Formato de hora inválido en check_in o check_out', [
                     'check_in' => $this->check_in,
                     'check_out' => $this->check_out,
                 ]);
@@ -134,7 +134,7 @@ class PayrollUser extends Pivot
                 }
             } catch (\Carbon\Exceptions\InvalidFormatException $e) {
                 // Log del error para depuración
-                logger()->error('Formato de hora inválido en check_in', [
+                logger()->error('Al calcular retardo. Formato de hora inválido en check_in', [
                     'check_in' => $this->check_in,
                 ]);
 

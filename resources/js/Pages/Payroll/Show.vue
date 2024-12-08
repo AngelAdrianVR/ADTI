@@ -5,12 +5,13 @@
             <section class="flex items-center justify-between">
                 <h1 class="font-bold text-gray37">Asistencias de empleados</h1>
                 <PrimaryButton v-if="$page.props.auth.user.permissions.includes('Ver pre-nominas')"
-                    @click="openTemplate">Generar Pre-nómina</PrimaryButton>
+                    @click="openTemplate" :disabled="!payrollUsers.length">Generar Pre-nómina</PrimaryButton>
             </section>
         </header>
         <main class="mx-2 lg:mx-20 my-6 space-y-3">
             <IncidencesTable v-for="(item, index) in payrollUsers" :key="index" :payrollUser="item"
                 :payroll="payroll" />
+            <el-empty v-if="!payrollUsers.length" description="No hay registro de asistencia de ningún empleado aún" />
         </main>
     </AppLayout>
 </template>

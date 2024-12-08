@@ -90,6 +90,8 @@ Route::middleware([
 Route::resource('users', UserController::class)->middleware('auth')->middleware('auth');
 Route::get('users/reactivatation/{user}', [UserController::class, 'reactivation'])->name('users.reactivatation')->middleware('auth');
 Route::get('users-get-next-attendance', [UserController::class, 'getNextAttendance'])->middleware('auth')->name('users.get-next-attendance');
+Route::get('users-get-pause-status', [UserController::class, 'getPauseStatus'])->middleware('auth')->name('users.get-pause-status');
+Route::get('users-set-pause', [UserController::class, 'setPause'])->middleware('auth')->name('users.set-pause');
 Route::post('users/update-with-media/{user}', [UserController::class, 'updateWithMedia'])->name('users.update-with-media')->middleware('auth');
 Route::post('users/massive-delete', [UserController::class, 'massiveDelete'])->name('users.massive-delete');
 Route::post('users/massive-delete-media', [UserController::class, 'massiveDeleteMedia'])->name('users.massive-delete-media');
@@ -100,7 +102,6 @@ Route::put('users/inactivate/{user}', [UserController::class, 'inactivate'])->na
 Route::put('users/update-vacations/{user}', [UserController::class, 'updateVacations'])->name('users.update-vacations');
 Route::put('users/update-media-name/{media}', [UserController::class, 'updateMediaName'])->name('users.update-media-name');
 Route::put('users/toggle-home-office/{user}', [UserController::class, 'toggleHomeOffice'])->name('users.toggle-home-office');
-
 
 //products routes----------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------

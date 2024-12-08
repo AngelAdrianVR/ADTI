@@ -30,7 +30,23 @@
             <el-table-column v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')" type="selection"
                 width="30" />
             <el-table-column prop="code" label="ID" width="90" sortable />
-            <el-table-column prop="name" label="Nombre" width="200" sortable />
+            <el-table-column prop="name" label="Nombre" width="200" sortable>
+                <template #default="scope">
+                    <el-tooltip v-if="scope.row.paused" :content="'Pausó a las ' + scope.row.paused" placement="top">
+                        <p class="flex space-x-1 text-red-400">
+                            <span class="mt-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                    stroke-width="1.5" stroke="currentColor" class="size-4">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M14.25 9v6m-4.5 0V9M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                </svg>
+                            </span>
+                            <span>{{ scope.row.name }}</span>
+                        </p>
+                    </el-tooltip>
+                    <p v-else>{{ scope.row.name }}</p>
+                </template>
+            </el-table-column>
             <el-table-column prop="org_props.position" label="Puesto" width="110" />
             <el-table-column prop="org_props.email" label="Correo electrónico empresarial" width="180" />
             <el-table-column prop="phone" label="Teléfono" width="110" />

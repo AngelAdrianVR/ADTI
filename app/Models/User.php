@@ -44,6 +44,7 @@ class User extends Authenticatable implements HasMedia
         'inactivate_reason',
         'profile_photo_path',
         'home_office',
+        'paused',
     ];
 
     /**
@@ -172,6 +173,20 @@ class User extends Authenticatable implements HasMedia
             $next = 'Día terminado';
         }
 
+        $this->update(['paused' => null]);
+
         return $next;
+    }
+
+    public function setPause()
+    {
+        if ($this->paused) {
+            $this->update(['paused' => null]);
+            return false;
+        } else {
+            $time = now()->isoFormat('h:mm a');
+            $this->update(['paused' => $time]);
+            return $time;
+        }
     }
 }
