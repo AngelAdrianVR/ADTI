@@ -17,6 +17,7 @@ use App\Http\Controllers\UserController;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Subcategory;
+use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -200,4 +201,64 @@ Route::get('/clear-all', function () {
     Artisan::call('route:clear');
     Artisan::call('view:clear');
     return 'cleared.';
+});
+
+
+
+
+// //PRUEBA API
+// Route::get('/api-test', function () {
+//     // Inicializar cURL
+//     $ch = curl_init();
+
+//     // Configurar las opciones de cURL
+//     curl_setopt($ch, CURLOPT_URL, 'http://192.168.1.189:81/api-token-auth/');
+//     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+//     curl_setopt($ch, CURLOPT_POST, 1);
+//     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+//         'username' => 'SuperADTI',
+//         'password' => 'adti1234',
+//     ]));
+//     curl_setopt($ch, CURLOPT_HTTPHEADER, [
+//         'Content-Type: application/json',
+//     ]);
+
+//     // Ejecutar la solicitud
+//     $response = curl_exec($ch);
+
+//     // Manejar errores
+//     if (curl_errno($ch)) {
+//         return 'Error: ' . curl_error($ch);
+//     } else {
+//         // Decodificar la respuesta JSON
+//         $data = json_decode($response, true);
+
+//         // Mostrar la respuesta en la vista
+//         return $data;
+//     }
+
+//     // Cerrar la sesión cURL
+//     curl_close($ch);
+// });
+
+Route::get('/api-test', function () {
+    $client = new Client();
+
+    $response = $client->post('http://192.168.1.189:81/api-token-auth/', [
+        'headers' => [
+            'Content-Type' => 'application/json',
+        ],
+        'json' => [
+            'username' => 'SuperADTI',
+            'password' => 'adti1234',
+        ],
+    ]);
+
+    // Manejar la respuesta
+    if ($response->getStatusCode() == 200) {
+        $data = json_decode($response->getBody(), true);
+        return $data['token'];
+    } else {
+        return 'Error al consumir la API. Código de estado: ' . $response->getStatusCode();
+    }
 });
