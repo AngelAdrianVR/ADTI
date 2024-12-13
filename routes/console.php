@@ -24,3 +24,4 @@ Schedule::command('payrolls:close')
         return now()->diffInDays(Carbon::parse($activePayroll->start_date)) >= 12;
     });
 Schedule::command('users:update-vacations')->daily();
+Schedule::command('payrolls:sync-incidents')->everyMinute();
