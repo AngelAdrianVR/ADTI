@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BioTimeTransactions;
+use App\Models\Payroll;
 use App\Models\PayrollUser;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class PayrollUserController extends Controller
 {
@@ -87,5 +91,53 @@ class PayrollUserController extends Controller
         // calcular y actualizar retardo y horas extras
         $payrollUser->calculateLate();
         $payrollUser->calculateExtraTime();
+    }
+
+    public function processBioTimeTransaction($time, $emp_code)
+    {
+        // Identificar si es entrada o salida
+        $employee = User::firstWhere('code', $emp_code);
+        if ($employee) {
+            $currentPayroll = Payroll::firstWhere('is_active', true);
+
+            $existingEntry = PayrollUser::where('user_id', $employee->id)
+                ->where('payroll_id', $currentPayroll->id)
+                ->whereDate('date', today()->toDateString())
+                ->first();
+
+            $time = str_replace('+', ' ', $time);
+            $punchTime = Carbon::parse($time)->format('H:i');
+            if (!$existingEntry) { //No existe registro de asistencia del empleado en cuestion
+                $existingEntry = PayrollUser::create([
+                    'emp_code' => $emp_code,
+                    'date' => today()->toDateString(),
+                    'check_in' => $punchTime,
+                    'user_id' => $employee->id,
+                    'payroll_id' => $currentPayroll->id,
+                ]);
+                $employee->update(['paused' => null]);
+            } else { //Ya existe registro de asistencia
+                if (strtotime($punchTime) <= strtotime('17:49')) {
+                    $employee->setPause();
+                } else {
+                    $existingEntry->update([
+                        'check_out' => $punchTime,
+                    ]);
+                    $employee->update(['paused' => null]);
+                }
+            }
+
+            // sumar la transaccion a las procesadas del dia actual
+            $todaysTransactions = BioTimeTransactions::firstOrCreate(
+                ['date' => today()->toDateString()],
+            );
+            $todaysTransactions->increment('quantity');
+
+            // Calcular tiempo extra y retardo
+            $existingEntry->calculateLate();
+            $existingEntry->calculateExtraTime();
+        } else {
+            Log::info("No se encontró al empleado con código {$emp_code}");
+        }
     }
 }

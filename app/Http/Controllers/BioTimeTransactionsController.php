@@ -41,4 +41,13 @@ class BioTimeTransactionsController extends Controller
     {
         //
     }
+
+    public function getTodaysTransactions()
+    {
+        $todaysTransactions = BioTimeTransactions::firstOrCreate(
+            ['date' => today()->toDateString()],
+        );
+
+        return response()->json(['transactions' => $todaysTransactions->quantity ?? 0]);
+    }
 }
