@@ -43,25 +43,6 @@ class PayrollUser extends Pivot
         return $this->belongsTo(Payroll::class);
     }
 
-    // public function calculateExtraTime()
-    // {
-    //     // Verifica si check_in y check_out están definidos y si es un día de fin de semana
-    //     if ($this->check_in && $this->check_out && Carbon::parse($this->date)->isWeekend()) {
-    //         $check_in = Carbon::createFromFormat('H:i', $this->check_in);
-    //         $check_out = Carbon::createFromFormat('H:i', $this->check_out);
-
-    //         $total_minutes = $check_in->diffInMinutes($check_out);
-    //         $extra_hours = intdiv($total_minutes, 60);
-    //         $extra_minutes = $total_minutes % 60;
-
-    //         // Actualiza los campos de horas y minutos extra
-    //         $this->update([
-    //             'extra_hours' => $extra_hours,
-    //             'extra_minutes' => $extra_minutes,
-    //         ]);
-    //     }
-    // }
-
     public function calculateExtraTime()
     {
         // Verifica si check_in y check_out están definidos
