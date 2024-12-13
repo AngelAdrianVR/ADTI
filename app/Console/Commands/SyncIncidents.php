@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\BioTimeTransactions;
 use App\Models\Payroll;
 use App\Models\PayrollUser;
 use App\Models\User;
@@ -51,47 +52,60 @@ class SyncIncidents extends Command
                 if ($response->getStatusCode() == 200) {
                     $transactions = json_decode($response->getBody(), true);
 
+                    Log::info($transactions);
                     // Comparar la cantidad de registros
                     $countFromApi = $transactions['count'];
-                    $countInDatabase = PayrollUser::whereDate('date', today()->toDateString())->count();
+                    $todaysTransactions = BioTimeTransactions::firstOrCreate(
+                        ['date' => today()->toDateString()],
+                    );
 
-                    if ($countFromApi > $countInDatabase) {
-                        $newRecords = array_slice($transactions['data'], $countInDatabase);
+                    if ($countFromApi > $todaysTransactions->quantity) {
+                        $newRecords = array_slice($transactions['data'], $todaysTransactions->quantity);
 
                         foreach ($newRecords as $record) {
                             // Identificar si es entrada o salida
                             $employee = User::firstWhere('code', $record['emp_code']);
-                            $currentPayroll = Payroll::firstWhere('is_active', true);
+                            if ($employee) {
+                                $currentPayroll = Payroll::firstWhere('is_active', true);
 
-                            $existingEntry = PayrollUser::where('user_id', $employee->id)
-                                ->where('payroll_id', $currentPayroll->id)
-                                ->whereDate('date', today()->toDateString())
-                                ->first();
+                                $existingEntry = PayrollUser::where('user_id', $employee->id)
+                                    ->where('payroll_id', $currentPayroll->id)
+                                    ->whereDate('date', today()->toDateString())
+                                    ->first();
 
-                            $punchTime = Carbon::parse($record['punch_time'])->format('H:i');
-                            if (!$existingEntry) { //No existe registro de asistencia del empleado en cuestion
-                                PayrollUser::create([
-                                    'emp_code' => $record['emp_code'],
-                                    'date' => today()->toDateString(),
-                                    'check_in' => $punchTime,
-                                    'user_id' => $employee->id,
-                                    'payroll_id' => $currentPayroll->id,
-                                ]);
-                            } else { //Ya existe registro de asistencia
-                                if (strtotime($punchTime) <= strtotime('17:49')) {
-                                    $employee->setPause();
-                                } else {
-                                    $existingEntry->update([
-                                        'check_out' => $punchTime,
+                                $punchTime = Carbon::parse($record['punch_time'])->format('H:i');
+                                if (!$existingEntry) { //No existe registro de asistencia del empleado en cuestion
+                                    $existingEntry = PayrollUser::create([
+                                        'emp_code' => $record['emp_code'],
+                                        'date' => today()->toDateString(),
+                                        'check_in' => $punchTime,
+                                        'user_id' => $employee->id,
+                                        'payroll_id' => $currentPayroll->id,
                                     ]);
+                                    $employee->update(['paused' => null]);
+                                } else { //Ya existe registro de asistencia
+                                    if (strtotime($punchTime) <= strtotime('17:49')) {
+                                        $employee->setPause();
+                                    } else {
+                                        $existingEntry->update([
+                                            'check_out' => $punchTime,
+                                        ]);
+                                        $employee->update(['paused' => null]);
+                                    }
                                 }
+
+
+                                // Calcular tiempo extra y retardo
+                                $existingEntry->calculateLate();
+                                $existingEntry->calculateExtraTime();
+                            } else {
+                                Log::info("No se encontró al empleado con codigo {$record['emp_code']}");
                             }
 
-                            // Calcular tiempo extra y retardo
-                            $currentPayroll->calculateLate();
-                            $currentPayroll->calculateExtraTime();
+                            $todaysTransactions->quantity++;
                         }
 
+                        $todaysTransactions->save();
                         Log::info(count($newRecords) . " nuevos registros agregados a la base de datos.");
                     } else {
                         Log::info("No se encontraron nuevos registros de asistencia.");
