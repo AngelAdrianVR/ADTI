@@ -10,6 +10,7 @@ use Carbon\Carbon;
 use Exception;
 use GuzzleHttp\Client;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class SyncIncidents extends Command
@@ -52,63 +53,24 @@ class SyncIncidents extends Command
                 if ($response->getStatusCode() == 200) {
                     $transactions = json_decode($response->getBody(), true);
 
-                    Log::info($transactions);
                     // Comparar la cantidad de registros
                     $countFromApi = $transactions['count'];
-                    $todaysTransactions = BioTimeTransactions::firstOrCreate(
-                        ['date' => today()->toDateString()],
-                    );
+                    $response = Http::get('https://app.adti.com.mx/api/get-todays-transactions/');
 
-                    if ($countFromApi > $todaysTransactions->quantity) {
-                        $newRecords = array_slice($transactions['data'], $todaysTransactions->quantity);
+                    if ($countFromApi > $response['transactions']) {
+                        $newRecords = array_slice($transactions['data'], $response['transactions']);
 
+                        // procesar transaccion en BDD de produccion desde API
                         foreach ($newRecords as $record) {
-                            // Identificar si es entrada o salida
-                            $employee = User::firstWhere('code', $record['emp_code']);
-                            if ($employee) {
-                                $currentPayroll = Payroll::firstWhere('is_active', true);
-
-                                $existingEntry = PayrollUser::where('user_id', $employee->id)
-                                    ->where('payroll_id', $currentPayroll->id)
-                                    ->whereDate('date', today()->toDateString())
-                                    ->first();
-
-                                $punchTime = Carbon::parse($record['punch_time'])->format('H:i');
-                                if (!$existingEntry) { //No existe registro de asistencia del empleado en cuestion
-                                    $existingEntry = PayrollUser::create([
-                                        'emp_code' => $record['emp_code'],
-                                        'date' => today()->toDateString(),
-                                        'check_in' => $punchTime,
-                                        'user_id' => $employee->id,
-                                        'payroll_id' => $currentPayroll->id,
-                                    ]);
-                                    $employee->update(['paused' => null]);
-                                } else { //Ya existe registro de asistencia
-                                    if (strtotime($punchTime) <= strtotime('17:49')) {
-                                        $employee->setPause();
-                                    } else {
-                                        $existingEntry->update([
-                                            'check_out' => $punchTime,
-                                        ]);
-                                        $employee->update(['paused' => null]);
-                                    }
-                                }
-
-
-                                // Calcular tiempo extra y retardo
-                                $existingEntry->calculateLate();
-                                $existingEntry->calculateExtraTime();
-                            } else {
-                                Log::info("No se encontró al empleado con codigo {$record['emp_code']}");
-                            }
-
-                            $todaysTransactions->quantity++;
+                            $time = $record['punch_time'];
+                            $emp_code = $record['emp_code'];
+                            $url = 'https://app.adti.com.mx/api/process-transaction/' . urlencode($time) . '/' . $emp_code;
+                            $response = Http::get($url);
                         }
 
-                        $todaysTransactions->save();
-                        Log::info(count($newRecords) . " nuevos registros agregados a la base de datos.");
+                        Log::info(count($newRecords) . " transacciones procesadas.");
                     } else {
-                        Log::info("No se encontraron nuevos registros de asistencia.");
+                        Log::info("No se encontraron nuevas transacciones.");
                     }
                 } else {
                     Log::error('Error al obtener las transacciones. Código de estado: ' . $response->getStatusCode());
