@@ -98,7 +98,7 @@ class PayrollController extends Controller
 
         $usersWithNoAttendance = User::whereDoesntHave('payrolls', function ($query) use ($payroll_id) {
             $query->where('payroll_id', $payroll_id);
-        })->where('is_active', true)->whereNotIn('org_props->position', ['Dirección', 'Desarrollador'])->get();
+        })->where('is_active', true)->whereNotIn('org_props->position', ['Dirección', 'Soporte DTW'])->get();
 
         return $usersWithNoAttendance;
     }
