@@ -150,8 +150,9 @@ Route::get('payrolls/{payroll}/pre-payroll', [PayrollController::class, 'prePayr
 
 //payroll user routes--------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------
-Route::put('payroll-user/set-incidence', [PayrollUserController::class, 'setIncidence'])->name('payrolls.set-incidence')->middleware('auth');
-Route::post('payroll-user/set-attendance', [PayrollUserController::class, 'setAttendance'])->name('payrolls.set-attendance')->middleware('auth');
+Route::put('payroll-user/set-incidence', [PayrollUserController::class, 'setIncidence'])->name('payroll-users.set-incidence')->middleware('auth');
+Route::post('payroll-user/set-attendance', [PayrollUserController::class, 'setAttendance'])->name('payroll-users.set-attendance')->middleware('auth');
+Route::post('payroll-user/remove-late', [PayrollUserController::class, 'removeLate'])->name('payroll-users.remove-late')->middleware('auth');
 
 
 //comentarios de nomina routes--------------------------------------------------------------------------------------

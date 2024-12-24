@@ -15,7 +15,7 @@ class UserController extends Controller
 {
     public function index()
     {
-        $users = User::latest()->get();
+        $users = User::latest()->whereNotIn('org_props->position', ['Soporte DTW'])->get();
 
         return inertia('User/Index', compact('users'));
     }

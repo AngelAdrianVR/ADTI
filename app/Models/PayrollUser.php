@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\Pivot;
+use Illuminate\Support\Facades\Log;
 
 class PayrollUser extends Pivot
 {
@@ -112,13 +113,17 @@ class PayrollUser extends Pivot
                     $this->update([
                         'late' => $lateMinutes,
                     ]);
+                } else {
+                    $this->update([
+                        'late' => 0,
+                    ]);
                 }
             } catch (\Carbon\Exceptions\InvalidFormatException $e) {
                 // Log del error para depuración
                 logger()->error('Al calcular retardo. Formato de hora inválido en check_in', [
                     'check_in' => $this->check_in,
                 ]);
-
+                
                 $this->update([
                     'late' => 0,
                 ]);
