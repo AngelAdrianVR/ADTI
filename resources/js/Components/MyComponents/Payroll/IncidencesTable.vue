@@ -56,27 +56,13 @@
                                             </svg>
                                         </el-tooltip>
                                     </div>
-                                    <el-tooltip v-if="item.late" :content="`${item.late} minutos tarde`" placement="top">
+                                    <el-tooltip v-if="item.late" :content="`${item.late} minutos tarde`"
+                                        placement="top">
                                         <span class="text-[#E95C10]">{{ formatTimeTo12Hour(item.check_in) }}</span>
                                     </el-tooltip>
                                     <p v-else>{{ formatTimeTo12Hour(item.check_in) }}</p>
                                 </div>
                             </td>
-                            <!-- <td class="relative">
-                                <div v-if="item.checked_in_platform" class="!absolute -left-14 md:-left-24 lg:-left-5 lg:top-4 xl:top-3">
-                                    <el-tooltip content="Acceso remoto" placement="top">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                            stroke-width="1.5" stroke="currentColor" class="size-4 text-[#F29513]">
-                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" />
-                                        </svg>
-                                    </el-tooltip>
-                                </div>
-                                <el-tooltip v-if="item.late" :content="`${item.late} minutos tarde`" placement="top">
-                                    <span class="text-[#E95C10]">{{ formatTimeTo12Hour(item.check_in) }}</span>
-                                </el-tooltip>
-                                <p v-else>{{ formatTimeTo12Hour(item.check_in) }}</p>
-                            </td> -->
                             <td>
                                 <p>{{ formatTimeTo12Hour(item.check_out) }}</p>
                             </td>
@@ -211,28 +197,6 @@
             </div>
         </template>
     </DialogModal>
-
-    <!-- <ConfirmationModal :show="showVacationsConfirmation" @close="showVacationsConfirmation = false" maxWidth="lg">
-        <template #title>
-            <h1>Vacaciones para <b class="text-primary">{{ formatDate(form.date) }}</b></h1>
-        </template>
-        <template #content>
-            <p>
-                Al continuar se descontará 1 día de las vacaciones registradas en el sistema para el usuario
-                seleccionado. ¿Deseas continuar?
-            </p>
-        </template>
-        <template #footer>
-            <div class="flex items-center space-x-2">
-                <CancelButton @click="showVacationsConfirmation = false" :disabled="form.processing">Cancelar
-                </CancelButton>
-                <PrimaryButton @click="setIncidence" :disabled="form.processing">
-                    <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
-                    Continuar
-                </PrimaryButton>
-            </div>
-        </template>
-    </ConfirmationModal> -->
 </template>
 
 <script>
@@ -262,7 +226,6 @@ export default {
         return {
             form,
             showAttendanceModal: false,
-            // showVacationsConfirmation: false,
             showCommentsModal: false,
         }
     },
@@ -399,10 +362,6 @@ export default {
                 this.form.incidence = commandName;
                 this.setIncidence();
             }
-            // else if (commandName === 'Vacaciones') {
-            //     this.form.incidence = commandName;
-            //     this.showVacationsConfirmation = true;
-            // } 
             else if (commandName === '1') {
                 // cargar hora de entrada y salida si las tiene
                 const register = this.payrollUser.incidences.find(i => isSameDay(i.date, date));

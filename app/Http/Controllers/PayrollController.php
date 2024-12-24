@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Payroll;
 use App\Models\PayrollComment;
+use App\Models\User;
 use Illuminate\Http\Request;
 
 class PayrollController extends Controller
@@ -87,6 +88,18 @@ class PayrollController extends Controller
         return [
             'payroll' => $payrollData,
             'payrollUsers' => $formattedUsers,
+            'noAttendances' => $this->getUsersWithNoAttendance($payroll->id),
         ];
+    }
+
+    private function getUsersWithNoAttendance($payroll_id)
+    {
+        $usersWithNoAttendance = [];
+
+        $usersWithNoAttendance = User::whereDoesntHave('payrolls', function ($query) use ($payroll_id) {
+            $query->where('payroll_id', $payroll_id);
+        })->where('is_active', true)->whereNotIn('org_props->position', ['Dirección', 'Desarrollador'])->get();
+
+        return $usersWithNoAttendance;
     }
 }
