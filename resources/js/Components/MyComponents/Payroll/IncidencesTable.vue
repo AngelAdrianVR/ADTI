@@ -80,6 +80,9 @@
                                         <el-dropdown-item :command="'1|' + item.date">
                                             {{ item.incidence ? 'Agregar asistencia' : 'Editar asistencia' }}
                                         </el-dropdown-item>
+                                        <el-dropdown-item v-if="item.late" :command="'quitar-retardo|' + item.date">
+                                            Quitar retardo
+                                        </el-dropdown-item>
                                         <el-dropdown-item :command="'Descanso|' + item.date">
                                             Descanso
                                         </el-dropdown-item>
@@ -243,10 +246,26 @@ export default {
         payroll: Object,
     },
     methods: {
+        removeLate() {
+            this.form.post(route('payroll-users.remove-late'), {
+                onSuccess: () => {
+                    this.$notify({
+                        title: 'Retardo removido',
+                        type: 'success'
+                    })
+                },
+                onError: (error) => {
+                    console.log(error)
+                }
+            })
+        },
         setAttendance() {
-            this.form.post(route('payrolls.set-attendance'), {
+            this.form.post(route('payroll-users.set-attendance'), {
                 onSuccess: () => {
                     this.showAttendanceModal = false;
+                },
+                onError: (error) => {
+                    console.log(error)
                 }
             })
         },
@@ -279,7 +298,7 @@ export default {
             this.form.delete(route('payroll-comments.destroy', this.payrollUser.comments.id));
         },
         setIncidence() {
-            this.form.put(route('payrolls.set-incidence'), {
+            this.form.put(route('payroll-users.set-incidence'), {
                 onSuccess: () => {
                     this.showVacationsConfirmation = false;
                 }
@@ -361,8 +380,7 @@ export default {
             if (['Descanso', 'Falta injustificada', 'Falta justificada', 'Incapacidad', 'Permiso sin goce', 'Permiso con goce', 'Vacaciones'].includes(commandName)) {
                 this.form.incidence = commandName;
                 this.setIncidence();
-            }
-            else if (commandName === '1') {
+            } else if (commandName === '1') {
                 // cargar hora de entrada y salida si las tiene
                 const register = this.payrollUser.incidences.find(i => isSameDay(i.date, date));
                 if (register) {
@@ -372,6 +390,8 @@ export default {
                 }
 
                 this.showAttendanceModal = true;
+            } else if (commandName == 'quitar-retardo') {
+                this.removeLate();
             }
 
         },

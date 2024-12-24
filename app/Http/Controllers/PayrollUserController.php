@@ -140,4 +140,16 @@ class PayrollUserController extends Controller
             Log::info("No se encontró al empleado con código {$emp_code}");
         }
     }
+
+    public function removeLate(Request $request)
+    {
+        $payrollUser = PayrollUser::firstWhere(
+            [
+                'date' => $request->date,
+                'user_id' => $request->user_id
+            ],
+        );
+
+        $payrollUser->update(['late' => 0]);
+    }
 }

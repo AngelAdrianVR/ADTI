@@ -83,7 +83,7 @@ export default {
             this.showAttendanceModal = true;
         },
         setAttendance() {
-            this.form.post(route('payrolls.set-attendance'), {
+            this.form.post(route('payroll-users.set-attendance'), {
                 onSuccess: () => {
                     this.showAttendanceModal = false;
                 }
