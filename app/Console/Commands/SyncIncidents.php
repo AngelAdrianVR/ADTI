@@ -20,11 +20,12 @@ class SyncIncidents extends Command
 
     public function handle()
     {
+        $localIp = $this->getLocalIp();
         $client = new Client();
 
         try {
             // Obtener token
-            $response = $client->post('http://192.168.1.189:81/api-token-auth/', [
+            $response = $client->post("http://$localIp:81/api-token-auth/", [
                 'headers' => [
                     'Content-Type' => 'application/json',
                 ],
@@ -41,7 +42,7 @@ class SyncIncidents extends Command
                 // Construir la URL con las fechas
                 $startDate = today()->startOfDay()->toDateTimeString();
                 $endDate = today()->addDay()->startOfDay()->toDateTimeString();
-                $url = "http://192.168.1.189:81/iclock/api/transactions/?start_time=$startDate&end_time=$endDate";
+                $url = "http://$localIp:81/iclock/api/transactions/?start_time=$startDate&end_time=$endDate";
 
                 // Realizar la solicitud con el token
                 $response = $client->get($url, [
@@ -80,6 +81,22 @@ class SyncIncidents extends Command
             }
         } catch (Exception $e) {
             Log::error('Ocurrió un error: ' . $e->getMessage());
+        }
+    }
+
+    private function getLocalIp()
+    {
+        // Ejecuta el comando ipconfig y captura la salida
+        $output = shell_exec('ipconfig');
+
+        // Busca las líneas con la IPv4 local
+        preg_match('/IPv4.*?:\s*([0-9.]+)/', $output, $matches);
+
+        if (!empty($matches[1])) {
+            return $matches[1];
+        } else {
+            Log::error('No se pudo obtener Ipv4. Revisar funcion getLocalIP desde el comando de SyncIncidents.php');
+            return '0.0.0.0';
         }
     }
 }
