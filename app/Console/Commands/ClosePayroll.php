@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Payroll;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 class ClosePayroll extends Command
 {
@@ -21,5 +22,6 @@ class ClosePayroll extends Command
         $current->update(['is_active' => 0]);
 
         $this->info('Catorcena cerrada y creada una nueva');
+        Log::info('Catorcena cerrada y creada una nueva');
     }
 }
