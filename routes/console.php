@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Schedule;
 // })->purpose('Display an inspiring quote')->hourly();
 
 Schedule::command('payrolls:close')
-    ->tuesdays() // Revisa cada día a medianoche
+    ->tuesdays() // Revisa Martes a primera hora
     ->when(function () {
         $activePayroll = Payroll::firstWhere('is_active', true);
 
@@ -20,8 +20,8 @@ Schedule::command('payrolls:close')
             return false; // No hay nómina activa o no tiene start_date
         }
 
-        // Calcula si han pasado al menos 12 días desde start_date
-        return now()->diffInDays(Carbon::parse($activePayroll->start_date)) >= 12;
+        // Calcula si han pasado al menos 8 días desde start_date
+        return Carbon::parse($activePayroll->start_date)->diffInDays(now()) > 8;
     });
 Schedule::command('users:update-vacations')->daily();
-Schedule::command('payrolls:sync-incidents')->everyMinute();
+//Schedule::command('payrolls:sync-incidents')->everyMinute();
