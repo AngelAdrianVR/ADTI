@@ -184,8 +184,7 @@
                 </div>
                 <div class="mt-3">
                     <InputLabel value="Número de parte interno" class="ml-3 mb-1" />
-                    <el-input v-model="form.part_number" disabled placeholder="Creación automática" :maxlength="100"
-                        clearable />
+                    <el-input v-model="form.part_number" disabled placeholder="Se generará al guardar" />
                     <InputError :message="form.errors.part_number" />
                 </div>
 
@@ -412,13 +411,16 @@ export default {
     props: {
         categories: Array,
         measure_units: Array,
-        next_product_id: Number, //id del ultimo producto para generar numero de parte interno
     },
     methods: {
         store() {
-            this.form.transform((data) => ({
-                ...data,
-                features: data.features.map(feature => ({
+            // Se clona el formulario para no mandar el número de parte, ya que se genera en backend
+            const dataToSend = { ...this.form };
+            delete dataToSend.part_number;
+
+            this.form.transform(() => ({
+                ...dataToSend,
+                features: dataToSend.features.map(feature => ({
                     name: feature.name,
                     value: feature.value,
                     measure_unit: feature.measure_unit
@@ -429,7 +431,7 @@ export default {
                         // toast
                         this.$notify({
                             title: "Correcto",
-                            message: "",
+                            message: "Producto creado",
                             type: "success",
                             position: "bottom-right",
                         });
@@ -479,21 +481,12 @@ export default {
                 },
             });
         },
-        async handleChangeFeatureOption(featureIndex, value) {
+        handleChangeFeatureOption(featureIndex, value) {
             const key = this.form.features[featureIndex].options.find(item => item.name == value)?.key;
-
-            if (key) {
-                // Crear un arreglo para mantener las partes seleccionadas según el índice de la característica
-                this.form.features_keys[featureIndex] = key;
-
-                // Filtrar las partes seleccionadas y concatenarlas en orden
-                const selectedKeys = this.form.features_keys.filter(Boolean).join('');
-
-                // resetear numero de parte
-                await this.generatePartNumber();
-                // Concatenar el resultado al número de parte base
-                this.form.part_number += selectedKeys;
-            }
+            
+            // Solo se guarda la clave de la característica para ser enviada al backend.
+            // Ya no se concatena al número de parte en el frontend.
+            this.form.features_keys[featureIndex] = key ?? null;
         },
         async fetchSubcategories() {
             this.loading = true;
@@ -529,7 +522,7 @@ export default {
             // Si es el último nivel, guarda las características de la subcategoría
             if (level === this.highestLevel) {
 
-                this.generatePartNumber(); //se crea el numero de parte interno.
+                // El número de parte ya no se genera aquí.
 
                 // Filtrar subcategoría que tienen el nivel más alto
                 const highestLevelSubcategory = this.categoryInfo.subcategories.find(sub => sub.id === this.form.subcategory_id[level - 1]);
@@ -557,31 +550,6 @@ export default {
         filterInput(event) {
             // Filtrar caracteres especiales dejando solo letras y números
             this.form.part_number_supplier = event.replace(/[^a-zA-Z0-9]/g, '');
-        },
-        async generatePartNumber() {
-            try {
-                const lastElement = this.form.subcategory_id[this.form.subcategory_id.length - 1];
-                const response = await axios.post(route('products.get-consecutivo', lastElement));
-                if (response.status === 200) {
-                    // Obtener la categoría seleccionada
-                    const categoryKey = this.categoryInfo.key;
-
-                    // Concatenar los "key" de las subcategorías seleccionadas
-                    const subcategoryKeys = this.form.subcategory_id.map(id => {
-                        const subcategory = this.categoryInfo.subcategories.find(sub => sub.id === id);
-                        return subcategory ? subcategory.key : '';
-                    }).join('');
-
-                    // Función para agregar ceros a la izquierda si es necesario
-                    const nextConsecutivo = String(response.data.next_consecutivo).padStart(3, '0');
-
-                    // Concatenar todos los "key" en un solo string
-                    const partNumber = categoryKey + subcategoryKeys + '-' + nextConsecutivo;
-                    this.form.part_number = partNumber;
-                }
-            } catch (error) {
-                console.log(error);
-            }
         },
         handleCreateSubcategory(index) {
             this.showSubcategoryFormModal = true;

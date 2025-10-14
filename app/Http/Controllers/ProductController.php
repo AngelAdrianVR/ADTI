@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
@@ -27,10 +28,8 @@ class ProductController extends Controller
     {
         $categories = Category::all();
         $measure_units = MeasureUnit::all();
-        $last_product = Product::latest()->first();
-        $next_product_id = $last_product ? $last_product->id + 1 : 0;
 
-        return inertia('Product/Create', compact('categories', 'measure_units', 'next_product_id'));
+        return inertia('Product/Create', compact('categories', 'measure_units'));
     }
 
     public function store(Request $request)
@@ -42,24 +41,53 @@ class ProductController extends Controller
             'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
             'features_keys' => 'nullable|array',
-            'part_number' => 'required|string|max:17',
             'part_number_supplier' => 'nullable|string|max:20|unique:products,part_number_supplier',
             'location' => 'nullable|string|max:100',
             'currency' => 'required|string|max:255',
             'line_cost' => 'nullable|numeric|min:0|max:99999',
         ]);
 
-        $product = Product::create($request->except(['imageCover', 'subcategory_id']) +
-            ['subcategory_id' => collect($request->subcategory_id)->last()]); //guarda el ultimo id del arreglo de subcategorías
+        $lastSubcategoryId = collect($request->subcategory_id)->last();
+        $product = null;
 
-        //busca la cantidad de productos agregados a la subcategoría del producto recién agregado para agregarle su consecutivo 
-        $last_consecutivo = Product::where('subcategory_id', $product->subcategory_id)->count();
+        // Usar una transacción para asegurar la atomicidad y prevenir condiciones de carrera.
+        DB::transaction(function () use ($request, $lastSubcategoryId, &$product) {
+            // Se bloquea la tabla para obtener un conteo preciso y evitar que otros procesos interfieran.
+            $count = Product::where('subcategory_id', $lastSubcategoryId)->lockForUpdate()->count();
+            $consecutivo = $count + 1;
 
-        $product->consecutivo = $last_consecutivo;
-        $product->save();
+            // --- Recrear la lógica de generación de número de parte ---
+            
+            // 1. Obtener la clave de la categoría
+            $category = Category::find($request->category_id);
+            $categoryKey = $category->key ?? '';
+
+            // 2. Concatenar las claves de las subcategorías
+            $subcategoryKeys = '';
+            foreach ($request->subcategory_id as $subId) {
+                $sub = Subcategory::find($subId);
+                $subcategoryKeys .= $sub->key ?? '';
+            }
+
+            // 3. Formatear el consecutivo a 3 dígitos (ej. 1 -> 001)
+            $formattedConsecutivo = str_pad($consecutivo, 3, '0', STR_PAD_LEFT);
+
+            // 4. Concatenar las claves de las características (filtrando valores nulos)
+            $featureKeysString = is_array($request->features_keys) ? implode('', array_filter($request->features_keys)) : '';
+
+            // 5. Ensamblar el número de parte final
+            $partNumber = $categoryKey . $subcategoryKeys . '-' . $formattedConsecutivo . $featureKeysString;
+            
+            $productData = $request->except(['imageCover', 'subcategory_id', 'part_number']);
+            $productData['subcategory_id'] = $lastSubcategoryId;
+            $productData['part_number'] = $partNumber;
+            $productData['consecutivo'] = $consecutivo;
+            
+            $product = Product::create($productData);
+        });
 
 
-        // Guardar la imagen de categoria temporalmente
+        // Guardar la imagen de categoria temporalmente (fuera de la transacción)
         if ($request->hasFile('imageCover')) {
             $path = $request->file('imageCover')->storeAs('temp', $request->file('imageCover')->getClientOriginalName());
             $product->addMedia(storage_path('app/' . $path))->toMediaCollection('imageCover');
@@ -70,8 +98,7 @@ class ProductController extends Controller
             $product->addAllMediaFromRequest('media')->each(fn($file) => $file->toMediaCollection('files'));
         }
 
-        return to_route('products.show', $product->id); //manda al show despues de crear el producto
-        // return response()->json(['id' => $product->id]); //en caso de agregar boton de acciones para mostrar, crear y seguir creando
+        return to_route('products.show', $product->id);
     }
 
     public function show(Product $product)
@@ -395,9 +422,9 @@ class ProductController extends Controller
 
     public function getConsecutivo($subcategory_id)
     {
-        $last_consecutivo = Product::where('subcategory_id', $subcategory_id)->count();
-
-        return response()->json(['next_consecutivo' => $last_consecutivo ? $last_consecutivo + 1 : 1]);
+        // ESTE MÉTODO ES LA CAUSA DE LA CONDICIÓN DE CARRERA Y YA NO SE UTILIZA.
+        // Se deja para evitar errores 404 si el front-end no se ha actualizado, pero su lógica ha sido movida al método store().
+        return response()->json(['error' => 'This endpoint is deprecated.'], 410);
     }
 
     public function getNextProduct($id)
