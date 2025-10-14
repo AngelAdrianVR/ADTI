@@ -1,29 +1,30 @@
 <template>
     <div>
         <div class="flex justify-end mt-5 mx-14">
-            <PrimaryButton v-if="$page.props.auth.user.permissions.includes('Crear caracteristicas')"
-                @click="createFeature()" class="rounded-full">
-                Crear característica
+            <PrimaryButton v-if="$page.props.auth.user.permissions.includes('Crear puestos')"
+                @click="createJobPosition()" class="rounded-full">
+                Crear puesto
             </PrimaryButton>
         </div>
-        <p class="mt-3 text-secondary">En esta sección, encontrarás todas las características que has creado. Si aún no
-            has creado ninguna, puedes
-            hacerlo utilizando el botón 'Crear'. También tienes la opción de editar o eliminar características
+        <p class="mt-3 text-secondary">
+            En esta sección, encontrarás todos los puestos que has creado. Si aún no
+            has creado ninguno, puedes hacerlo utilizando el botón 'Crear'.
+            También tienes la opción de editar o eliminar puestos
             existentes </p>
         <section class="mt-10">
             <table class="text-secondary border border-grayD9 rounded-[3px]">
                 <thead>
                     <tr class="*:text-start *:px-2 *:py-1 border border-grayD9">
-                        <th>Característica</th>
+                        <th>Puestos</th>
                         <th></th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="(item, index) in features" :key="item.id"
+                    <tr v-for="(item, index) in jobPositions" :key="item.id"
                         class="*:text-start *:px-2 *:py-1 border border-grayD9">
                         <td>{{ item.name }}</td>
                         <td class="rounded-e-full text-end"
-                            v-if="$page.props.auth.user.permissions.includes('Editar caracteristicas') || $page.props.auth.user.permissions.includes('Eliminar caracteristicas')">
+                            v-if="$page.props.auth.user.permissions.includes('Editar puestos') || $page.props.auth.user.permissions.includes('Eliminar puestos')">
                             <el-dropdown trigger="click" @command="handleCommand">
                                 <button @click.stop
                                     class="el-dropdown-link justify-center items-center size-6 hover:bg-primary hover:text-primarylight rounded-full text-primary transition-all duration-200 ease-in-out">
@@ -32,7 +33,7 @@
                                 <template #dropdown>
                                     <el-dropdown-menu>
                                         <el-dropdown-item
-                                            v-if="$page.props.auth.user.permissions.includes('Editar caracteristicas')"
+                                            v-if="$page.props.auth.user.permissions.includes('Editar puestos')"
                                             :command="'edit|' + index">
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                                 stroke-width="1.5" stroke="currentColor" class="size-[14px] mr-2">
@@ -42,7 +43,7 @@
                                             <span class="text-xs">Editar</span>
                                         </el-dropdown-item>
                                         <el-dropdown-item
-                                            v-if="$page.props.auth.user.permissions.includes('Eliminar caracteristicas')"
+                                            v-if="$page.props.auth.user.permissions.includes('Eliminar puestos')"
                                             :command="'delete|' + index">
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                                 stroke-width="1.5" stroke="currentColor" class="size-[14px] mr-2">
@@ -60,16 +61,16 @@
             </table>
         </section>
 
-        <DialogModal :show="showFeatureModal" @close="showFeatureModal = false" maxWidth="lg">
+        <DialogModal :show="showJobPositionModal" @close="showJobPositionModal = false" maxWidth="lg">
             <template #title>
-                <p v-if="indexFeatureToEdit">Editar Característica</p>
-                <p v-else>Crear nuevo Característica</p>
+                <p v-if="indexJobPositionToEdit">Editar puesto</p>
+                <p v-else>Crear nuevo puesto</p>
             </template>
             <template #content>
                 <div>
-                    <form @submit.prevent="indexFeatureToEdit ? updateFeature() : storeFeature()" ref="myform">
+                    <form @submit.prevent="indexJobPositionToEdit ? updateJobPosition() : storeJobPosition()" ref="myform">
                         <div>
-                            <InputLabel value="Nombre de la característica *" class="ml-2" />
+                            <InputLabel value="Nombre del puesto *" />
                             <input v-model="form.name" class="input" type="text">
                             <InputError :message="form.errors.name" />
                         </div>
@@ -77,9 +78,9 @@
                 </div>
             </template>
             <template #footer>
-                <CancelButton class="mr-1" @click="showFeatureModal = false; form.reset();" :disabled="form.processing">
+                <CancelButton class="mr-1" @click="showJobPositionModal = false; form.reset();" :disabled="form.processing">
                     Cancelar</CancelButton>
-                <PrimaryButton @click="submitForm" :disabled="form.processing">{{ indexFeatureToEdit ?
+                <PrimaryButton @click="submitForm" :disabled="form.processing">{{ indexJobPositionToEdit ?
                     'Actualizar' :
                     'Crear' }}
                 </PrimaryButton>
@@ -88,7 +89,7 @@
 
         <ConfirmationModal :show="showDeleteConfirm" @close="showDeleteConfirm = false">
             <template #title>
-                <p>Eliminar característica</p>
+                <p>Eliminar puesto</p>
             </template>
             <template #content>
                 <p>¿Continuar con la eliminación?</p>
@@ -96,7 +97,7 @@
             <template #footer>
                 <CancelButton class="mr-1" @click="showDeleteConfirm = false" :disabled="deletting">
                     Cancelar</CancelButton>
-                <PrimaryButton @click="deleteFeature()" :disabled="deletting">
+                <PrimaryButton @click="deleteJobPosition()" :disabled="deletting">
                     Eliminar
                 </PrimaryButton>
             </template>
@@ -121,9 +122,9 @@ export default {
 
         return {
             form,
-            showFeatureModal: false,
-            indexFeatureToEdit: null,
-            currentFeature: null,
+            showJobPositionModal: false,
+            indexJobPositionToEdit: null,
+            currentJobPosition: null,
             showDeleteConfirm: false,
             deletting: false,
         };
@@ -138,36 +139,36 @@ export default {
         ConfirmationModal,
     },
     props: {
-        features: Array,
+        jobPositions: Array,
     },
     methods: {
         handleCommand(command) {
             const commandName = command.split('|')[0];
             const index = command.split('|')[1];
-            const feature = this.features[index];
+            const jobPosition = this.jobPositions[index];
 
             if (commandName == 'edit') {
-                this.editFeature(feature, index);
+                this.editJobPosition(jobPosition, index);
             } else if (commandName == 'delete') {
                 this.showDeleteConfirm = true;
-                this.currentFeature = feature;
+                this.currentJobPosition = jobPosition;
             }
         },
-        editFeature(feature, index) {
-            this.currentFeature = feature;
-            this.indexFeatureToEdit = index;
-            this.showFeatureModal = true;
+        editJobPosition(jobPosition, index) {jobPosition
+            this.currentJobPosition = jobPosition;
+            this.indexJobPositionToEdit = index;
+            this.showJobPositionModal = true;
 
-            this.form.name = feature.name;
+            this.form.name = jobPosition.name;
         },
-        createFeature() {
-            this.currentFeature = null;
-            this.showFeatureModal = true;
-            this.indexFeatureToEdit = null;
+        createJobPosition() {
+            this.currentJobPosition = null;
+            this.showJobPositionModal = true;
+            this.indexJobPositionToEdit = null;
         },
-        deleteFeature() {
+        deleteJobPosition() {
             this.deletting = true;
-            this.form.delete(route('features.destroy', this.currentFeature), {
+            this.form.delete(route('job-positions.destroy', this.currentJobPosition), {
                 onSuccess: () => {
                     this.$notify({
                         title: 'Correcto',
@@ -176,13 +177,13 @@ export default {
                     });
                     
                     this.showDeleteConfirm = false;
-                    this.currentFeature = null;
+                    this.currentJobPosition = null;
                     this.deletting = false;
                 },
             });
         },
-        updateFeature() {
-            this.form.put(route('features.update', this.currentFeature), {
+        updateJobPosition() {
+            this.form.put(route('job-positions.update', this.currentJobPosition), {
                 onSuccess: () => {
                     this.$notify({
                         title: 'Correcto',
@@ -191,12 +192,12 @@ export default {
                     });
 
                     this.form.reset();
-                    this.showFeatureModal = false;
+                    this.showJobPositionModal = false;
                 },
             });
         },
-        storeFeature() {
-            this.form.post(route('features.store'), {
+        storeJobPosition() {
+            this.form.post(route('job-positions.store'), {
                 onSuccess: () => {
                     this.$notify({
                         title: 'Correcto',
@@ -205,7 +206,7 @@ export default {
                     });
 
                     this.form.reset();
-                    this.showFeatureModal = false;
+                    this.showJobPositionModal = false;
                 },
             });
         },

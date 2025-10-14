@@ -1,29 +1,66 @@
 <template>
-    <div class="mx-2 lg:mx-10 mt-6">
-        <div class="lg:flex justify-between mb-2">
-            <!-- pagination -->
-            <div class="flex space-x-2 items-center lg:ml-20">
-                <el-pagination @current-change="handlePagination" layout="prev, pager, next"
-                    :total="users.length / itemsPerPage" />
-                <div v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')" class="mt-2 lg:mt-0">
-                    <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
-                        title="¿Continuar?" @confirm="deleteSelections">
-                        <template #reference>
-                            <el-button type="danger" plain class="mb-3"
-                                :disabled="disableMassiveActions">Eliminar</el-button>
-                        </template>
-                    </el-popconfirm>
-                </div>
+    <div class="mx-2 lg:mx-10 mt-2">
+        <article class="flex items-center space-x-5 lg:w-1/3">
+            <div class="relative md:mb-0 w-full">
+                <input v-model="searchQuery" @keydown.enter="handleSearch" class="input w-full pl-9"
+                    placeholder="Buscar por ID, nombre, puesto, correo o teléfono" type="search" ref="searchInput" />
+                <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
+            </div>
+            <el-tag @close="closedTag" v-if="searchedWord" closable type="primary">
+                {{ searchedWord }}
+            </el-tag>
+        </article>
+        <!-- pagination -->
+        <div class="flex space-x-2 items-center lg:ml-16 mt-4">
+            <el-pagination @current-change="handlePagination" layout="prev, pager, next" :total="users.length"
+                hide-on-single-page />
+            <div v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')" class="mt-2 lg:mt-0">
+                <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5" title="¿Continuar?"
+                    @confirm="deleteSelections">
+                    <template #reference>
+                        <el-button type="danger" plain class="mb-3"
+                            :disabled="disableMassiveActions">Eliminar</el-button>
+                    </template>
+                </el-popconfirm>
             </div>
         </div>
-        <el-table :data="users" @row-click="handleRowClick" max-height="670" style="width: 90%" class="mx-auto"
-            @selection-change="handleSelectionChange" ref="multipleTableRef" :row-class-name="tableRowClassName">
-            <el-table-column type="selection" width="30" />
-            <el-table-column prop="id" label="ID" width="80" />
-            <el-table-column prop="name" label="Nombre" />
-            <el-table-column prop="org_props.position" label="Puesto" />
-            <el-table-column prop="email" label="Correo electrónico" />
-            <el-table-column prop="phone" label="Teléfono" />
+        <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 90%"
+            class="mx-auto" @selection-change="handleSelectionChange" ref="multipleTableRef"
+            :row-class-name="tableRowClassName" :default-sort="{ prop: 'code', order: 'descending' }">
+            <el-table-column v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')" type="selection"
+                width="30" />
+            <el-table-column prop="code" label="ID" width="90" sortable />
+            <el-table-column prop="name" label="Nombre" width="200" sortable>
+                <template #default="scope">
+                    <el-tooltip v-if="scope.row.paused" :content="'Pausó a las ' + scope.row.paused" placement="top">
+                        <p class="flex space-x-1 text-red-400">
+                            <span class="mt-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                    stroke-width="1.5" stroke="currentColor" class="size-4">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M14.25 9v6m-4.5 0V9M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                </svg>
+                            </span>
+                            <span>{{ scope.row.name }}</span>
+                        </p>
+                    </el-tooltip>
+                    <p v-else>{{ scope.row.name }}</p>
+                </template>
+            </el-table-column>
+            <el-table-column prop="org_props.position" label="Puesto" width="110" />
+            <el-table-column prop="org_props.email" label="Correo electrónico empresarial" width="180" />
+            <el-table-column prop="phone" label="Teléfono" width="110" />
+            <el-table-column label="Acceso remoto" width="110">
+                <template #default="scope">
+                    <span v-if="scope.row.home_office">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                            stroke="currentColor" class="size-4 text-[#F29513] mr-1">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" />
+                        </svg>
+                    </span>
+                </template>
+            </el-table-column>
             <el-table-column align="right">
                 <template #default="scope">
                     <el-dropdown trigger="click" @command="handleCommand">
@@ -49,8 +86,19 @@
                                         <path stroke-linecap="round" stroke-linejoin="round"
                                             d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
                                     </svg>
-                                    Editar</el-dropdown-item>
-                                <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Inactivar usuarios')"
+                                    Editar
+                                </el-dropdown-item>
+                                <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Editar usuarios')"
+                                    :command="'homeOffice-' + scope.row.id">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke-width="1.5" stroke="currentColor" class="size-4 mr-1">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" />
+                                    </svg>
+                                    {{ scope.row.home_office ? 'Desactivar acceso remoto' : 'Activar acceso remoto' }}
+                                </el-dropdown-item>
+                                <el-dropdown-item
+                                    v-if="$page.props.auth.user.permissions.includes('Inactivar usuarios')"
                                     :command="'inactivate-' + scope.row.id">
                                     <svg class="size-4 mr-1" width="14" height="14" viewBox="0 0 14 14" fill="none"
                                         xmlns="http://www.w3.org/2000/svg">
@@ -78,7 +126,7 @@
             <h1>Baja del usuario</h1>
         </template>
         <template #content>
-            <form @submit.prevent="toogleStatus">
+            <form @submit.prevent="inactiveUser">
                 <div>
                     <InputLabel value="Fecha de baja*" />
                     <input v-model="form.inactivate_date" class="w-full input" type="date"
@@ -127,6 +175,10 @@ export default {
             itemsPerPage: 10,
             start: 0,
             end: 10,
+            // buscador
+            search: '',
+            searchQuery: null,
+            searchedWord: null,
         }
     },
     components: {
@@ -138,9 +190,31 @@ export default {
     props: {
         users: Array
     },
+    computed: {
+        filteredTableData() {
+            if (!this.search) {
+                return this.users.filter((item, index) => index >= this.start && index < this.end);
+            } else {
+                return this.users.filter(
+                    (user) =>
+                        user.code?.toLowerCase().includes(this.search.toLowerCase()) ||
+                        user.name?.toLowerCase().includes(this.search.toLowerCase()) ||
+                        user.email?.toLowerCase().includes(this.search.toLowerCase()) ||
+                        user.phone?.toLowerCase().includes(this.search.toLowerCase()) ||
+                        user.org_props?.position?.toLowerCase().includes(this.search.toLowerCase())
+                )
+            }
+        }
+    },
     methods: {
+        closedTag() {
+            this.search = null
+            this.searchedWord = null;
+        },
         handleSearch() {
             this.search = this.searchQuery;
+            this.searchedWord = this.searchQuery;
+            this.searchQuery = null;
         },
         handleSelectionChange(val) {
             this.$refs.multipleTableRef.value = val;
@@ -168,12 +242,14 @@ export default {
             if (commandName === 'inactivate') {
                 this.showInactivatigModal = true;
                 this.inactivateUserId = rowId;
+            } else if (commandName === 'homeOffice') {
+                this.$inertia.put(route('users.toggle-home-office', rowId));
             } else {
                 this.$inertia.get(route('users.' + commandName, rowId));
             }
 
         },
-        toogleStatus() {
+        inactiveUser() {
             this.form.put(route('users.inactivate', this.inactivateUserId), {
                 onSuccess: () => {
                     this.$notify({

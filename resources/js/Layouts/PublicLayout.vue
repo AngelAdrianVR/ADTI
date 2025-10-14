@@ -41,8 +41,8 @@
                             </div>
 
                             <!-- Login y navegación -->
-                            <div class="lg:flex items-center space-x-9 hidden">
-                                <button :class="route().current('welcome') ? 'text-primary' : ''" @click="$inertia.get(route('welcome'))">Inicio</button>
+                            <div class="flex items-center space-x-9">
+                                <button class="lg:inline hidden" :class="route().current('welcome') ? 'text-primary' : ''" @click="$inertia.get(route('welcome'))">Inicio</button>
                                 <PrimaryButton @click="$inertia.visit(route('login'))">Iniciar sesión</PrimaryButton>
                             </div>
                         </div>

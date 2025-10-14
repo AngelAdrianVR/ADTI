@@ -14,16 +14,21 @@
                         {{ searchedWord }}
                     </el-tag>
                 </article>
-                <el-dropdown split-button type="primary" @click="$inertia.get(route('products.create'))" trigger="click"
+                <el-dropdown v-if="$page.props.auth.user.permissions?.includes('Crear productos') && $page.props.auth.user?.permissions?.some(permission => {
+                    return ['Importar productos', 'Exportar productos'].includes(permission);
+                })" split-button type="primary" @click="$inertia.get(route('products.create'))" trigger="click"
                     @command="handleDropdownCommand">
                     Crear producto
                     <template #dropdown>
                         <el-dropdown-menu>
-                            <el-dropdown-item command="import">Importar productos</el-dropdown-item>
-                            <el-dropdown-item command="export">Exportar productos</el-dropdown-item>
+                            <el-dropdown-item v-if="$page.props.auth.user.permissions?.includes('Importar productos')"
+                                command="import">Importar productos</el-dropdown-item>
+                            <el-dropdown-item v-if="$page.props.auth.user.permissions?.includes('Exportar productos')"
+                                command="export">Exportar productos</el-dropdown-item>
                         </el-dropdown-menu>
                     </template>
                 </el-dropdown>
+                <PrimaryButton v-else-if="$page.props.auth.user.permissions?.includes('Crear productos')" @click="$inertia.get(route('products.create'))">Crear producto</PrimaryButton>
             </section>
 
             <Loading v-if="loading" class="mt-4 lg:mt-20" />
@@ -32,24 +37,26 @@
             <div v-else class="mx-2 lg:mx-10 mt-6">
                 <div class="lg:flex justify-between mb-2">
                     <!-- pagination -->
-                    <div class="flex space-x-5 items-center">
+                    <div class="lg:flex space-x-5 items-center">
                         <el-pagination @current-change="handlePagination" layout="prev, pager, next"
-                            :total="totalPagination" />
+                            :total="totalPagination" hide-on-single-page/>
                         <!-- buttons -->
-                        <div v-if="$page.props.auth.user.permissions?.includes('Eliminar productos')"
-                            class="mt-2 lg:mt-0">
-                            <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
-                                title="¿Continuar?" @confirm="deleteSelections">
-                                <template #reference>
-                                    <el-button type="danger" plain class="mb-3"
-                                        :disabled="disableMassiveActions">Eliminar</el-button>
-                                </template>
-                            </el-popconfirm>
-                        </div>
-                        <div class="mt-2 lg:mt-0">
-                            <el-button @click="printBarcodes" type="primary" plain class="mb-3"
-                                :disabled="disableMassiveActions">
-                                Imprimir códigos</el-button>
+                        <div class="flex items-center space-x-2">
+                            <div v-if="$page.props.auth.user.permissions?.includes('Eliminar productos')"
+                                class="mt-2 lg:mt-0">
+                                <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
+                                    title="¿Continuar?" @confirm="deleteSelections">
+                                    <template #reference>
+                                        <el-button type="danger" plain class="mb-3"
+                                            :disabled="disableMassiveActions">Eliminar</el-button>
+                                    </template>
+                                </el-popconfirm>
+                            </div>
+                            <div class="mt-2 lg:mt-0">
+                                <el-button @click="printBarcodes" type="primary" plain class="mb-3"
+                                    :disabled="disableMassiveActions">
+                                    Imprimir códigos</el-button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -58,7 +65,6 @@
                     :row-class-name="tableRowClassName">
                     <el-table-column type="selection" width="30" />
                     <el-table-column prop="part_number_supplier" label="Num. de parte fabricante" width="200" />
-                    <el-table-column prop="name" label="Nombre" width="150" />
                     <el-table-column prop="subcategory.category.name" label="Categoría" width="150" />
                     <el-table-column label="Subcategorías" width="150">
                         <template #default="scope">
@@ -107,7 +113,6 @@
                     </el-table-column>
                 </el-table>
             </div>
-            <!-- tabla ends -->
         </main>
 
         <!-- modal de exportacion -->
@@ -259,11 +264,10 @@ export default {
             // buscador
             searchQuery: null,
             searchedWord: null,
+            search: null,
             // tabla
             disableMassiveActions: true,
             loading: false,
-            inputSearch: '',
-            search: null,
             // pagination
             totalPagination: this.products.length / 3, //el componente toma 10 items por pagina pero aqui le pusimos 30, por eso se divide entre 3
             itemsPerPage: 30,
@@ -419,7 +423,7 @@ export default {
             } else {
                 // this.loading = true;
                 // console.log(this.loading);
-                const filteredProducts = this.products.filter((product) => 
+                const filteredProducts = this.products.filter((product) =>
                     (product.name && product.name.toLowerCase().includes(this.search.toLowerCase())) ||
                     product.subcategory.category.name.toLowerCase().includes(this.search.toLowerCase()) ||
                     (product.part_number_supplier && product.part_number_supplier.toLowerCase().includes(this.search.toLowerCase()))

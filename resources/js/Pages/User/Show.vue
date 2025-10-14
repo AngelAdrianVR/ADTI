@@ -14,15 +14,18 @@
                         @click="$inertia.get(route('users.edit', user.id))" :disabled="loading">Editar</PrimaryButton>
                     <el-popconfirm v-if="$page.props.auth.user.permissions.includes('Resetear contraseñas')"
                         confirm-button-text="Si" cancel-button-text="No" icon-color="#6D6E72"
-                        :title="'¿Desea continuar?'" @confirm="resetPassword()">
+                        title="La contraseña del usuario será reseteada a '123456' ¿Desea continuar?"
+                        @confirm="resetPassword()">
                         <template #reference>
-                            <SecondaryButton class="!rounded-full !p-2" :disabled="loading">
+                            <SecondaryButton class="!rounded-full" :disabled="loading">
                                 Resetear contraseña
                             </SecondaryButton>
                         </template>
                     </el-popconfirm>
-                    <SecondaryButton @click="$inertia.get(route('users.create'))" class="!rounded-full !p-2"
-                        :disabled="loading"><i class="fa-solid fa-plus text-xs size-4"></i></SecondaryButton>
+                    <el-tooltip content="Crear nuevo usuario" placement="top">
+                        <SecondaryButton @click="$inertia.get(route('users.create'))" class="!rounded-full !p-2"
+                            :disabled="loading"><i class="fa-solid fa-plus text-xs size-4"></i></SecondaryButton>
+                    </el-tooltip>
                 </div>
             </section>
         </header>
@@ -33,8 +36,8 @@
                     <i class="fa-solid fa-angle-left text-xs"></i>
                 </button>
             </div>
-            <svg class="absolute top-1 left-12" width="533" height="169" viewBox="0 0 533 169" fill="none"
-                xmlns="http://www.w3.org/2000/svg">
+            <svg class="hidden lg:block absolute top-1 left-12" width="533" height="169" viewBox="0 0 533 169"
+                fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M41.0025 168.5C-115 -99.5 212.506 253.5 532.003 1" stroke="#D9D9D9" />
             </svg>
             <svg class="absolute top-[75px] right-12" width="426" height="102" viewBox="0 0 426 102" fill="none"
@@ -47,6 +50,16 @@
                     class="size-32 lg:size-40 object-cover rounded-[5px]">
             </figure>
             <h1 class="font-bold text-center mt-20">{{ user.name }}</h1>
+            <p v-if="user.paused" class="flex justify-center space-x-1 text-red-400 text-xs">
+                <span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                        stroke="currentColor" class="size-4">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M14.25 9v6m-4.5 0V9M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
+                </span>
+                <span>Pausó a las {{ user.paused }}</span>
+            </p>
         </section>
         <!-- Tabs -->
         <el-tabs v-model="activeTab" class="mx-5" @tab-click="handleClickInTab">
@@ -68,7 +81,7 @@
                         <p>Información general</p>
                     </div>
                 </template>
-                <General :user="user" />
+                <General :user="user" :vacations="vacations" />
             </el-tab-pane>
             <el-tab-pane name="2">
                 <template #label>
@@ -122,6 +135,7 @@ export default {
     props: {
         user: Object,
         users: Array,
+        vacations: Array,
     },
     methods: {
         handleClickInTab(tab) {

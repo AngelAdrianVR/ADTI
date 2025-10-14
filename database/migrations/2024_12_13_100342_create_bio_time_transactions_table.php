@@ -11,11 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('payrolls', function (Blueprint $table) {
+        Schema::create('bio_time_transactions', function (Blueprint $table) {
             $table->id();
-            $table->date('start_date');
-            $table->unsignedTinyInteger('biweekly');
-            $table->boolean('is_active')->default(true);
+            $table->date('date');
+            $table->unsignedInteger('quantity')->default(0);
             $table->timestamps();
         });
     }
@@ -25,6 +24,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('payrolls');
+        Schema::dropIfExists('bio_time_transactions');
     }
 };

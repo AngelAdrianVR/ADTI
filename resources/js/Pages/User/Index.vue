@@ -1,9 +1,9 @@
 <template>
     <AppLayout title="Usuarios">
-        <main class="px-2 lg:px-10 py-7">
-            <h1 class="font-bold my-3 ml-4 text-lg">Usuarios</h1>
+        <main class="px-2 lg:px-10 py-2">
             <section class="md:flex justify-between items-center">
-                <article class="flex items-center space-x-5 lg:w-1/3">
+                <h1 class="font-bold my-3 ml-4 text-lg">Usuarios</h1>
+                <!-- <article class="flex items-center space-x-5 lg:w-1/3">
                     <div class="relative mb-3 md:mb-0 w-full">
                         <input v-model="searchQuery" @keydown.enter="handleSearch" class="input w-full pl-9"
                             placeholder="Buscar por nombre, puesto, correo o teléfono" type="search" ref="searchInput" />
@@ -12,7 +12,7 @@
                     <el-tag @close="closedTag" v-if="searchedWord" closable type="primary">
                         {{ searchedWord }}
                     </el-tag>
-                </article>
+                </article> -->
                 <!-- buttons -->
                 <div class="flex items-center space-x-1">
                     <div class="my-4 lg:my-0 flex items-center justify-end space-x-3">
@@ -23,7 +23,7 @@
             </section>
 
             <!-- Tabs -->
-            <el-tabs v-model="activeTab" class="mx-5 mt-3" @tab-click="handleClick">
+            <el-tabs v-model="activeTab" class="mx-5" @tab-click="handleClick">
                 <el-tab-pane label="Ingresos" name="1">
                     <template #label>
                         <div class="flex items-center space-x-2">
@@ -38,7 +38,7 @@
                             <p>Activos</p>
                         </div>
                     </template>
-                    <ActiveUsers :users="filteredTableData.filter(user => user.is_active)" />
+                    <ActiveUsers :users="users.filter(user => user.is_active)" />
                 </el-tab-pane>
                 <el-tab-pane label="Ingresos recurrentes" name="2">
                     <template #label>
@@ -54,7 +54,7 @@
                             <p>Inactivos</p>
                         </div>
                     </template>
-                    <DisabledUsers :users="filteredTableData.filter(user => !user.is_active)" />
+                    <DisabledUsers :users="users.filter(user => !user.is_active)" />
                 </el-tab-pane>
             </el-tabs>
         </main>
@@ -71,9 +71,9 @@ export default {
     data() {
         return {
             // buscador
-            search: '',
-            searchQuery: null,
-            searchedWord: null,
+            // search: '',
+            // searchQuery: null,
+            // searchedWord: null,
             // Tabs
             activeTab: '1',
             // pagination
@@ -92,11 +92,11 @@ export default {
         users: Array
     },
     methods: {
-        handleSearch() {
-            this.search = this.searchQuery;
-            this.searchedWord = this.searchQuery;
-            this.searchQuery = null;
-        },
+        // handleSearch() {
+        //     this.search = this.searchQuery;
+        //     this.searchedWord = this.searchQuery;
+        //     this.searchQuery = null;
+        // },
         handleClick(tab) {
             // Obtén la URL actual
             const currentURL = new URL(window.location.href);
@@ -119,35 +119,36 @@ export default {
             }
 
             // Cierra las búsquedas de la otra pestaña
-            this.closedTag();
+            // this.closedTag();
         },
-        closedTag() {
-            this.search = null
-            this.searchedWord = null;
-        },
-        inputFocus() {
-            this.$nextTick(() => {
-                this.$refs.searchInput.focus();
-            });
-        },
+        // closedTag() {
+        //     this.search = null
+        //     this.searchedWord = null;
+        // },
+        // inputFocus() {
+        //     this.$nextTick(() => {
+        //         this.$refs.searchInput.focus();
+        //     });
+        // },
     },
-    computed: {
-        filteredTableData() {
-            if (!this.search) {
-                return this.users.filter((item, index) => index >= this.start && index < this.end);
-            } else {
-                return this.users.filter(
-                    (user) =>
-                        user.name.toLowerCase().includes(this.search.toLowerCase()) ||
-                        user.email.toLowerCase().includes(this.search.toLowerCase()) ||
-                        user.phone.toLowerCase().includes(this.search.toLowerCase()) ||
-                        user.org_props.position.toLowerCase().includes(this.search.toLowerCase())
-                )
-            }
-        }
-    },
+    // computed: {
+    //     filteredTableData() {
+    //         if (!this.search) {
+    //             // return this.users.filter((item, index) => index >= this.start && index < this.end);
+    //             return this.users;
+    //         } else {
+    //             return this.users.filter(
+    //                 (user) =>
+    //                     user.name?.toLowerCase().includes(this.search.toLowerCase()) ||
+    //                     user.email?.toLowerCase().includes(this.search.toLowerCase()) ||
+    //                     user.phone?.toLowerCase().includes(this.search.toLowerCase()) ||
+    //                     user.org_props?.position?.toLowerCase().includes(this.search.toLowerCase())
+    //             )
+    //         }
+    //     }
+    // },
     mounted() {
-        this.inputFocus();
+        // this.inputFocus();
         // Obtener la URL actual
         const currentURL = new URL(window.location.href);
         // Extraer el valor de 'currentTab' de los parámetros de búsqueda

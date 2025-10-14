@@ -2,7 +2,6 @@
     <AppLayout title="Días festivos">
         <main class="px-2 md:px-10 pt-1 pb-16">
             <h1 class="font-bold my-3 ml-4 text-lg">Días festivos</h1>
-
             <section class="md:flex justify-between items-center">
                 <article class="flex items-center space-x-5 lg:w-1/3">
                     <div class="mb-3 md:mb-0 w-full relative">
@@ -18,7 +17,7 @@
                 
                 <div class="my-4 lg:my-0 flex items-center justify-end space-x-3">
                     <PrimaryButton v-if="$page.props.auth.user.permissions?.includes('Crear dias festivos')" 
-                        @click="editFlag = false; showModal = true;">Agregar día festivo</PrimaryButton>
+                        @click="editFlag = false; showModal = true">Agregar día festivo</PrimaryButton>
                 </div>
             </section>
 
@@ -28,11 +27,10 @@
                     <!-- pagination -->
                     <div>
                         <el-pagination @current-change="handlePagination" layout="prev, pager, next"
-                            :total="holidays.length" />
+                            :total="holidays.length" hide-on-single-page />
                     </div>
-
                     <!-- buttons -->
-                    <div>
+                    <div v-if="$page.props.auth.user.permissions?.includes('Eliminar dias festivos')" >
                         <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
                             title="¿Continuar?" @confirm="deleteSelections">
                             <template #reference>
@@ -44,7 +42,7 @@
                 </div>
                 <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 100%"
                     @selection-change="handleSelectionChange" ref="multipleTableRef" :row-class-name="tableRowClassName">
-                    <el-table-column type="selection" width="45" />
+                    <el-table-column v-if="$page.props.auth.user.permissions?.includes('Eliminar dias festivos')"  type="selection" width="40" />
                     <el-table-column prop="id" label="ID" width="70" />
                     <el-table-column label="Nombre">
                         <template #default="scope">
@@ -71,10 +69,8 @@
                     </el-table-column>
                 </el-table>
             </div>
-            <!-- tabla -->
 
-            <!-- -------------- Modal Create starts----------------------- -->
-            <DialogModal :show="showModal" @close="showModal = false">
+            <DialogModal :show="showModal" @close="showModal = false" maxWidth="lg">
                 <template #title>
                     <p v-if="editFlag">Editar Día festivo "{{ itemClicked.name }}"</p>
                     <p v-else>Crear día festivo</p>
@@ -142,11 +138,10 @@
                             style="--el-switch-on-color: #1676A2; --el-switch-off-color: #CCCCCC" active-text="Activo"
                             inactive-text="Inactivo" />
 
-                        <div class="flex items-center space-x-3">
+                        <div class="flex items-center space-x-1">
                             <CancelButton @click="showModal = false; form.reset(); editFlag = false;" :disabled="form.processing">
                                 Cancelar
                             </CancelButton>
-
                             <PrimaryButton @click="editFlag ? update() : store()" :disabled="form.processing">
                                 <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
                                 {{ editFlag ? 'Actualizar' : 'Crear' }}
@@ -155,7 +150,6 @@
                     </div>
                 </template>
             </DialogModal>
-            <!-- --------------------------- Modal Create ends ------------------------------------ -->
         </main>
     </AppLayout>
 </template>
@@ -352,6 +346,7 @@ methods:{
         }
     },
     handleRowClick(row) {
+        if (!this.$page.props.auth.user.permissions?.includes('Editar dias festivos')) return;
         this.itemClicked = row;
         this.editFlag = true;
         this.showModal = true;

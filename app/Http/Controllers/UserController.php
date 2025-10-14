@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Department;
+use App\Models\JobPosition;
+use App\Models\PayrollUser;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -12,7 +15,7 @@ class UserController extends Controller
 {
     public function index()
     {
-        $users = User::latest()->get();
+        $users = User::latest()->whereNotIn('org_props->position', ['Soporte DTW'])->get();
 
         return inertia('User/Index', compact('users'));
     }
@@ -20,18 +23,22 @@ class UserController extends Controller
     public function create()
     {
         $roles = Role::all();
+        $departments = Department::latest()->get();
+        $job_positions = JobPosition::latest()->get();
 
-        return inertia('User/Create', compact('roles'));
+        return inertia('User/Create', compact('roles' ,'departments', 'job_positions'));
     }
 
     public function edit(User $user)
     {
         $roles = Role::all();
         $user_roles = $user->roles->pluck('id');
+        $departments = Department::latest()->get();
+        $job_positions = JobPosition::latest()->get();
 
-        return inertia('User/Edit', compact('user', 'roles', 'user_roles'));
+        return inertia('User/Edit', compact('user', 'roles', 'user_roles','departments', 'job_positions'));
     }
-    
+
     public function reactivation(User $user)
     {
         $roles = Role::all();
@@ -43,8 +50,9 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'code' => 'nullable|string|max:10',
             'name' => 'required|string|max:255|unique:users,name',
-            'email' => 'nullable|email|unique:users,email',
+            'email' => 'nullable',
             'phone' => 'nullable|string|max:15',
             'birthdate' => 'nullable|date',
             'civil_state' => 'nullable|string',
@@ -54,11 +62,12 @@ class UserController extends Controller
             'ssn' => 'nullable|string',
             'org_props.entry_date' => 'required|date',
             'org_props.position' => 'required|string|max:255',
-            'org_props.department' => 'nullable|string|max:255',
+            'org_props.department' => 'required|string|max:255',
             'org_props.phone' => 'nullable|string|max:255',
-            'org_props.gross_salary' => 'nullable|numeric|min:1',
+            'org_props.biweekly_complement' => 'nullable|numeric|min:1',
+            'org_props.month_complement' => 'nullable|numeric|min:1',
             'org_props.net_salary' => 'nullable|numeric|min:1',
-            'org_props.email' => 'required|string|max:255',
+            'org_props.email' => 'nullable|string|max:255',
             'org_props.vacations' => 'nullable',
             'org_props.updated_date_vacations' => 'nullable',
             'roles' => 'required|array|min:1',
@@ -93,14 +102,32 @@ class UserController extends Controller
         $users = User::get(['id', 'name']);
         $user->load(['media']);
 
-        return inertia('User/Show', compact('user', 'users'));
+        // Obtener vacaciones y agruparlas por año
+        $vacations = PayrollUser::where(['user_id' => $user->id, 'incidence' => 'Vacaciones'])
+            ->get()
+            ->groupBy(function ($vacation) {
+                return $vacation->date->format('Y'); // Agrupar por año
+            })
+            ->map(function ($vacations, $year) {
+                return [
+                    'label' => $year,
+                    'children' => $vacations->map(function ($vacation) {
+                        return [
+                            'label' => $vacation->date->isoFormat('dd, DD MMM')
+                        ];
+                    })->values()->all()
+                ];
+            })->values()->all();
+
+        return inertia('User/Show', compact('user', 'users', 'vacations'));
     }
 
     public function update(Request $request, User $user)
     {
         $validated = $request->validate([
+            'code' => 'nullable|string|max:10',
             'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
-            'email' => 'nullable|email|unique:users,email,' . $user->id,
+            'email' => 'nullable',
             'phone' => 'nullable|string|max:15',
             'birthdate' => 'nullable|date',
             'civil_state' => 'nullable|string',
@@ -110,17 +137,19 @@ class UserController extends Controller
             'ssn' => 'nullable|string',
             'org_props.entry_date' => 'required|date',
             'org_props.position' => 'required|string|max:255',
-            'org_props.department' => 'nullable|string|max:255',
+            'org_props.department' => 'required|string|max:255',
             'org_props.phone' => 'nullable|string|max:255',
-            'org_props.email' => 'required|string|max:255',
+            'org_props.email' => 'nullable|string|max:255',
             'org_props.vacations' => 'nullable',
             'org_props.updated_date_vacations' => 'nullable',
-            'org_props.gross_salary' => 'nullable|numeric|min:1',
+            'org_props.biweekly_complement' => 'nullable|numeric|min:1',
+            'org_props.month_complement' => 'nullable|numeric|min:1',
             'org_props.net_salary' => 'nullable|numeric|min:1',
             'roles' => 'required|array|min:1',
         ], [
             'org_props.entry_date.required' => 'Campo obligatorio.',
             'org_props.position.required' => 'Campo obligatorio.',
+            'org_props.position.department' => 'Campo obligatorio.',
             'org_props.email.required' => 'Campo obligatorio.',
         ]);
 
@@ -137,8 +166,9 @@ class UserController extends Controller
     public function updateWithMedia(Request $request, User $user)
     {
         $validated = $request->validate([
+            'code' => 'nullable|string|max:10',
             'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
-            'email' => 'nullable|email|unique:users,email,' . $user->id,
+            'email' => 'nullable',
             'phone' => 'nullable|string|max:15',
             'birthdate' => 'nullable|date',
             'civil_state' => 'nullable|string',
@@ -146,14 +176,15 @@ class UserController extends Controller
             'rfc' => 'nullable|string',
             'curp' => 'nullable|string',
             'ssn' => 'nullable|string',
-            'org_props.entry_date' => 'required|date',
-            'org_props.position' => 'required|string|max:255',
+            'org_props.entry_date' => 'nullable|date',
+            'org_props.position' => 'nullable|string|max:255',
             'org_props.department' => 'nullable|string|max:255',
             'org_props.phone' => 'nullable|string|max:255',
-            'org_props.email' => 'required|string|max:255',
+            'org_props.email' => 'nullable|string|max:255',
             'org_props.vacations' => 'nullable',
             'org_props.updated_date_vacations' => 'nullable',
-            'org_props.gross_salary' => 'nullable|numeric|min:1',
+            'org_props.biweekly_complement' => 'nullable|numeric|min:1',
+            'org_props.month_complement' => 'nullable|numeric|min:1',
             'org_props.net_salary' => 'nullable|numeric|min:1',
             'roles' => 'required|array|min:1',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
@@ -206,6 +237,11 @@ class UserController extends Controller
     public function resetPassword(User $user)
     {
         $user->update(['password' => bcrypt('123456')]);
+    }
+
+    public function toggleHomeOffice(User $user)
+    {
+        $user->update(['home_office' => !$user->home_office]);
     }
 
     public function massiveDelete(Request $request)
@@ -261,5 +297,40 @@ class UserController extends Controller
         $media->name = $request->media_name;
         $media->file_name = $request->media_name . ".$media->extension";
         $media->save();
+    }
+
+    public function getNextAttendance()
+    {
+        $next = auth()->user()->getNextAttendance();
+
+        return response()->json(compact('next'));
+    }
+
+    public function setAttendance()
+    {
+        $user = auth()->user();
+        $next = $user->setAttendance();
+
+        return response()->json(compact('next'));
+    }
+
+    public function getPauseStatus()
+    {
+        $status = auth()->user()->paused;
+
+        return response()->json(compact('status'));
+    }
+
+    public function setPause()
+    {
+        $user = auth()->user();
+
+        $is_paused = $user->setPause();
+
+        $message = $is_paused
+            ? "Se ha pausado tu tiempo laboral"
+            : "Se ha reanudado tu tiempo laboral";
+
+        return response()->json(['message' => $message, 'status' => $is_paused]);
     }
 }
