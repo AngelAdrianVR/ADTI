@@ -30,7 +30,7 @@ class SyncIncidents extends Command
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
-                    'username' => 'SuperADTI',
+                    'username' => 'admin',
                     'password' => 'adti1234',
                 ],
             ]);
