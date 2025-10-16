@@ -154,8 +154,8 @@
         <template #content>
             <div>
                 <InputLabel value="Comentarios" />
-                <el-input v-model="form.comments" :autosize="{ minRows: 3, maxRows: 6 }" type="textarea"
-                    placeholder="Escribe cualquier comentario" :maxlength="1200" show-word-limit clearable />
+                <el-input v-model="form.comments"
+                    placeholder="Escribe cualquier comentario" :maxlength="1200" clearable />
                 <InputError :message="form.errors.comments" />
             </div>
         </template>

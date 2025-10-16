@@ -1,15 +1,8 @@
 <?php
 
-// use Illuminate\Foundation\Inspiring;
-// use Illuminate\Support\Facades\Artisan;
-
 use App\Models\Payroll;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Schedule;
-
-// Artisan::command('inspire', function () {
-//     $this->comment(Inspiring::quote());
-// })->purpose('Display an inspiring quote')->hourly();
 
 Schedule::command('payrolls:close')
     ->tuesdays() // Revisa Martes a primera hora
@@ -24,4 +17,4 @@ Schedule::command('payrolls:close')
         return Carbon::parse($activePayroll->start_date)->diffInDays(now()) > 8;
     });
 Schedule::command('users:update-vacations')->daily();
-//Schedule::command('payrolls:sync-incidents')->everyMinute();
+// Schedule::command('payrolls:sync-incidents')->everyMinute();
