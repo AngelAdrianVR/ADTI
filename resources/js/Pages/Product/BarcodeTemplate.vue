@@ -1,6 +1,6 @@
 <template>
     <Head title="Códigos de barras" />
-    <section class="grid grid-cols-2 gap-4">
+    <section class="grid grid-cols-2 gap-">
         <div v-for="(product, index) in products" :key="index" class="h-[calc((100vh-2cm)/9)] md:h-32 flex flex-col items-center justify-center">
             <svg :ref="`barcode${index}`" class="h-[70%]"></svg>
             <p class="h-[30%] text-[10px] text-center">{{ product.name }}</p>
