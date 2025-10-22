@@ -134,7 +134,7 @@
                 </template>
                 <template #footer>
                     <div class="w-full flex justify-between">
-                        <el-switch v-model="form.is_active" inline-prompt size="medium"
+                        <el-switch v-model="form.is_active" inline-prompt
                             style="--el-switch-on-color: #1676A2; --el-switch-off-color: #CCCCCC" active-text="Activo"
                             inactive-text="Inactivo" />
 
@@ -217,13 +217,13 @@ data() {
             { label: "Diciembre", value: "12" },
         ],
         weekDays: [
-            'Lunes',
-            'Martes',
-            'Miércoles',
-            'Jueves',
-            'Viernes',
-            'Sábado',
-            'Domingo',
+            'lunes',
+            'martes',
+            'miércoles',
+            'jueves',
+            'viernes',
+            'sábado',
+            'domingo',
         ],
         Ordinals: [
             'Primer',
