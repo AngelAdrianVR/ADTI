@@ -207,4 +207,6 @@ Route::get('/clear-all', function () {
 
 
 Route::get('/api/process-transaction/{time}/{emp_code}', [PayrollUserController::class, 'processBioTimeTransaction']);
-Route::get('/api/get-todays-transactions/', [BioTimeTransactionsController::class, 'getTodaysTransactions']);
+// --- CAMBIO DE RUTA ---
+// Se cambió la ruta para obtener el conteo total de transacciones procesadas
+Route::get('/api/get-total-processed-count/', [BioTimeTransactionsController::class, 'getTotalProcessedCount']);
