@@ -60,7 +60,7 @@
                         </div>
                     </div>
                 </div>
-                <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 90%"
+                <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 100%"
                     @selection-change="handleSelectionChange" ref="multipleTableRef"
                     :row-class-name="tableRowClassName">
                     <el-table-column type="selection" width="30" />
@@ -241,6 +241,33 @@
                 </div>
             </template>
         </DialogModal>
+
+        <!-- modal para imprimir codigos de barras -->
+        <DialogModal :show="showPrintBarcodesModal" @close="showPrintBarcodesModal = false">
+            <template #title> Imprimir Códigos de Barras </template>
+            <template #content>
+                <p class="mb-3 text-sm text-gray-600">Ajusta la cantidad de etiquetas a imprimir para cada producto seleccionado.</p>
+                <div class="space-y-3">
+                    <div v-for="product in productsToPrint" :key="product.id" class="flex justify-between items-center p-2 border rounded-lg">
+                        <div>
+                            <p class="font-semibold">{{ product.description }}</p>
+                            <p class="text-xs text-gray-500">Núm. Parte: {{ product.part_number_supplier }}</p>
+                        </div>
+                        <el-input-number v-model="product.quantity" :min="1" size="small" controls-position="right" class="w-28" />
+                    </div>
+                </div>
+            </template>
+            <template #footer>
+                <div class="flex space-x-2">
+                    <CancelButton @click="showPrintBarcodesModal = false">
+                        Cancelar
+                    </CancelButton>
+                    <PrimaryButton @click="confirmPrintBarcodes">
+                        Imprimir
+                    </PrimaryButton>
+                </div>
+            </template>
+        </DialogModal>
     </AppLayout>
 </template>
 
@@ -283,6 +310,9 @@ export default {
             //exportacion
             showExportModal: false,
             isExporting: false,
+            // impresion de codigos de barras
+            showPrintBarcodesModal: false,
+            productsToPrint: [],
         }
     },
     components: {
@@ -348,9 +378,15 @@ export default {
             }
         },
         printBarcodes() {
-            const items_ids = this.$refs.multipleTableRef.value.map(item => item.id);
-            const url = route('products.print-barcodes', { items_ids: items_ids });
+            // Clona los items seleccionados para no modificar la data original y añade la propiedad 'quantity'
+            this.productsToPrint = JSON.parse(JSON.stringify(this.$refs.multipleTableRef.value)).map(item => ({...item, quantity: 1 }));
+            this.showPrintBarcodesModal = true;
+        },
+        confirmPrintBarcodes() {
+            const products_with_quantity = this.productsToPrint.map(item => ({ id: item.id, quantity: item.quantity }));
+            const url = route('products.print-barcodes', { products: JSON.stringify(products_with_quantity) });
             window.open(url, '_blank');
+            this.showPrintBarcodesModal = false;
         },
         async deleteSelections() {
             try {

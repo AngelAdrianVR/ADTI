@@ -98,40 +98,74 @@ class PayrollUserController extends Controller
         // Identificar si es entrada o salida
         $employee = User::firstWhere('code', $emp_code);
         if ($employee) {
-            $currentPayroll = Payroll::firstWhere('is_active', true);
 
+            // --- INICIO DE CAMBIOS ---
+            
+            $time = str_replace('+', ' ', $time);
+            $punchDateTime = Carbon::parse($time); // Parsear el timestamp completo
+            $punchDateStr = $punchDateTime->toDateString(); // Obtener la FECHA del punch
+            $punchTimeStr = $punchDateTime->format('H:i'); // Obtener la HORA del punch
+
+            // --- CORRECCIÓN DE CONSULTA ---
+            // Buscar el período de nómina que CONTENGA esta fecha.
+            // Ya que no hay 'end_date', calculamos el fin sumando 13 días a start_date (para un período de 14 días).
+            $currentPayroll = Payroll::where('start_date', '<=', $punchDateStr)
+                                    ->whereRaw('? <= DATE_ADD(start_date, INTERVAL 13 DAY)', [$punchDateStr])
+                                    ->first();
+
+            // Fallback a la nómina activa si no se encuentra un período (lógica original)
+            if (!$currentPayroll) {
+                $currentPayroll = Payroll::firstWhere('is_active', true);
+                if (!$currentPayroll) {
+                    Log::warning("No se encontró nómina activa o coincidente para el empleado {$emp_code} en la fecha {$punchDateStr}.");
+                    return; // Salir si no hay nómina
+                }
+            }
+            // --- FIN DE CORRECCIÓN DE CONSULTA ---
+
+            // Buscar el registro de asistencia usando la FECHA DEL PUNCH, no la de hoy
             $existingEntry = PayrollUser::where('user_id', $employee->id)
-                ->where('payroll_id', $currentPayroll->id)
-                ->whereDate('date', today()->toDateString())
+                ->whereDate('date', $punchDateStr) // <-- CAMBIO CRÍTICO
                 ->first();
 
-            $time = str_replace('+', ' ', $time);
-            $punchTime = Carbon::parse($time)->format('H:i');
             if (!$existingEntry) { //No existe registro de asistencia del empleado en cuestion
                 $existingEntry = PayrollUser::create([
-                    'emp_code' => $emp_code,
-                    'date' => today()->toDateString(),
-                    'check_in' => $punchTime,
+                    // 'emp_code' => $emp_code, // Este campo no existe en el modelo PayrollUser
+                    'date' => $punchDateStr, // <-- CAMBIO CRÍTICO
+                    'check_in' => $punchTimeStr, // Es el primer punch, se asigna a check_in
                     'user_id' => $employee->id,
                     'payroll_id' => $currentPayroll->id,
                 ]);
                 $employee->update(['paused' => null]);
             } else { //Ya existe registro de asistencia
-                if (strtotime($punchTime) <= strtotime('17:49')) {
+                // Lógica simple: si ya hay check_in, este es el check_out.
+                // (Se puede mejorar esta lógica si hay comidas, etc., pero seguimos la original)
+                if ($existingEntry->check_in && !$existingEntry->check_out) {
+                     $existingEntry->update([
+                        'check_out' => $punchTimeStr,
+                    ]);
+                    $employee->update(['paused' => null]);
+                }
+                // Si ya hay check_in y check_out, podríamos loggear que es un punch extra
+                // O si es antes de las 17:49 (lógica original), registrar pausa.
+                else if (strtotime($punchTimeStr) <= strtotime('17:49')) {
                     $employee->setPause();
                 } else {
-                    $existingEntry->update([
-                        'check_out' => $punchTime,
+                    // Si ya hay check_out, esto sobreescribirá el último.
+                     $existingEntry->update([
+                        'check_out' => $punchTimeStr,
                     ]);
                     $employee->update(['paused' => null]);
                 }
             }
 
-            // sumar la transaccion a las procesadas del dia actual
+            // sumar la transaccion a las procesadas del DIA DEL PUNCH
             $todaysTransactions = BioTimeTransactions::firstOrCreate(
-                ['date' => today()->toDateString()],
+                ['date' => $punchDateStr], // <-- CAMBIO CRÍTICO
             );
             $todaysTransactions->increment('quantity');
+
+            // --- FIN DE CAMBIOS ---
 
             // Calcular tiempo extra y retardo
             $existingEntry->calculateLate();
