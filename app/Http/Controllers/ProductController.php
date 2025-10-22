@@ -415,7 +415,29 @@ class ProductController extends Controller
 
     public function printBarcodes()
     {
-        $products = Product::whereIn('id', request('items_ids'))->get(['id', 'name', 'part_number']);
+        // Decodifica el string JSON de la solicitud. El segundo parámetro `true` convierte objetos a arrays asociativos.
+        $products_with_quantity = json_decode(request('products'), true);
+
+        // Obtiene un array con los IDs de los productos
+        $product_ids = array_column($products_with_quantity, 'id');
+
+        // Carga los productos desde la base de datos para mejorar el rendimiento
+        $product_models = Product::whereIn('id', $product_ids)
+                                 ->get(['id', 'name', 'part_number'])
+                                 ->keyBy('id');
+
+        // Crea la colección final de productos para imprimir, duplicándolos según la cantidad especificada
+        $products = collect();
+        foreach ($products_with_quantity as $product_data) {
+            // Verifica si el producto existe en los modelos cargados
+            if (isset($product_models[$product_data['id']])) {
+                $product_model = $product_models[$product_data['id']];
+                // Agrega el modelo del producto a la colección la cantidad de veces necesaria
+                for ($i = 0; $i < $product_data['quantity']; $i++) {
+                    $products->push($product_model);
+                }
+            }
+        }
 
         return inertia('Product/BarcodeTemplate', compact('products'));
     }
