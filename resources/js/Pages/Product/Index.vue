@@ -60,10 +60,16 @@
                         </div>
                     </div>
                 </div>
+                <!-- 
+                    MODIFICACIÓN: 
+                    1. Se agregó 'row-key="id"' a el-table.
+                    2. Se agregó 'reserve-selection' a el-table-column type="selection".
+                -->
                 <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 100%"
                     @selection-change="handleSelectionChange" ref="multipleTableRef"
-                    :row-class-name="tableRowClassName">
-                    <el-table-column type="selection" width="30" />
+                    :row-class-name="tableRowClassName" row-key="id">
+                    <!-- Se aumentó el width a 50 para mejor click area -->
+                    <el-table-column type="selection" width="50" reserve-selection />
                     <el-table-column prop="part_number_supplier" label="Num. de parte fabricante" width="200" />
                     <el-table-column prop="subcategory.category.name" label="Categoría" width="150" />
                     <el-table-column label="Subcategorías" width="150">
@@ -361,7 +367,12 @@ export default {
         tableRowClassName({ row, rowIndex }) {
             return 'cursor-pointer text-xs';
         },
-        handleRowClick(row) {
+        handleRowClick(row, column, event) {
+            // Si la columna clickeada es la de selección, togglea la selección y no navega
+            if (column.type === 'selection') {
+                this.$refs.multipleTableRef.toggleRowSelection(row);
+                return;
+            }
             this.$inertia.visit(route('products.show', row));
         },
         handleCommand(command) {
