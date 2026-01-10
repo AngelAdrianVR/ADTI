@@ -196,6 +196,20 @@ Route::delete('role-permission/{permission}/destroy-permission', [SettingControl
 //-----------------------------------------------------------------------------------------------------
 Route::get('kiosk', [KioskController::class, 'index'])->name('kiosk.index')->middleware('auth');
 
+// --- NUEVO MÓDULO: PROYECTOS & TIME TRACKING ---
+// ----------------------------------------------------------------------------------------------------
+use App\Http\Controllers\ProjectController; // Asegúrate de importar esto arriba si no se hace automático
+
+Route::middleware(['auth'])->group(function () {
+    // CRUD Básico de Proyectos
+    Route::resource('projects', ProjectController::class);
+    
+    // Acciones de Time Tracking
+    Route::post('projects/{project}/start', [ProjectController::class, 'startWork'])->name('projects.start');
+    Route::post('projects/{project}/pause', [ProjectController::class, 'togglePause'])->name('projects.pause'); // Sirve para pausar y reanudar
+    Route::post('projects/{project}/stop', [ProjectController::class, 'stopWork'])->name('projects.stop');
+});
+
 // artisan
 Route::get('/clear-all', function () {
     Artisan::call('cache:clear');
