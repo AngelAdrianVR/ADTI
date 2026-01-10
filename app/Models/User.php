@@ -189,4 +189,17 @@ class User extends Authenticatable implements HasMedia
             return $time;
         }
     }
+
+    public function timeEntries()
+    {
+        return $this->hasMany(TimeEntry::class);
+    }
+
+    // Retorna la entrada de tiempo activa (si existe)
+    public function activeTimeEntry()
+    {
+        return $this->hasOne(TimeEntry::class)
+            ->whereNull('end_time')
+            ->latest();
+    }
 }
