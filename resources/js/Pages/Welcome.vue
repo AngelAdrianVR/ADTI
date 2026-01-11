@@ -1,7 +1,6 @@
 <script setup>
-import { Link } from '@inertiajs/vue3';
 import { ref, computed, onMounted } from 'vue';
-import { router } from '@inertiajs/vue3';
+import { router, Head } from '@inertiajs/vue3';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
 import PublicCategoryCard from '@/Components/MyComponents/PublicLayout/PublicCategoryCard.vue';
 
@@ -10,29 +9,35 @@ const props = defineProps({
 });
 
 const cascaderProps = {
-  // expandTrigger: 'hover',
-  checkStrictly: true, //single selection
+  checkStrictly: true, // Selección única permitida en cualquier nivel
+  expandTrigger: 'hover', // UX mejorada: expandir al pasar el mouse
 }
 
 const value = ref([]);
-const loadinPage = ref(true);
+const loadingPage = ref(true);
 
-const handleChange = (value) => { //el value es un arreglo que guarda las selecciones del cascader. el index equivale al nivel de profundidad
-//si value solo tiene 1 elemento significa que es categoría, si tiene mas, es subcategoría
-  if ( value.length === 1 ) {
-    const category_id = props.categories.find(category => category.name === value[0]).id; //obtiene el id de la categoría seleccionada 
-    router.get(route('public.show-category', category_id)); //direcciona a la ruta que muestra las subcategorías
+const handleChange = (value) => {
+  if (!value || value.length === 0) return;
+
+  // Lógica original preservada pero optimizada
+  if (value.length === 1) {
+    const category = props.categories.find(c => c.name === value[0]);
+    if (category) router.get(route('public.show-category', category.id));
   } else {
-    const level = value.length; //obctiene el nivel de la opcion seleccionada 0-> categoría, mayor a 0 es subcategoría.
-    const category = props.categories.find(cat => cat.name === value[0]); //se guarda la categría de la que forma parte la subcategoría seleccionada.
-    const subcategory_id = category?.subcategories.find(sb => sb.name === value[(level - 1)]).id; //se busca el id de la subcategoría seleccionada
-    router.get(route('public.show-subcategory', subcategory_id)); //direcciona a la ruta que muestra las subcategorías
+    const level = value.length;
+    const categoryName = value[0];
+    const targetSubName = value[level - 1];
+    
+    const category = props.categories.find(c => c.name === categoryName);
+    const subcategory = category?.subcategories.find(sb => sb.name === targetSubName);
+    
+    if (subcategory) router.get(route('public.show-subcategory', subcategory.id));
   }
 }
 
-// Función para transformar categorías
+// Función de transformación (Lógica original mantenida, solo limpiada visualmente)
 const transformCategories = (categories) => {
-  if (!categories || !Array.isArray(categories)) return []; // Asegúrate de que categories esté definido y sea un arreglo
+  if (!categories || !Array.isArray(categories)) return [];
 
   return categories.map(category => {
     const transformedCategory = {
@@ -41,142 +46,131 @@ const transformCategories = (categories) => {
       children: []
     };
 
-    // Organizar subcategorías por nivel
-    let level1 = [];
-    let level2 = [];
-    let level3 = [];
-    let level4 = [];
-    let level5 = [];
+    // Agrupar por niveles
+    const levels = { 1: [], 2: [], 3: [], 4: [], 5: [] };
 
-    category.subcategories.forEach(subcategory => {
-      if (subcategory.level === 1) {
-        level1.push({
-          id: subcategory.id,
-          value: subcategory.name,
-          label: subcategory.name,
-          children: []
-        });
-      } else if (subcategory.level === 2) {
-        level2.push({
-          id: subcategory.id,
-          value: subcategory.name,
-          label: subcategory.name,
-          prev_sub: subcategory.prev_subcategory_id,
-          children: []
-        });
-      } else if (subcategory.level === 3) {
-        level3.push({
-          id: subcategory.id,
-          value: subcategory.name,
-          label: subcategory.name,
-          prev_sub: subcategory.prev_subcategory_id,
-          children: []
-        });
-      } else if (subcategory.level === 4) {
-        level4.push({
-          id: subcategory.id,
-          value: subcategory.name,
-          label: subcategory.name,
-          prev_sub: subcategory.prev_subcategory_id,
-          children: []
-        });
-      } else if (subcategory.level === 5) {
-        level5.push({
-          id: subcategory.id,
-          value: subcategory.name,
-          label: subcategory.name,
-          prev_sub: subcategory.prev_subcategory_id,
-          children: []
-        });
-      }
+    category.subcategories.forEach(sub => {
+        if (levels[sub.level]) {
+            levels[sub.level].push({
+                id: sub.id,
+                value: sub.name,
+                label: sub.name,
+                prev_sub: sub.prev_subcategory_id,
+                children: []
+            });
+        }
     });
 
-    // Añadir subcategorías de nivel 2 a las correspondientes de nivel 1
-    level2.forEach(l2 => {
-      const parent = level1.find(l1 => l1.id === l2.prev_sub);
-      if (parent) parent.children.push(l2);
+    // Anidar niveles (bottom-up logic simplificada en loops)
+    [5, 4, 3, 2].forEach(lvl => {
+        levels[lvl].forEach(child => {
+            const parent = levels[lvl-1].find(p => p.id === child.prev_sub);
+            if (parent) parent.children.push(child);
+        });
     });
 
-    // Añadir subcategorías de nivel 3 a las correspondientes de nivel 2
-    level3.forEach(l3 => {
-      const parent = level2.find(l2 => l2.id === l3.prev_sub);
-      if (parent) parent.children.push(l3);
-    });
-
-    // Añadir subcategorías de nivel 4 a las correspondientes de nivel 3
-    level4.forEach(l4 => {
-      const parent = level3.find(l3 => l3.id === l4.prev_sub);
-      if (parent) parent.children.push(l4);
-    });
-
-    // Añadir subcategorías de nivel 5 a las correspondientes de nivel 4
-    level5.forEach(l5 => {
-      const parent = level4.find(l4 => l4.id === l5.prev_sub);
-      if (parent) parent.children.push(l5);
-    });
-
-    transformedCategory.children.push(...level1);
-
+    transformedCategory.children.push(...levels[1]);
     return transformedCategory;
   });
 };
 
-// Utiliza la función con tus categorías
 const options = computed(() => transformCategories(props.categories));
 
 onMounted(() => {
-  // Después de 3 segundos, oculta el logo de carga
     setTimeout(() => {
-      loadinPage.value = false;
-    }, 2000);
+      loadingPage.value = false;
+    }, 1500); // Reduje un poco el tiempo para mejor UX
 });
 </script>
 
 <template>
-
-    <div v-if="loadinPage" class="absolute z-30 left-0 top-0 inset-0 bg-white flex flex-col items-center justify-center">
-      <figure class="rounded-3xl border p-3 shadow-md shadow-black/30 size-36 md:size-44 flex items-center justify-center">
-          <img class="w-full" src="@/../../public/images/logo_colors.webp" alt="Logo" />
-      </figure>
-        <i class="fa-solid fa-spinner text-primary fa-spin text-4xl mt-7"></i>
-    </div>
-
-    <PublicLayout class="relative" :title="'Bienvenido'">
-        <main class="lg:mx-40 p-4">
-
-            <!-- Decorations  -->
-            <figure>
-                <img class="hidden md:block absolute top-40 left-0" src="@/../../public/images/home_decoration1.png" alt="">
-                <img class="hidden md:block absolute top-20 left-0" src="@/../../public/images/home_decoration2.png" alt="">
-                <img class="hidden md:block absolute top-20 right-0" src="@/../../public/images/home_decoration3.png" alt="">
-            </figure>
-            <!-- ------------ -->
-
-            <body>
-                <!-- cascader -->
-                <div class="md:w-96">
-                    <el-cascader
-                    class="!w-full"
-                    v-model="value"
-                    :options="options"
-                    :props="cascaderProps"
-                    @change="handleChange"
-                    placeholder="Todas las categorías"
-                    />
-                </div>
-                <!-- --------- -->
-
-                <!-- Vista de selección de categorías -->
-                <section class="mx-auto my-16">
-                    <h1 class="font-bold text-center mb-5">TODAS LAS CATEGORIAS</h1>
-
-                    <div class="md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                      <PublicCategoryCard class="z-10" v-for="category in categories" :key="category" :category="category" />
+    <div>
+        <!-- Loading Screen (Overlay) -->
+        <transition name="fade">
+            <div v-if="loadingPage" class="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center">
+                <div class="relative">
+                    <div class="w-24 h-24 border-4 border-gray-100 border-t-primary rounded-full animate-spin"></div>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                         <img class="w-12 opacity-80" src="/images/logo_colors.webp" alt="Logo" />
                     </div>
-                </section>
-                <!-- -------------------------------- -->
-            </body>
-        </main>
-    </PublicLayout>
+                </div>
+                <p class="mt-4 text-gray-400 text-sm tracking-widest uppercase animate-pulse">Cargando catálogo...</p>
+            </div>
+        </transition>
+
+        <PublicLayout :title="'Bienvenido'">
+            
+            <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-16">
+                
+                <!-- Decoraciones de fondo (Absolute) -->
+                <div class="pointer-events-none select-none absolute inset-0 overflow-hidden -z-10 opacity-60">
+                     <img class="hidden lg:block absolute top-20 left-0 w-64 opacity-50 transform -translate-x-10" src="/images/home_decoration1.png" alt="">
+                     <img class="hidden md:block absolute top-10 right-0 w-96 opacity-40 transform translate-x-20" src="/images/home_decoration3.png" alt="">
+                </div>
+
+                <div class="relative z-10 flex flex-col items-center">
+                    
+                    <!-- Header Section -->
+                    <div class="text-center max-w-2xl mx-auto mb-10">
+                        <h1 class="text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
+                            Explora el <span class="text-primary">Catálogo</span>
+                        </h1>
+                        <p class="text-gray-500 text-lg">
+                            Encuentra rápidamente lo que necesitas navegando por las categorías o usando el buscador inteligente.
+                        </p>
+                    </div>
+
+                    <!-- Buscador Jerárquico (Cascader) -->
+                    <div class="w-full max-w-lg mb-16 rounded-lg">
+                        <el-cascader
+                            class="!w-full !h-12 text-lg"
+                            v-model="value"
+                            :options="options"
+                            :props="cascaderProps"
+                            @change="handleChange"
+                            placeholder="Selecciona una categoría..."
+                            size="large"
+                            filterable
+                            clearable
+                        />
+                    </div>
+
+                    <!-- Grid de Categorías -->
+                    <section class="w-full">
+                        <div class="flex items-center mb-8">
+                            <h2 class="text-xl font-bold text-gray-800 uppercase tracking-wider border-b-4 border-primary/20 pb-1">
+                                Categorías Destacadas
+                            </h2>
+                            <div class="flex-1 h-px bg-gray-100 ml-4"></div>
+                        </div>
+
+                        <div v-if="categories.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
+                            <PublicCategoryCard 
+                                v-for="category in categories" 
+                                :key="category.id" 
+                                :category="category" 
+                                class="h-full"
+                            />
+                        </div>
+                        <div v-else class="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
+                            <p class="text-gray-400">No hay categorías disponibles por el momento.</p>
+                        </div>
+                    </section>
+
+                </div>
+            </div>
+        </PublicLayout>
+    </div>
 </template>
 
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.5s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

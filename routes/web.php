@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\BioTimeTransactionsController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\FeatureController;
 use App\Http\Controllers\HolidayController;
@@ -74,16 +75,7 @@ Route::middleware([
     config('jetstream.auth_session'),
     'verified',
 ])->group(function () {
-    Route::get('/dashboard', function () {
-        $categories = Category::with(['subcategories:id,name,category_id' => ['products:id,name,subcategory_id']])->get();
-        $total_products = Product::all()->count();
-
-        // return $categories;
-        return Inertia::render('Dashboard', [
-            'categories' => $categories,
-            'total_products' => $total_products,
-        ]);
-    })->name('dashboard');
+    Route::get('/dashboard', DashboardController::class)->name('dashboard');
 });
 
 
