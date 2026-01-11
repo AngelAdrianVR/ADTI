@@ -219,6 +219,10 @@ Route::get('/clear-all', function () {
     return 'cleared.';
 });
 
+Route::get('/storage-link', function () {
+    Artisan::call('storage:link');
+    return 'Storage link created.';
+});
 
 Route::get('/api/process-transaction/{time}/{emp_code}', [PayrollUserController::class, 'processBioTimeTransaction']);
 // --- CAMBIO DE RUTA ---

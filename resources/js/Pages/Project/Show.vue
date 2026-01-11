@@ -55,13 +55,14 @@ const formatDate = (dateString) => {
     return new Intl.DateTimeFormat('es-MX', options).format(date);
 };
 
-// NUEVO: Formateador estricto para la HORA (evita el error del split)
+// Formateador estricto para la HORA
 const formatTime = (dateString) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
     return date.toLocaleTimeString('es-MX', { 
         hour: '2-digit', 
         minute: '2-digit', 
+        second: '2-digit',
         hour12: true 
     }).replace('p. m.', 'pm').replace('a. m.', 'am');
 };
@@ -215,11 +216,7 @@ const formatTime = (dateString) => {
                                             </template>
                                         </el-table-column>
                                         
-                                        <el-table-column label="Tiempo en Pausa">
-                                            <template #default="dayScope">
-                                                <span class="text-orange-500">{{ formatDuration(dayScope.row.total_pause) }}</span>
-                                            </template>
-                                        </el-table-column>
+                                        <!-- SE ELIMINÓ LA COLUMNA DE PAUSAS -->
 
                                         <!-- Detalle fino de sesiones (Tooltip o Popover) -->
                                         <el-table-column label="Sesiones" width="100" align="center">
@@ -235,7 +232,6 @@ const formatTime = (dateString) => {
                                                             <li v-for="entry in dayScope.row.entries" :key="entry.id" class="text-xs border-b pb-1 last:border-0">
                                                                 <div class="flex justify-between">
                                                                     <span>Inicio:</span>
-                                                                    <!-- AQUI SE CORRIGE: Usamos formatTime directo -->
                                                                     <span class="font-mono text-gray-700">{{ formatTime(entry.start_time) }}</span>
                                                                 </div>
                                                                 <div class="flex justify-between text-gray-500">
