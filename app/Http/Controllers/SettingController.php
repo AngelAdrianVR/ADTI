@@ -8,46 +8,84 @@ use App\Models\JobPosition;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use Inertia\Inertia;
 
 class SettingController extends Controller
 {
+    // VISTA 1: Categorías
+    // Ruta: settings/catalogos
     public function index()
     {
-        $roles = Role::with(['permissions'])->get();
+        return Inertia::render('Setting/Index', [
+            'section' => 'categories',
+        ]);
+    }
+
+    // VISTA 2: Roles y Permisos
+    // Ruta: settings/permisos
+    public function permissions()
+    {
+        // Cargamos los roles con sus permisos asignados
+        $roles = Role::with(['permissions'])->latest()->get();
+        
+        // Cargamos todos los permisos y los agrupamos por categoría para facilitar la UI
         $permissions = Permission::all()->groupBy(function ($data) {
             return $data->category;
         });
+
+        return Inertia::render('Setting/Index', [
+            'section' => 'permissions',
+            'roles' => $roles,
+            'permissions' => $permissions,
+        ]);
+    }
+
+    // VISTA 3: General
+    // Ruta: settings/general
+    public function general()
+    {
         $features = Feature::latest()->get();
         $departments = Department::latest()->get();
         $job_positions = JobPosition::latest()->get();
 
-        // mandar el unmero de tab por defecto desde la url
+        // Tab por defecto si viene en la url
         $currentTab = request('currentTab');
 
-        return inertia('Setting/Index', compact('roles', 'permissions', 'currentTab', 'features', 'departments', 'job_positions'));
+        return Inertia::render('Setting/Index', [
+            'section' => 'general',
+            'features' => $features,
+            'departments' => $departments,
+            'job_positions' => $job_positions,
+            'currentTab' => $currentTab
+        ]);
     }
 
     public function storeRole(Request $request)
     {
         $request->validate([
             'name' => 'required|string|max:191',
-            'permissions' => 'array|min:1'
+            'permissions' => 'array'
         ]);
 
         $role = Role::create(['name' => $request->name]);
-        $role->syncPermissions($request->permissions);
+        if ($request->has('permissions')) {
+            $role->syncPermissions($request->permissions);
+        }
     }
 
     public function updateRole(Request $request, Role $role)
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'permissions' => 'array|min:1'
+            'permissions' => 'array'
         ]);
 
         $role->name = $request->name;
         $role->save();
-        $role->syncPermissions($request->permissions);
+        
+        if ($request->has('permissions')) {
+            $role->syncPermissions($request->permissions);
+        }
     }
 
     public function deleteRole(Role $role)

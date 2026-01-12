@@ -1,6 +1,6 @@
 <script setup>
-import { ref, onMounted } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { ref, onMounted, computed, watch, onUnmounted } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import ApplicationMark from '@/Components/ApplicationMark.vue';
 import Banner from '@/Components/Banner.vue';
 import Dropdown from '@/Components/Dropdown.vue';
@@ -14,9 +14,85 @@ defineProps({
     title: String,
 });
 
+const page = usePage();
 const showingNavigationDropdown = ref(false);
 const nextAttendance = ref("");
 const isPaused = ref(false);
+// Nueva variable para ocultar el timer inmediatamente al detener
+const isHidden = ref(false);
+
+// --- Lógica del Timer de Proyecto ---
+const activeEntry = computed(() => page.props.auth?.user?.active_entry);
+const timerDisplay = ref('00:00:00');
+let timerInterval = null;
+
+const startLocalTimer = () => {
+    if (!activeEntry.value) return;
+    
+    // Función para calcular diferencia
+    const updateTimer = () => {
+        const start = new Date(activeEntry.value.start_time).getTime();
+        const now = new Date().getTime();
+        const diff = now - start;
+
+        if (diff < 0) {
+            timerDisplay.value = '00:00:00';
+            return;
+        }
+
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+        timerDisplay.value = 
+            `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    updateTimer(); // Ejecutar inmediatamente
+    timerInterval = setInterval(updateTimer, 1000); // Actualizar cada segundo
+};
+
+const stopWork = async () => {
+    try {
+        const response = await axios.post(route('projects.stop', activeEntry.value.project.id));
+        
+        if (response.status === 200) {
+            // 1. Detener lógica local y Ocultar visualmente INMEDIATAMENTE
+            clearInterval(timerInterval);
+            isHidden.value = true;
+
+            ElNotification.success({
+                title: "Tarea detenida",
+                message: `Has dejado de trabajar en: ${activeEntry.value.project.name}`,
+            });
+
+            // 2. Recargar datos del servidor en segundo plano
+            router.reload({ only: ['auth'] });
+        }
+    } catch (error) {
+        console.error(error);
+        ElNotification.error({
+            title: "Error",
+            message: "No se pudo detener la tarea. Intenta de nuevo.",
+        });
+    }
+};
+
+// Observar cambios en activeEntry (por si inicias/detienes tarea en otra pestaña o componente)
+watch(activeEntry, (newVal) => {
+    if (newVal) {
+        isHidden.value = false; // Resetear ocultamiento si entra una nueva tarea
+        startLocalTimer();
+    } else {
+        clearInterval(timerInterval);
+        timerDisplay.value = '00:00:00';
+    }
+}, { immediate: true });
+
+onUnmounted(() => {
+    clearInterval(timerInterval);
+});
+// --------------------------------
 
 const getAttendanceTextButton = async () => {
     try {
@@ -234,15 +310,15 @@ onMounted(() => {
             </div>
         </div>
 
-        <div class="overflow-hidden h-screen md:flex bg-white">
+        <div class="overflow-hidden h-screen md:flex bg-white relative">
 
             <!-- sidenav (Desktop) -->
-            <aside class="col-span-2 w-auto hidden md:block">
+            <aside class="col-span-2 w-auto hidden md:block z-30">
                 <SideNav />
             </aside>
 
             <!-- resto de pagina -->
-            <main class="w-full flex flex-col h-screen">
+            <main class="w-full flex flex-col h-screen relative">
                 <nav class="bg-white border-b border-grayD9 shrink-0">
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div class="flex justify-between h-12">
@@ -376,10 +452,65 @@ onMounted(() => {
                     </div>
                 </nav>
 
-                <div class="overflow-y-auto flex-1 bg-white">
+                <div class="overflow-y-auto flex-1 bg-white relative">
                     <slot />
+                    
+                    <!-- Timer Flotante -->
+                    <div v-if="activeEntry && !isHidden" 
+                         class="fixed bottom-0 right-0 left-0 sm:left-auto sm:bottom-6 sm:right-6 z-50 bg-gray-800 text-white shadow-lg sm:rounded-lg overflow-hidden flex items-center justify-between transition-all duration-300 transform translate-y-0">
+                        
+                        <!-- Barra de progreso indeterminada superior -->
+                        <div class="absolute top-0 left-0 w-full h-0.5 bg-gray-700 overflow-hidden">
+                            <div class="h-full bg-primary animate-progress"></div>
+                        </div>
+
+                        <div class="flex items-center px-4 py-3 gap-4">
+                            <!-- Icono y Texto -->
+                            <div class="flex items-center gap-3">
+                                <div class="relative flex h-3 w-3">
+                                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                  <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                                </div>
+                                <div class="flex flex-col">
+                                    <span class="text-[10px] uppercase text-gray-400 font-bold tracking-wider leading-none mb-1">En curso</span>
+                                    <span class="text-sm font-semibold truncate max-w-[150px] sm:max-w-[200px]" :title="activeEntry.project.name">
+                                        {{ activeEntry.project.name }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Timer Display -->
+                            <div class="font-mono text-lg font-bold text-gray-100 tabular-nums">
+                                {{ timerDisplay }}
+                            </div>
+
+                            <!-- Separador Vertical -->
+                            <div class="h-6 w-px bg-gray-600"></div>
+
+                            <!-- Botón Stop -->
+                            <button @click="stopWork" 
+                                    class="text-red-400 hover:text-white hover:bg-red-600 p-1.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                                    title="Detener tarea">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+                                  <path fill-rule="evenodd" d="M4.5 7.5a3 3 0 013-3h9a3 3 0 013 3v9a3 3 0 01-3 3h-9a3 3 0 01-3-3v-9z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </main>
         </div>
     </div>
 </template>
+
+<style>
+/* Animación para la barra de progreso */
+@keyframes progress {
+  0% { width: 0%; margin-left: 0%; }
+  50% { width: 50%; margin-left: 25%; }
+  100% { width: 100%; margin-left: 100%; }
+}
+.animate-progress {
+  animation: progress 2s infinite linear;
+}
+</style>

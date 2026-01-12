@@ -242,6 +242,8 @@ class UserController extends Controller
     public function toggleHomeOffice(User $user)
     {
         $user->update(['home_office' => !$user->home_office]);
+        // CORRECCIÓN: Retornar back() para que Inertia refresque las props en el frontend
+        return back();
     }
 
     public function massiveDelete(Request $request)

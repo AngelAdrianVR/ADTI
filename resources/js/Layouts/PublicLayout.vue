@@ -144,7 +144,7 @@ const goToProduct = (product) => {
         </nav>
 
         <!-- Contenido Principal -->
-        <main class="w-full">
+        <main class="w-full min-h-[calc(100vh-10.5em)]">
             <slot />
         </main>
 

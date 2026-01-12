@@ -1,181 +1,262 @@
+<script setup>
+import { ref, onMounted } from 'vue';
+import { router, Head, Link } from '@inertiajs/vue3';
+import AppLayout from "@/Layouts/AppLayout.vue";
+import PrimaryButton from "@/Components/PrimaryButton.vue";
+import SecondaryButton from "@/Components/SecondaryButton.vue";
+import Back from "@/Components/MyComponents/Back.vue";
+import General from "./Tabs/General.vue";
+import DigitalDocuments from "./Tabs/DigitalDocuments.vue";
+import axios from "axios";
+import { ElNotification } from "element-plus";
+
+const props = defineProps({
+    user: Object,
+    users: Array,
+    vacations: Array,
+});
+
+// State
+const loading = ref(false);
+const selectedItem = ref(props.user.id);
+const activeTab = ref('1');
+
+// Methods
+const handleClickInTab = (tab) => {
+    const currentURL = new URL(window.location.href);
+    currentURL.searchParams.set('currentTab', tab.props.name);
+    window.history.replaceState({}, document.title, currentURL.href);
+};
+
+const setTabFromUrl = () => {
+    const currentURL = new URL(window.location.href);
+    const currentTabFromURL = currentURL.searchParams.get('currentTab');
+    if (currentTabFromURL) {
+        activeTab.value = currentTabFromURL;
+    }
+};
+
+const resetPassword = async () => {
+    try {
+        loading.value = true;
+        const response = await axios.put(route('users.reset-password', props.user.id));
+
+        if (response.status === 200) {
+            ElNotification({
+                title: "Correcto",
+                message: "Se ha reseteado la contraseña a '123456'",
+                type: "success",
+            });
+        }
+    } catch (error) {
+        console.error(error);
+        ElNotification({
+            title: "Error",
+            message: "No se pudo resetear la contraseña.",
+            type: "error",
+        });
+    } finally {
+        loading.value = false;
+    }
+};
+
+const navigateToUser = (id) => {
+    router.visit(route('users.show', id));
+};
+
+onMounted(() => {
+    setTabFromUrl();
+});
+</script>
+
 <template>
-    <AppLayout title="Detalles usuario">
-        <header class="lg:px-9 px-1 mt-3">
-            <h1 class="font-bold text-base mt-2">Detalles del usuario</h1>
-            <section class="md:flex items-center justify-between mt-2">
-                <!-- buscador -->
-                <el-select @change="$inertia.get(route('users.show', selectedItem))" v-model="selectedItem"
-                    class="w-full lg:!w-1/4 mt-2" placeholder="Buscar usuario" filterable
-                    no-data-text="No hay más usuarios registrados" no-match-text="No se encontraron coincidencias">
-                    <el-option v-for="item in users" :key="item.id" :label="item.name" :value="item.id" />
-                </el-select>
-                <div class="flex items-center space-x-2 mt-3 md:mt-0">
-                    <PrimaryButton v-if="$page.props.auth.user.permissions.includes('Editar usuarios')"
-                        @click="$inertia.get(route('users.edit', user.id))" :disabled="loading">Editar</PrimaryButton>
-                    <el-popconfirm v-if="$page.props.auth.user.permissions.includes('Resetear contraseñas')"
-                        confirm-button-text="Si" cancel-button-text="No" icon-color="#6D6E72"
-                        title="La contraseña del usuario será reseteada a '123456' ¿Desea continuar?"
-                        @confirm="resetPassword()">
-                        <template #reference>
-                            <SecondaryButton class="!rounded-full" :disabled="loading">
-                                Resetear contraseña
-                            </SecondaryButton>
-                        </template>
-                    </el-popconfirm>
-                    <el-tooltip content="Crear nuevo usuario" placement="top">
-                        <SecondaryButton @click="$inertia.get(route('users.create'))" class="!rounded-full !p-2"
-                            :disabled="loading"><i class="fa-solid fa-plus text-xs size-4"></i></SecondaryButton>
-                    </el-tooltip>
+    <AppLayout :title="`Perfil - ${user.name}`">
+        <main class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+            <div class="max-w-7xl mx-auto">
+                
+                <!-- Encabezado y Navegación -->
+                <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                    <div class="flex items-center self-start md:self-auto">
+                        <Back :route="route('users.index')" class="mr-4" />
+                        <h1 class="text-2xl font-bold text-gray-800 hidden md:block">Expediente de Usuario</h1>
+                    </div>
+
+                    <!-- Selector de Usuario y Acciones -->
+                    <div class="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+                        <div class="w-full md:w-64">
+                            <el-select 
+                                v-model="selectedItem" 
+                                @change="navigateToUser"
+                                placeholder="Buscar usuario..." 
+                                filterable
+                                class="w-full"
+                            >
+                                <template #prefix>
+                                    <i class="fa-solid fa-user-magnifying-glass text-gray-400"></i>
+                                </template>
+                                <el-option v-for="item in users" :key="item.id" :label="item.name" :value="item.id" />
+                            </el-select>
+                        </div>
+
+                        <div class="flex items-center gap-2 self-end md:self-auto">
+                            <!-- Botón Editar -->
+                            <PrimaryButton 
+                                v-if="$page.props.auth.user.permissions.includes('Editar usuarios')"
+                                @click="router.visit(route('users.edit', user.id))" 
+                                :disabled="loading"
+                                class="!py-2"
+                            >
+                                <i class="fa-solid fa-pen-to-square mr-2"></i> Editar
+                            </PrimaryButton>
+
+                            <!-- Botón Reset Password -->
+                            <el-popconfirm 
+                                v-if="$page.props.auth.user.permissions.includes('Resetear contraseñas')"
+                                confirm-button-text="Si" 
+                                cancel-button-text="No" 
+                                icon-color="#F59E0B"
+                                title="¿Resetear contraseña a '123456'?"
+                                @confirm="resetPassword"
+                            >
+                                <template #reference>
+                                    <button class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 hover:text-red-600 px-3 py-2 rounded-md shadow-sm transition-colors text-sm font-medium" :disabled="loading" title="Resetear contraseña">
+                                        <i class="fa-solid fa-key"></i>
+                                    </button>
+                                </template>
+                            </el-popconfirm>
+
+                            <!-- Botón Nuevo -->
+                            <button 
+                                @click="router.visit(route('users.create'))" 
+                                class="bg-indigo-600 text-white hover:bg-indigo-700 px-3 py-2 rounded-md shadow-sm transition-colors"
+                                title="Crear nuevo usuario"
+                            >
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
-            </section>
-        </header>
-        <section class="relative mt-10">
-            <div class="bg-[#0B3B51] h-44 pt-px">
-                <button @click="$inertia.get(route('users.index'))"
-                    class="flex justify-center items-center rounded-full size-5 focus:outline-none bg-grayED text-primary ml-3 mt-3">
-                    <i class="fa-solid fa-angle-left text-xs"></i>
-                </button>
+
+                <!-- Grid Principal -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+                    
+                    <!-- Columna Izquierda: Tarjeta de Perfil -->
+                    <div class="lg:col-span-4 xl:col-span-3">
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col items-center text-center sticky top-24">
+                            
+                            <!-- Foto -->
+                            <div class="relative mb-4 group">
+                                <img :src="user.profile_photo_url" :alt="user.name" class="w-32 h-32 rounded-full object-cover border-4 border-white shadow-md">
+                                <div v-if="!user.is_active" class="absolute bottom-1 right-1 bg-red-100 text-red-600 p-1.5 rounded-full border-2 border-white" title="Usuario Inactivo">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="size-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
+                                    </svg>
+                                </div>
+                                <div v-else class="absolute bottom-1 right-1 bg-green-100 text-green-600 p-1.5 rounded-full border-2 border-white" title="Usuario Activo">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="size-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <h2 class="text-xl font-bold text-gray-800">{{ user.name }}</h2>
+                            <p class="text-sm text-gray-500 font-medium mb-4">{{ user.org_props?.position || 'Sin puesto definido' }}</p>
+
+                            <!-- Badge Pausa -->
+                            <div v-if="user.paused" class="bg-amber-50 text-amber-700 px-3 py-1 rounded-full text-xs font-bold border border-amber-100 flex items-center gap-1 mb-4">
+                                <i class="fa-solid fa-pause"></i> En pausa: {{ user.paused }}
+                            </div>
+
+                            <div class="w-full border-t border-gray-100 my-4"></div>
+
+                            <!-- Info Rápida -->
+                            <div class="w-full space-y-3 text-sm text-left">
+                                <div class="flex items-center text-gray-600">
+                                    <div class="w-8 flex justify-center"><i class="fa-solid fa-id-card text-gray-400"></i></div>
+                                    <span class="font-mono text-gray-800">{{ user.code || 'N/A' }}</span>
+                                </div>
+                                <div class="flex items-center text-gray-600">
+                                    <div class="w-8 flex justify-center"><i class="fa-solid fa-envelope text-gray-400"></i></div>
+                                    <span class="truncate" :title="user.email">{{ user.email }}</span>
+                                </div>
+                                <div class="flex items-center text-gray-600">
+                                    <div class="w-8 flex justify-center"><i class="fa-solid fa-phone text-gray-400"></i></div>
+                                    <span>{{ user.phone || 'N/A' }}</span>
+                                </div>
+                                <div class="flex items-center text-gray-600">
+                                    <div class="w-8 flex justify-center"><i class="fa-solid fa-building text-gray-400"></i></div>
+                                    <span>{{ user.org_props?.department || 'N/A' }}</span>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- Columna Derecha: Tabs -->
+                    <div class="lg:col-span-8 xl:col-span-9">
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden min-h-[600px]">
+                            <el-tabs v-model="activeTab" class="user-tabs px-6 pt-4" @tab-click="handleClickInTab">
+                                
+                                <el-tab-pane name="1">
+                                    <template #label>
+                                        <span class="flex items-center gap-2">
+                                            <i class="fa-regular fa-id-badge"></i> Información General
+                                        </span>
+                                    </template>
+                                    <div class="py-6 animate-fade-in">
+                                        <General :user="user" :vacations="vacations" />
+                                    </div>
+                                </el-tab-pane>
+
+                                <el-tab-pane name="2">
+                                    <template #label>
+                                        <span class="flex items-center gap-2">
+                                            <i class="fa-regular fa-folder-open"></i> Expediente Digital
+                                        </span>
+                                    </template>
+                                    <div class="py-6 animate-fade-in">
+                                        <DigitalDocuments :user="user" />
+                                    </div>
+                                </el-tab-pane>
+
+                            </el-tabs>
+                        </div>
+                    </div>
+
+                </div>
             </div>
-            <svg class="hidden lg:block absolute top-1 left-12" width="533" height="169" viewBox="0 0 533 169"
-                fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M41.0025 168.5C-115 -99.5 212.506 253.5 532.003 1" stroke="#D9D9D9" />
-            </svg>
-            <svg class="absolute top-[75px] right-12" width="426" height="102" viewBox="0 0 426 102" fill="none"
-                xmlns="http://www.w3.org/2000/svg">
-                <path d="M335 101.001C587.5 -66.501 258 7.5 0.5 101.001" stroke="#D9D9D9" />
-            </svg>
-            <figure
-                class="size-32 lg:size-40 rounded-[5px] bg-gray-500 absolute top-20 left-[calc(50%-5rem)] shadow-lg">
-                <img :src="user.profile_photo_url" :alt="user.name"
-                    class="size-32 lg:size-40 object-cover rounded-[5px]">
-            </figure>
-            <h1 class="font-bold text-center mt-20">{{ user.name }}</h1>
-            <p v-if="user.paused" class="flex justify-center space-x-1 text-red-400 text-xs">
-                <span>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                        stroke="currentColor" class="size-4">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M14.25 9v6m-4.5 0V9M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                    </svg>
-                </span>
-                <span>Pausó a las {{ user.paused }}</span>
-            </p>
-        </section>
-        <!-- Tabs -->
-        <el-tabs v-model="activeTab" class="mx-5" @tab-click="handleClickInTab">
-            <el-tab-pane name="1">
-                <template #label>
-                    <div class="flex items-center space-x-2">
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"
-                            class="size-4">
-                            <mask id="mask0_14787_313" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0"
-                                width="14" height="14">
-                                <rect width="14" height="14" fill="currentColor" />
-                            </mask>
-                            <g mask="url(#mask0_14787_313)">
-                                <path
-                                    d="M2.91667 12.2507C2.59583 12.2507 2.32118 12.1364 2.09271 11.9079C1.86424 11.6795 1.75 11.4048 1.75 11.084V2.91732C1.75 2.59648 1.86424 2.32183 2.09271 2.09336C2.32118 1.86489 2.59583 1.75065 2.91667 1.75065H5.36667C5.50278 1.40065 5.71667 1.11871 6.00833 0.904818C6.3 0.690929 6.63056 0.583984 7 0.583984C7.36944 0.583984 7.7 0.690929 7.99167 0.904818C8.28333 1.11871 8.49722 1.40065 8.63333 1.75065H11.0833C11.4042 1.75065 11.6788 1.86489 11.9073 2.09336C12.1358 2.32183 12.25 2.59648 12.25 2.91732V11.084C12.25 11.4048 12.1358 11.6795 11.9073 11.9079C11.6788 12.1364 11.4042 12.2507 11.0833 12.2507H2.91667ZM7 2.47982C7.12639 2.47982 7.2309 2.4385 7.31354 2.35586C7.39618 2.27322 7.4375 2.16871 7.4375 2.04232C7.4375 1.91593 7.39618 1.81141 7.31354 1.72878C7.2309 1.64614 7.12639 1.60482 7 1.60482C6.87361 1.60482 6.7691 1.64614 6.68646 1.72878C6.60382 1.81141 6.5625 1.91593 6.5625 2.04232C6.5625 2.16871 6.60382 2.27322 6.68646 2.35586C6.7691 2.4385 6.87361 2.47982 7 2.47982ZM2.91667 10.4132C3.44167 9.89787 4.05174 9.49197 4.74688 9.19544C5.44201 8.89892 6.19306 8.75065 7 8.75065C7.80694 8.75065 8.55799 8.89892 9.25312 9.19544C9.94826 9.49197 10.5583 9.89787 11.0833 10.4132V2.91732H2.91667V10.4132ZM7 7.58398C7.56389 7.58398 8.04514 7.38468 8.44375 6.98607C8.84236 6.58746 9.04167 6.10621 9.04167 5.54232C9.04167 4.97843 8.84236 4.49718 8.44375 4.09857C8.04514 3.69996 7.56389 3.50065 7 3.50065C6.43611 3.50065 5.95486 3.69996 5.55625 4.09857C5.15764 4.49718 4.95833 4.97843 4.95833 5.54232C4.95833 6.10621 5.15764 6.58746 5.55625 6.98607C5.95486 7.38468 6.43611 7.58398 7 7.58398ZM4.08333 11.084H9.91667V10.9382C9.50833 10.5979 9.05625 10.3427 8.56042 10.1725C8.06458 10.0024 7.54444 9.91732 7 9.91732C6.45556 9.91732 5.93542 10.0024 5.43958 10.1725C4.94375 10.3427 4.49167 10.5979 4.08333 10.9382V11.084ZM7 6.41732C6.75694 6.41732 6.55035 6.33225 6.38021 6.16211C6.21007 5.99197 6.125 5.78537 6.125 5.54232C6.125 5.29926 6.21007 5.09267 6.38021 4.92253C6.55035 4.75239 6.75694 4.66732 7 4.66732C7.24306 4.66732 7.44965 4.75239 7.61979 4.92253C7.78993 5.09267 7.875 5.29926 7.875 5.54232C7.875 5.78537 7.78993 5.99197 7.61979 6.16211C7.44965 6.33225 7.24306 6.41732 7 6.41732Z"
-                                    fill="currentColor" />
-                            </g>
-                        </svg>
-                        <p>Información general</p>
-                    </div>
-                </template>
-                <General :user="user" :vacations="vacations" />
-            </el-tab-pane>
-            <el-tab-pane name="2">
-                <template #label>
-                    <div class="flex items-center space-x-2">
-                        <svg class="size-4" width="14" height="14" viewBox="0 0 14 14" fill="none"
-                            xmlns="http://www.w3.org/2000/svg">
-                            <mask id="mask0_14787_310" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0"
-                                width="14" height="14">
-                                <rect width="14" height="14" fill="currentColor" />
-                            </mask>
-                            <g mask="url(#mask0_14787_310)">
-                                <path
-                                    d="M6.18333 9.36315L10.2958 5.25065L9.47917 4.43398L6.18333 7.72982L4.52083 6.06732L3.70417 6.88399L6.18333 9.36315ZM2.91667 12.2507C2.59583 12.2507 2.32118 12.1364 2.09271 11.9079C1.86424 11.6795 1.75 11.4048 1.75 11.084V2.91732C1.75 2.59648 1.86424 2.32183 2.09271 2.09336C2.32118 1.86489 2.59583 1.75065 2.91667 1.75065H5.36667C5.49306 1.40065 5.70451 1.11871 6.00104 0.904818C6.29757 0.690929 6.63056 0.583984 7 0.583984C7.36944 0.583984 7.70243 0.690929 7.99896 0.904818C8.29549 1.11871 8.50694 1.40065 8.63333 1.75065H11.0833C11.4042 1.75065 11.6788 1.86489 11.9073 2.09336C12.1358 2.32183 12.25 2.59648 12.25 2.91732V11.084C12.25 11.4048 12.1358 11.6795 11.9073 11.9079C11.6788 12.1364 11.4042 12.2507 11.0833 12.2507H2.91667ZM2.91667 11.084H11.0833V2.91732H2.91667V11.084ZM7 2.47982C7.12639 2.47982 7.2309 2.4385 7.31354 2.35586C7.39618 2.27322 7.4375 2.16871 7.4375 2.04232C7.4375 1.91593 7.39618 1.81141 7.31354 1.72878C7.2309 1.64614 7.12639 1.60482 7 1.60482C6.87361 1.60482 6.7691 1.64614 6.68646 1.72878C6.60382 1.81141 6.5625 1.91593 6.5625 2.04232C6.5625 2.16871 6.60382 2.27322 6.68646 2.35586C6.7691 2.4385 6.87361 2.47982 7 2.47982Z"
-                                    fill="currentColor" />
-                            </g>
-                        </svg>
-                        <p>Expediente digital</p>
-                    </div>
-                </template>
-                <DigitalDocuments :user="user" />
-            </el-tab-pane>
-        </el-tabs>
+        </main>
     </AppLayout>
 </template>
 
-<script>
-import AppLayout from "@/Layouts/AppLayout.vue";
-import PrimaryButton from "@/Components/PrimaryButton.vue";
-import Back from "@/Components/MyComponents/Back.vue";
-import SecondaryButton from "@/Components/SecondaryButton.vue";
-import axios from "axios";
-import General from "./Tabs/General.vue";
-import DigitalDocuments from "./Tabs/DigitalDocuments.vue";
-
-export default {
-    data() {
-        return {
-            loading: false,
-            selectedItem: this.user.id,
-            activeTab: '1',
-        }
-    },
-    components: {
-        AppLayout,
-        PrimaryButton,
-        Back,
-        SecondaryButton,
-        General,
-        DigitalDocuments,
-    },
-    props: {
-        user: Object,
-        users: Array,
-        vacations: Array,
-    },
-    methods: {
-        handleClickInTab(tab) {
-            // Agrega la variable currentTab=tab.props.name a la URL para mejorar la navegacion al actalizar o cambiar de pagina
-            const currentURL = new URL(window.location.href);
-            currentURL.searchParams.set('currentTab', tab.props.name);
-            // Actualiza la URL
-            window.history.replaceState({}, document.title, currentURL.href);
-        },
-        setTabFromUrl() {
-            // Obtener la URL actual
-            const currentURL = new URL(window.location.href);
-            // Extraer el valor de 'currentTab' de los parámetros de búsqueda
-            const currentTabFromURL = currentURL.searchParams.get('currentTab');
-
-            if (currentTabFromURL) {
-                this.activeTab = currentTabFromURL;
-            }
-        },
-        async resetPassword() {
-            try {
-                this.loading = true;
-                const response = await axios.put(route('users.reset-password', this.user.id));
-
-                if (response.status === 200) {
-                    this.$notify({
-                        title: "Correcto",
-                        message: "Se ha reseteado la contraseña a 123456",
-                        type: "success",
-                    });
-                }
-            } catch (error) {
-                console.log(error)
-            } finally {
-                this.loading = false;
-            }
-        },
-    },
-    mounted() {
-        this.setTabFromUrl();
-    }
+<style scoped>
+/* Personalización de Tabs similar a ProductShow */
+:deep(.el-tabs__nav-wrap::after) {
+    background-color: #f3f4f6;
+    height: 1px;
 }
-</script>
+:deep(.el-tabs__item) {
+    font-size: 0.95rem;
+    color: #6b7280;
+    transition: all 0.3s;
+    padding-bottom: 12px !important; 
+    padding-top: 12px !important;
+}
+:deep(.el-tabs__item.is-active) {
+    color: #4f46e5;
+    font-weight: 600;
+}
+:deep(.el-tabs__active-bar) {
+    background-color: #4f46e5;
+    height: 3px;
+    border-radius: 3px;
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.4s ease-out;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>

@@ -1,198 +1,231 @@
+<script setup>
+import { ref, computed } from 'vue';
+import { useForm, router } from '@inertiajs/vue3';
+import PrimaryButton from "@/Components/PrimaryButton.vue";
+import DialogModal from "@/Components/DialogModal.vue";
+import InputLabel from "@/Components/InputLabel.vue";
+import InputError from "@/Components/InputError.vue";
+import TextInput from "@/Components/TextInput.vue";
+import SecondaryButton from "@/Components/SecondaryButton.vue";
+import { ElNotification } from "element-plus";
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+
+const props = defineProps({
+    roles: Array,
+});
+
+// Obtener permisos globales compartidos desde el controlador padre (SettingIndex -> Tabs)
+// O hacer una petición si no están disponibles. 
+// Asumiremos que se pasan o se pueden inyectar.
+// Para simplificar y corregir el error, usaremos los permisos que ya vienen en `roles` para visualización
+// Y para el modal, necesitamos la lista completa de permisos disponibles.
+// **IMPORTANTE**: Como `Roles.vue` ahora es hijo de `SettingIndex` en la sección "permissions",
+// necesitamos acceder a la lista completa de permisos para poder asignarlos.
+// Vamos a usar `usePage` para acceder a las props globales si están ahí, o definiremos una prop extra si el padre la pasa.
+// El padre (SettingIndex) recibe `permissions` y `roles`. Deberíamos pasar `permissions` a este componente.
+
+// NOTA: Para que esto funcione, asegúrate de pasar `:permissions="permissions"` desde SettingIndex.vue a <Roles />
+const permissions = defineModel('permissions', { default: {} }); 
+
+const showRoleModal = ref(false);
+const currentRole = ref(null);
+const editFlag = ref(false);
+const form = useForm({
+    name: null,
+    permissions: [] // Array de IDs de permisos
+});
+
+const formatDate = (dateString) => {
+    return format(new Date(dateString), 'dd MMM, yyyy', { locale: es });
+};
+
+const createRole = () => {
+    currentRole.value = null;
+    editFlag.value = false;
+    form.reset();
+    showRoleModal.value = true;
+};
+
+const editRole = (role) => {
+    currentRole.value = role;
+    editFlag.value = true;
+    form.name = role.name;
+    // Extraer IDs de permisos actuales
+    form.permissions = role.permissions.map(p => p.id);
+    showRoleModal.value = true;
+};
+
+const storeRole = () => {
+    form.post(route('settings.role-permission.store-role'), {
+        onSuccess: () => {
+            ElNotification.success('Rol creado correctamente');
+            showRoleModal.value = false;
+            form.reset();
+        },
+    });
+};
+
+const updateRole = () => {
+    form.put(route('settings.role-permission.update-role', currentRole.value.id), {
+        onSuccess: () => {
+            ElNotification.success('Rol actualizado correctamente');
+            showRoleModal.value = false;
+            form.reset();
+        },
+    });
+};
+
+const deleteRole = (role) => {
+    router.delete(route('settings.role-permission.delete-role', role.id), {
+        onSuccess: () => {
+            ElNotification.success('Rol eliminado');
+        },
+    });
+};
+
+// Helper para convertir el objeto de permisos agrupados en una lista plana para el checkbox si fuera necesario,
+// pero aquí lo manejaremos agrupado visualmente.
+</script>
+
 <template>
-    <div class="mx-3">
-        <div class="flex items-center justify-between">
-            <h1 class="font-bold text-base">Roles</h1>
-            <PrimaryButton v-if="$page.props.auth.user.permissions.includes('Crear roles')" @click="createRole()"
-                class="rounded-full">
-                Crear rol
+    <div class="py-4">
+        <!-- Header Actions -->
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h2 class="text-lg font-bold text-gray-800">Gestión de Roles</h2>
+                <p class="text-sm text-gray-500">Administra los roles de usuario y sus niveles de acceso.</p>
+            </div>
+            <PrimaryButton v-if="$page.props.auth.user.permissions.includes('Crear roles')" @click="createRole">
+                <i class="fa-solid fa-plus mr-2"></i> Nuevo Rol
             </PrimaryButton>
         </div>
-        <p class="text-secondary">En este apartado, puedes gestionar los roles y sus permisos. Asigna permisos
-            específicos a cada rol según sea necesario.</p>
-        <div class="text-sm mt-5">
-            <div v-if="roles.length" class="overflow-auto">
-                <table class="">
-                    <thead>
-                        <tr class="*:text-secondary *:font-normal *:text-start">
-                            <th class="w-12">ID</th>
-                            <th class="w-44">Nombre del rol</th>
-                            <th class="w-56">Fecha de creación</th>
-                            <th class="w-12"></th>
+
+        <!-- Tabla de Roles -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left text-gray-500">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-50 border-b">
+                        <tr>
+                            <th class="px-6 py-3 font-bold">Nombre del Rol</th>
+                            <th class="px-6 py-3 font-bold text-center">Permisos Asignados</th>
+                            <th class="px-6 py-3 font-bold text-center">Fecha Creación</th>
+                            <th class="px-6 py-3 font-bold text-right">Acciones</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr v-for="(role, index) in roles" :key="role.id">
-                            <td>{{ role.id }}</td>
-                            <td>
-                                <button @click="editRole(role, index)" class="hover:underline">
+                    <tbody class="divide-y divide-gray-100">
+                        <tr v-for="role in roles" :key="role.id" class="hover:bg-gray-50 transition-colors">
+                            <td class="px-6 py-4 font-medium text-gray-900">
+                                <div class="flex items-center">
+                                    <div class="h-8 w-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center mr-3 font-bold uppercase text-xs">
+                                        {{ role.name.substring(0, 2) }}
+                                    </div>
                                     {{ role.name }}
-                                </button>
+                                </div>
                             </td>
-                            <td>{{ formatDate(role.created_at) }}</td>
-                            <td>
-                                <div v-if="$page.props.auth.user.permissions.includes('Eliminar roles')">
-                                    <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#6F6E72"
-                                        :title="'¿Desea eliminar el elemento seleccionado?'" @confirm="deleteRole(role)">
+                            <td class="px-6 py-4 text-center">
+                                <span class="bg-gray-100 text-gray-600 py-1 px-3 rounded-full text-xs font-semibold">
+                                    {{ role.permissions.length }} permisos
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                {{ formatDate(role.created_at) }}
+                            </td>
+                            <td class="px-6 py-4 text-right">
+                                <div class="flex items-center justify-end space-x-2">
+                                    <button 
+                                        v-if="$page.props.auth.user.permissions.includes('Editar roles')"
+                                        @click="editRole(role)" 
+                                        class="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 p-2 rounded-full transition-colors"
+                                        title="Editar"
+                                    >
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+                                    
+                                    <el-popconfirm
+                                        v-if="$page.props.auth.user.permissions.includes('Eliminar roles')"
+                                        confirm-button-text="Si"
+                                        cancel-button-text="No"
+                                        icon-color="#DC2626"
+                                        title="¿Eliminar este rol?"
+                                        @confirm="deleteRole(role)"
+                                    >
                                         <template #reference>
-                                            <button class="text-primary">
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                                    stroke-width="1.5" stroke="currentColor" class="size-4">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-                                                </svg>
+                                            <button class="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-full transition-colors" title="Eliminar">
+                                                <i class="fa-regular fa-trash-can"></i>
                                             </button>
                                         </template>
                                     </el-popconfirm>
                                 </div>
                             </td>
                         </tr>
+                        <tr v-if="roles.length === 0">
+                            <td colspan="4" class="px-6 py-8 text-center text-gray-400">
+                                No hay roles registrados.
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
-            <el-empty v-if="!roles.length" description="No hay roles para mostrar" />
         </div>
-        <DialogModal :show="showRoleModal" @close="showRoleModal = false">
+
+        <!-- Modal Crear/Editar Rol -->
+        <DialogModal :show="showRoleModal" @close="showRoleModal = false" maxWidth="2xl">
             <template #title>
-                <p v-if="editFlag">Rol {{ currentRole.name }}</p>
-                <p v-else>Crear nuevo rol</p>
+                <span class="font-bold text-lg text-gray-800">{{ editFlag ? 'Editar Rol' : 'Crear Nuevo Rol' }}</span>
             </template>
+
             <template #content>
-                <div>
-                    <form @submit.prevent="editFlag ? updateRole() : storeRole()" ref="myform"
-                        class="grid grid-cols-2 lg:grid-cols-3">
-                        <div class="col-span-full mb-4">
-                            <InputLabel value="Nombre de rol *" class="ml-2" />
-                            <input v-model="form.name" class="input" type="text">
-                            <InputError :message="form.errors.name" />
+                <div class="space-y-6">
+                    <!-- Nombre -->
+                    <div>
+                        <InputLabel value="Nombre del Rol *" />
+                        <TextInput v-model="form.name" class="w-full mt-1" placeholder="Ej. Administrador de Ventas" autofocus />
+                        <InputError :message="form.errors.name" class="mt-1" />
+                    </div>
+
+                    <!-- Permisos (Selector Agrupado) -->
+                    <div>
+                        <InputLabel value="Asignar Permisos" class="mb-3" />
+                        
+                        <!-- CORRECCIÓN ERROR: v-if="permissions" asegura que exista el objeto antes de iterar -->
+                        <div v-if="permissions && Object.keys(permissions).length > 0" class="border rounded-lg border-gray-200 max-h-96 overflow-y-auto bg-gray-50 p-4 space-y-5">
+                            <div v-for="(group, groupName) in permissions" :key="groupName" class="bg-white p-3 rounded-md shadow-sm border border-gray-100">
+                                <h3 class="font-bold text-sm text-gray-700 mb-3 border-b border-gray-100 pb-1 capitalize">
+                                    {{ groupName.replace(/_/g, ' ') }}
+                                </h3>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div v-for="permission in group" :key="permission.id" class="flex items-center">
+                                        <input 
+                                            type="checkbox" 
+                                            :value="permission.id" 
+                                            v-model="form.permissions"
+                                            :id="'perm-' + permission.id"
+                                            class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer"
+                                        >
+                                        <label :for="'perm-' + permission.id" class="ml-2 text-sm text-gray-600 cursor-pointer select-none">
+                                            {{ permission.name }}
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <p class="font-bold mb-2 col-span-full">Asignar permisos</p>
-                        <div v-for="(guard, index) in Object.keys(permissions)" :key="index" class="border p-3">
-                            <h1 class="font-bold">{{ guard.replace(/_/g, " ") }}</h1>
-                            <label v-for="permission in permissions[guard]" :key="permission.id"
-                                class="flex items-center">
-                                <input type="checkbox" v-model="form.permissions" :value="permission.id"
-                                    class="rounded border-gray-400 text-primary shadow-sm focus:ring-primary bg-transparent" />
-                                <span class="ml-2 text-sm">{{ permission.name }}</span>
-                            </label>
+                        <div v-else class="text-sm text-gray-500 italic p-4 text-center border rounded bg-gray-50">
+                            No hay permisos disponibles para asignar.
                         </div>
-                        <InputError class="col-span-full" :message="form.errors.permissions" />
-                    </form>
+                        <InputError :message="form.errors.permissions" class="mt-1" />
+                    </div>
                 </div>
             </template>
+
             <template #footer>
-                <CancelButton class="mr-1" @click="showRoleModal = false; form.reset();" :disabled="form.processing">
-                    Cancelar
-                </CancelButton>
-                <PrimaryButton @click="submitForm" :disabled="form.processing">
-                    {{ editFlag ? 'Actualizar' : 'Crear' }}
-                </PrimaryButton>
+                <div class="flex gap-2">
+                    <SecondaryButton @click="showRoleModal = false">Cancelar</SecondaryButton>
+                    <PrimaryButton @click="editFlag ? updateRole() : storeRole()" :disabled="form.processing">
+                        {{ editFlag ? 'Actualizar' : 'Guardar' }}
+                    </PrimaryButton>
+                </div>
             </template>
         </DialogModal>
     </div>
 </template>
-<script>
-import AppLayout from "@/Layouts/AppLayout.vue";
-import PrimaryButton from "@/Components/PrimaryButton.vue";
-import CancelButton from "@/Components/MyComponents/CancelButton.vue";
-import DialogModal from "@/Components/DialogModal.vue";
-import InputLabel from "@/Components/InputLabel.vue";
-import InputError from "@/Components/InputError.vue";
-import { useForm } from "@inertiajs/vue3";
-import { parseISO, format } from 'date-fns';
-import es from 'date-fns/locale/es';
-
-export default {
-    data() {
-        const form = useForm({
-            name: null,
-            permissions: [],
-        });
-
-        return {
-            form,
-            selectedItems: [],
-            allItems: false,
-            currentRole: null,
-            showRoleModal: false,
-            indexRoleEdit: null,
-            editFlag: false,
-        };
-    },
-    components: {
-        AppLayout,
-        PrimaryButton,
-        CancelButton,
-        DialogModal,
-        InputLabel,
-        InputError,
-    },
-    props: {
-        roles: Object,
-        permissions: Object,
-    },
-    methods: {
-        formatDate(dateString) {
-            return format(parseISO(dateString), 'dd MMMM yyyy', { locale: es });
-        },
-        submitForm() {
-            this.$refs.myform.dispatchEvent(new Event('submit', { cancelable: true }));
-        },
-        editRole(role, index) {
-            if (this.$page.props.auth.user.permissions.includes('Editar roles')) {
-                this.currentRole = role;
-                this.editFlag = true;
-                this.indexRoleEdit = index;
-                this.showRoleModal = true;
-
-                this.form.name = role.name;
-                this.form.permissions = role.permissions.map(item => item.id);
-            }
-        },
-        createRole() {
-            this.currentRole = null;
-            this.showRoleModal = true;
-            this.editFlag = false;
-            this.form.reset();
-        },
-        deleteRole(role) {
-            this.form.delete(route('settings.role-permission.delete-role', role.id), {
-                onSuccess: () => {
-                    this.$notify({
-                        title: 'Correcto',
-                        message: 'Rol eliminado',
-                        type: 'success'
-                    });
-                },
-            })
-        },
-        updateRole() {
-            this.form.put(route('settings.role-permission.update-role', this.currentRole), {
-                onSuccess: () => {
-                    this.$notify({
-                        title: 'Correcto',
-                        message: 'Rol actualizado',
-                        type: 'success'
-                    });
-
-                    this.form.reset();
-                    this.showRoleModal = false;
-                },
-            })
-        },
-        storeRole() {
-            this.form.post(route('settings.role-permission.store-role'), {
-                onSuccess: () => {
-                    this.$notify({
-                        title: 'Correcto',
-                        message: 'Rol creado',
-                        type: 'success'
-                    });
-
-                    this.form.reset();
-                    this.showRoleModal = false;
-                },
-            })
-        },
-    },
-};
-</script>
