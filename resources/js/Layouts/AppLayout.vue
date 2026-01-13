@@ -209,6 +209,53 @@ onMounted(() => {
 
             <!-- Drawer Body: Links -->
             <div class="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+                
+                <!-- SECCIÓN ASISTENCIA MÓVIL (HOME OFFICE) -->
+                <div v-if="$page.props.auth.user.home_office" class="mb-6 mx-2 p-3 bg-blue-50/50 rounded-xl border border-blue-100 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-bold text-[#1676A2] uppercase tracking-wider flex items-center gap-1">
+                            <i class="fa-solid fa-clock"></i> Control Asistencia
+                        </span>
+                        <span v-if="isPaused" class="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold animate-pulse border border-amber-200">
+                            En Pausa
+                        </span>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <!-- Botón Pausa -->
+                        <el-popconfirm v-if="nextAttendance == 'Registrar salida'"
+                            confirm-button-text="Sí" cancel-button-text="No" icon-color="#373737"
+                            :title="isPaused ? '¿Reanudar?' : '¿Pausar tiempo?'" @confirm="setPause" width="200">
+                            <template #reference>
+                                <button class="w-12 py-2 rounded-lg border border-gray-200 bg-white shadow-sm flex items-center justify-center text-gray-600 active:scale-95 transition-transform hover:bg-gray-50">
+                                    <i v-if="isPaused" class="fa-solid fa-play text-green-600 text-lg"></i>
+                                    <i v-else class="fa-solid fa-pause text-amber-500 text-lg"></i>
+                                </button>
+                            </template>
+                        </el-popconfirm>
+
+                        <!-- Botón Principal Asistencia -->
+                        <div class="flex-grow">
+                            <el-popconfirm v-if="nextAttendance != 'Día terminado'" 
+                                confirm-button-text="Sí" cancel-button-text="No" icon-color="#373737" 
+                                :title="'¿' + nextAttendance + '?'" @confirm="setAttendance" width="200">
+                                <template #reference>
+                                    <button class="w-full py-2 rounded-lg font-bold text-sm shadow-sm active:scale-95 transition-transform flex items-center justify-center gap-2 border"
+                                        :class="nextAttendance == 'Registrar entrada' 
+                                            ? 'bg-[#1676A2] text-white border-[#1676A2]' 
+                                            : 'bg-white text-red-500 border-red-100 hover:bg-red-50'">
+                                        <i class="fa-solid" :class="nextAttendance == 'Registrar entrada' ? 'fa-stopwatch' : 'fa-right-from-bracket'"></i>
+                                        {{ nextAttendance }}
+                                    </button>
+                                </template>
+                            </el-popconfirm>
+                            <div v-else class="w-full py-2 bg-green-100 text-green-700 rounded-lg text-sm font-bold text-center border border-green-200 flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-check-circle"></i> Día terminado
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Menu Principal</p>
                 
                 <ResponsiveNavLink :href="route('welcome')" :active="route().current('welcome')" class="rounded-lg">

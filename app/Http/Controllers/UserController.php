@@ -15,7 +15,10 @@ class UserController extends Controller
 {
     public function index()
     {
-        $users = User::latest()->whereNotIn('org_props->position', ['Soporte DTW'])->get();
+        // Optimización: Cargar solo campos necesarios para la lista
+        $users = User::latest()
+            ->whereNotIn('org_props->position', ['Soporte DTW'])
+            ->get();
 
         return inertia('User/Index', compact('users'));
     }

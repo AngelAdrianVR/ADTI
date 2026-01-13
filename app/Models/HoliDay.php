@@ -20,6 +20,7 @@ class Holiday extends Model
     ];
 
     protected $casts = [
-        'date' => 'date'
+        'date' => 'date',
+        'is_custom_date' => 'boolean',
     ];
 }

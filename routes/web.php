@@ -101,7 +101,6 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::get('/products/{id}/previous', [ProductController::class, 'getPreviousProduct'])->name('products.previous');
 
     Route::resource('users', UserController::class);
-    Route::get('users/reactivatation/{user}', [UserController::class, 'reactivation'])->name('users.reactivatation');
     Route::get('users-get-next-attendance', [UserController::class, 'getNextAttendance'])->name('users.get-next-attendance');
     Route::get('users-get-pause-status', [UserController::class, 'getPauseStatus'])->name('users.get-pause-status');
     Route::get('users-set-pause', [UserController::class, 'setPause'])->name('users.set-pause');
@@ -115,6 +114,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::put('users/media/{media}/update-name', [UserController::class, 'updateMediaName'])->name('users.update-media-name');
     Route::put('users/{user}/update-vacations', [UserController::class, 'updateVacations'])->name('users.update-vacations');
     Route::put('users/{user}/toggle-home-office', [UserController::class, 'toggleHomeOffice'])->name('users.toggle-home-office');
+    Route::get('users/reactivatation/{user}', [UserController::class, 'reactivation'])->name('users.reactivation');
 
     Route::resource('departments', DepartmentController::class);
     Route::resource('features', FeatureController::class);

@@ -1,499 +1,343 @@
+<script setup>
+import { ref, computed, onMounted, nextTick } from 'vue';
+import { Head, router, useForm } from '@inertiajs/vue3';
+import AppLayout from '@/Layouts/AppLayout.vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import SecondaryButton from '@/Components/SecondaryButton.vue';
+import DialogModal from '@/Components/DialogModal.vue';
+import InputLabel from '@/Components/InputLabel.vue';
+import InputError from '@/Components/InputError.vue';
+import { ElNotification } from "element-plus";
+
+const props = defineProps({
+    products: Array,
+});
+
+// State
+const search = ref('');
+const currentPage = ref(1);
+const itemsPerPage = ref(10);
+const showImportModal = ref(false);
+const searchInput = ref(null);
+
+const importForm = useForm({
+    file: null,
+});
+
+// Computed: Filtrado y Paginación
+const filteredProducts = computed(() => {
+    if (!search.value) return props.products;
+    const lowerSearch = search.value.toLowerCase();
+    
+    return props.products.filter(product => 
+        (product.name && product.name.toLowerCase().includes(lowerSearch)) ||
+        (product.part_number_supplier && product.part_number_supplier.toLowerCase().includes(lowerSearch)) ||
+        (product.subcategory?.category?.name && product.subcategory.category.name.toLowerCase().includes(lowerSearch)) ||
+        (product.location && product.location.toLowerCase().includes(lowerSearch))
+    );
+});
+
+const paginatedProducts = computed(() => {
+    const start = (currentPage.value - 1) * itemsPerPage.value;
+    const end = start + itemsPerPage.value;
+    return filteredProducts.value.slice(start, end);
+});
+
+// Helpers
+const getCoverImage = (product) => {
+    return product.media?.find(img => img.collection_name === 'default')?.original_url;
+};
+
+// Methods
+const handleRowClick = (row) => {
+    router.visit(route('products.show', row.id));
+};
+
+const handlePageChange = (val) => {
+    currentPage.value = val;
+};
+
+const editProduct = (id) => {
+    router.visit(route('products.edit', id));
+};
+
+const deleteProduct = (id) => {
+    router.delete(route('products.destroy', id), {
+        onSuccess: () => {
+            ElNotification.success({
+                title: 'Éxito',
+                message: 'Producto eliminado correctamente'
+            });
+        },
+        onError: () => {
+            ElNotification.error({
+                title: 'Error',
+                message: 'No se pudo eliminar el producto'
+            });
+        }
+    });
+};
+
+const handleDropdownCommand = (command) => {
+    if (command === 'import') {
+        showImportModal.value = true;
+    } else if (command === 'export') {
+        window.open(route('products.export'), '_blank');
+    } else if (command === 'template') {
+        window.open(route('products.import-template'), '_blank');
+    }
+};
+
+const importProducts = () => {
+    importForm.post(route('products.import'), {
+        onSuccess: () => {
+            ElNotification.success({
+                title: 'Éxito',
+                message: 'Productos importados correctamente'
+            });
+            showImportModal.value = false;
+            importForm.reset();
+            router.reload();
+        },
+        onError: () => {
+            ElNotification.error({
+                title: 'Error',
+                message: 'Hubo un problema al importar el archivo'
+            });
+        }
+    });
+};
+
+onMounted(() => {
+    // Foco en buscador
+    nextTick(() => {
+        searchInput.value?.focus();
+    });
+
+    // Abrir modal si viene en URL (para deep linking)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('openImportModal')) {
+        showImportModal.value = true;
+        // Limpiar URL
+        urlParams.delete('openImportModal');
+        const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+        window.history.replaceState({}, '', newUrl);
+    }
+});
+</script>
+
 <template>
     <AppLayout title="Productos">
-        <main class="px-2 md:px-10 pt-1 pb-16">
-            <h1 class="font-bold my-3 ml-4 text-lg">Productos ({{ products.length }})</h1>
-            <section class="md:flex justify-between items-center">
-                <article class="flex items-center space-x-5 lg:w-1/3">
-                    <div class="mb-3 md:mb-0 w-full relative">
-                        <input v-model="searchQuery" @keydown.enter="handleSearch" class="input w-full pl-9"
-                            placeholder="Buscar por nombre, categoria o número de parte del fabricante" type="search"
-                            ref="searchInput" />
-                        <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
+        <main class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+            <div class="max-w-7xl mx-auto">
+                
+                <!-- Header Actions -->
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-800">Catálogo de Productos</h1>
+                        <p class="text-xs text-gray-500 mt-1">Gestión de inventario y referencias.</p>
                     </div>
-                    <el-tag @close="closedTag" v-if="searchedWord" closable type="primary">
-                        {{ searchedWord }}
-                    </el-tag>
-                </article>
-                <el-dropdown v-if="$page.props.auth.user.permissions?.includes('Crear productos') && $page.props.auth.user?.permissions?.some(permission => {
-                    return ['Importar productos', 'Exportar productos'].includes(permission);
-                })" split-button type="primary" @click="$inertia.get(route('products.create'))" trigger="click"
-                    @command="handleDropdownCommand">
-                    Crear producto
-                    <template #dropdown>
-                        <el-dropdown-menu>
-                            <el-dropdown-item v-if="$page.props.auth.user.permissions?.includes('Importar productos')"
-                                command="import">Importar productos</el-dropdown-item>
-                            <el-dropdown-item v-if="$page.props.auth.user.permissions?.includes('Exportar productos')"
-                                command="export">Exportar productos</el-dropdown-item>
-                        </el-dropdown-menu>
-                    </template>
-                </el-dropdown>
-                <PrimaryButton v-else-if="$page.props.auth.user.permissions?.includes('Crear productos')" @click="$inertia.get(route('products.create'))">Crear producto</PrimaryButton>
-            </section>
-
-            <Loading v-if="loading" class="mt-4 lg:mt-20" />
-
-            <!-- tabla starts -->
-            <div v-else class="mx-2 lg:mx-10 mt-6">
-                <div class="lg:flex justify-between mb-2">
-                    <!-- pagination -->
-                    <div class="lg:flex space-x-5 items-center">
-                        <el-pagination @current-change="handlePagination" layout="prev, pager, next"
-                            :total="totalPagination" hide-on-single-page/>
-                        <!-- buttons -->
-                        <div class="flex items-center space-x-2">
-                            <div v-if="$page.props.auth.user.permissions?.includes('Eliminar productos')"
-                                class="mt-2 lg:mt-0">
-                                <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
-                                    title="¿Continuar?" @confirm="deleteSelections">
-                                    <template #reference>
-                                        <el-button type="danger" plain class="mb-3"
-                                            :disabled="disableMassiveActions">Eliminar</el-button>
-                                    </template>
-                                </el-popconfirm>
-                            </div>
-                            <div class="mt-2 lg:mt-0">
-                                <el-button @click="printBarcodes" type="primary" plain class="mb-3"
-                                    :disabled="disableMassiveActions">
-                                    Imprimir códigos</el-button>
-                            </div>
+                    
+                    <div class="flex items-center gap-3 w-full sm:w-auto">
+                        <!-- Buscador -->
+                        <div class="relative w-full sm:w-72">
+                            <input 
+                                v-model="search" 
+                                type="text" 
+                                ref="searchInput"
+                                placeholder="Buscar producto..." 
+                                class="w-full pl-10 pr-4 py-2 rounded-lg border-gray-300 focus:border-[#1676A2] focus:ring-[#1676A2] text-sm shadow-sm"
+                            >
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-sm"></i>
                         </div>
-                    </div>
-                </div>
-                <!-- 
-                    MODIFICACIÓN: 
-                    1. Se agregó 'row-key="id"' a el-table.
-                    2. Se agregó 'reserve-selection' a el-table-column type="selection".
-                -->
-                <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 100%"
-                    @selection-change="handleSelectionChange" ref="multipleTableRef"
-                    :row-class-name="tableRowClassName" row-key="id">
-                    <!-- Se aumentó el width a 50 para mejor click area -->
-                    <el-table-column type="selection" width="50" reserve-selection />
-                    <el-table-column prop="part_number_supplier" label="Num. de parte fabricante" width="200" />
-                    <el-table-column prop="subcategory.category.name" label="Categoría" width="150" />
-                    <el-table-column label="Subcategorías" width="150">
-                        <template #default="scope">
-                            <div class="flex flex-col">
-                                <p v-for="subcategory in scope.row.bread_crumbles" :key="subcategory"
-                                    class="flex text-xs space-x-2">
-                                    <i class="fa-solid fa-caret-right mt-[2px]"></i>
-                                    <span>{{ subcategory }}</span>
-                                </p>
-                            </div>
-                        </template>
-                    </el-table-column>
-                    <el-table-column prop="location" label="Ubicación en almacén" width="150" />
-                    <el-table-column prop="description" label="Descripción" />
-                    <el-table-column align="right">
-                        <template #default="scope">
-                            <el-dropdown trigger="click" @command="handleCommand">
-                                <button @click.stop
-                                    class="el-dropdown-link mr-3 justify-center items-center size-8 rounded-full text-primary hover:bg-grayED transition-all duration-200 ease-in-out">
-                                    <i class="fa-solid fa-ellipsis-vertical"></i>
-                                </button>
+
+                        <!-- Botón Crear / Dropdown Acciones -->
+                        <div class="flex items-center">
+                            <el-dropdown 
+                                v-if="$page.props.auth.user.permissions?.includes('Crear productos')" 
+                                split-button 
+                                type="primary" 
+                                @click="router.visit(route('products.create'))" 
+                                @command="handleDropdownCommand"
+                                class="!bg-[#1676A2] !border-[#1676A2]"
+                            >
+                                <span class="flex items-center gap-2"><i class="fa-solid fa-plus"></i> Crear Producto</span>
                                 <template #dropdown>
                                     <el-dropdown-menu>
-                                        <el-dropdown-item :command="'show-' + scope.row.id">
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                                stroke-width="1.5" stroke="currentColor" class="size-4 mr-1">
-                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                    d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
-                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                    d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                                            </svg>
-                                            Ver</el-dropdown-item>
-                                        <el-dropdown-item
-                                            v-if="$page.props.auth.user.permissions.includes('Editar productos')"
-                                            :command="'edit-' + scope.row.id">
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                                stroke-width="1.5" stroke="currentColor" class="size-4 mr-1">
-                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                    d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
-                                            </svg>
-                                            Editar</el-dropdown-item>
+                                        <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Importar productos')" command="import">
+                                            <i class="fa-solid fa-file-import mr-2"></i> Importar Excel
+                                        </el-dropdown-item>
+                                        <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Exportar productos')" command="export">
+                                            <i class="fa-solid fa-file-export mr-2"></i> Exportar Excel
+                                        </el-dropdown-item>
+                                        <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Importar productos')" command="template" divided>
+                                            <i class="fa-solid fa-download mr-2"></i> Descargar Plantilla
+                                        </el-dropdown-item>
                                     </el-dropdown-menu>
                                 </template>
                             </el-dropdown>
-                        </template>
-                    </el-table-column>
-                </el-table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla de Productos -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <el-table 
+                        :data="paginatedProducts" 
+                        @row-click="handleRowClick"
+                        style="width: 100%"
+                        class="cursor-pointer"
+                        :row-class-name="'hover:bg-gray-50 transition-colors'"
+                    >
+                        <!-- Imagen y Nombre -->
+                        <el-table-column label="Producto" min-width="250">
+                            <template #default="scope">
+                                <div class="flex items-center gap-4 py-2">
+                                    <!-- <div class="w-12 h-12 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center shrink-0 overflow-hidden">
+                                        <img v-if="getCoverImage(scope.row)" 
+                                             :src="getCoverImage(scope.row)" 
+                                             class="w-full h-full object-contain mix-blend-multiply" 
+                                             alt="Cover"
+                                        >
+                                        <i v-else class="fa-regular fa-image text-gray-300 text-lg"></i>
+                                    </div> -->
+                                    <div class="min-w-0">
+                                        <p class="font-bold text-gray-800 text-sm truncate" :title="scope.row.name">
+                                            {{ scope.row.name }}
+                                        </p>
+                                        <p class="text-xs text-gray-500 truncate" :title="scope.row.part_number_supplier">
+                                            NP: {{ scope.row.part_number_supplier || 'N/A' }}
+                                        </p>
+                                    </div>
+                                </div>
+                            </template>
+                        </el-table-column>
+
+                        <!-- Categoría -->
+                        <el-table-column label="Categoría / Ruta" min-width="200">
+                            <template #default="scope">
+                                <div class="flex flex-col">
+                                    <span class="text-sm font-medium text-[#1676A2]">
+                                        {{ scope.row.subcategory?.category?.name || 'Sin Categoría' }}
+                                    </span>
+                                    <span class="text-xs text-gray-400 truncate" v-if="scope.row.bread_crumbles">
+                                        {{ scope.row.bread_crumbles.join(' > ') }}
+                                    </span>
+                                </div>
+                            </template>
+                        </el-table-column>
+
+                        <!-- Ubicación -->
+                        <el-table-column label="Ubicación" width="150">
+                            <template #default="scope">
+                                <span v-if="scope.row.location" class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                                    <i class="fa-solid fa-location-dot mr-1 text-gray-400"></i>
+                                    {{ scope.row.location }}
+                                </span>
+                                <span v-else class="text-gray-400 text-xs italic">-</span>
+                            </template>
+                        </el-table-column>
+
+                        <!-- Acciones -->
+                        <el-table-column align="right" width="120">
+                            <template #default="scope">
+                                <div class="flex items-center justify-end gap-1">
+                                    <button 
+                                        v-if="$page.props.auth.user.permissions.includes('Editar productos')"
+                                        @click.stop="editProduct(scope.row.id)" 
+                                        class="p-2 text-gray-400 hover:text-[#1676A2] hover:bg-blue-50 rounded-full transition-colors"
+                                        title="Editar"
+                                    >
+                                        <i class="fa-solid fa-pen-to-square"></i>
+                                    </button>
+
+                                    <el-popconfirm 
+                                        v-if="$page.props.auth.user.permissions.includes('Eliminar productos')"
+                                        title="¿Eliminar este producto?"
+                                        confirm-button-text="Sí, eliminar"
+                                        cancel-button-text="No"
+                                        icon-color="#DC2626"
+                                        @confirm="deleteProduct(scope.row.id)"
+                                        width="200"
+                                    >
+                                        <template #reference>
+                                            <button @click.stop class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" title="Eliminar">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </template>
+                                    </el-popconfirm>
+                                </div>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+
+                    <!-- Paginación -->
+                    <div class="px-4 py-3 border-t border-gray-100 flex justify-between items-center bg-gray-50">
+                        <p class="text-xs text-gray-500">
+                            Mostrando {{ paginatedProducts.length }} de {{ filteredProducts.length }} productos
+                        </p>
+                        <el-pagination 
+                            layout="prev, pager, next" 
+                            :total="filteredProducts.length" 
+                            :page-size="itemsPerPage"
+                            @current-change="handlePageChange"
+                            background
+                            small
+                        />
+                    </div>
+                </div>
+
             </div>
         </main>
 
-        <!-- modal de exportacion -->
-        <DialogModal :show="showExportModal" @close="showExportModal = false">
-            <template #title> Exportar productos </template>
-            <template #content>
-                <p class="text-black">
-                    Ve a configuración en la pestaña de categorías. Ahí encontrarás el botón para exportar tus productos
-                    por cada línea jerárquica o da clic en el siguiente link:
-                </p>
-                <Link :href="route('settings.index')" class="flex items-center space-x-3 text-primary mt-3">
-                <span class="underline">Ir a categorías </span>
-                <i class="fa-solid fa-arrow-right-long mt-1"></i>
-                </Link>
-                <figure class="border border-grayD9 rounded-[5px] px-5 py-2 mt-4">
-                    <img src="@/../../public/images/export.jpg" alt="logo">
-                </figure>
-            </template>
-            <template #footer>
-            </template>
-        </DialogModal>
-
-        <!-- modal de importacion -->
+        <!-- Modal de Importación -->
         <DialogModal :show="showImportModal" @close="showImportModal = false">
-            <template #title> Importar productos </template>
+            <template #title>
+                <span class="font-bold text-gray-800">Importar Productos</span>
+            </template>
             <template #content>
-                <div v-if="importWasWrong" class="flex flex-col items-center justify-center">
-                    <p>Se detectaron inconvenientes con la información</p>
-                    <p class="text-gray99">
-                        A continuación verás una lista de la información que necesitamos que revises
-                        para poder importar correctamente tus productos. Al editar tu archivo recuerda
-                        guardar los cambios y vuelve a subirlo.
+                <div class="space-y-4">
+                    <p class="text-sm text-gray-600">
+                        Sube un archivo Excel (.xlsx) con la estructura correcta para cargar productos masivamente.
+                        <a :href="route('products.import-template')" target="_blank" class="text-[#1676A2] hover:underline font-medium">
+                            Descargar plantilla aquí.
+                        </a>
                     </p>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                        stroke="currentColor" class="size-10 text-amber-600">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-                    </svg>
-                    <section v-for="(error, index1) in importErrors" :key="index1" class="mt-3 self-start mx-5 text-xs">
-                        <p>Fila {{ error.row }} de tu archivo excel</p>
-                        <ul>
-                            <li v-for="(item, index2) in error.errors" :key="index2">
-                                • {{ item }}
-                            </li>
-                        </ul>
-                    </section>
-                </div>
-                <div v-else-if="importWasSuccessful" class="flex flex-col items-center justify-center">
-                    <p>¡Listo!</p>
-                    <p class="text-gray99">Tus productos se han subido con éxito.</p>
-                    <svg class="mt-2" width="24" height="24" viewBox="0 0 54 43" fill="none"
-                        xmlns="http://www.w3.org/2000/svg">
-                        <path
-                            d="M12.5263 42.0011C8.73489 31.147 0.492597 22.5137 0.0263141 22.0011C-0.439969 21.4884 5.33881 20.5148 13.5263 29.0011C29.0463 11.4303 44.0918 -0.0470468 52.5263 0.00107837C52.8512 -0.0320255 53.3498 0.705849 53.0263 1.00108C34.3519 9.89275 24.0145 25.6913 15.0263 42.0011C14.9721 42.4953 12.5049 42.397 12.5263 42.0011Z"
-                            fill="#189203" />
-                    </svg>
-                </div>
-                <div v-else-if="isImporting" class="flex flex-col items-center justify-center">
-                    <p>Procesando productos</p>
-                    <p class="text-gray99">Esto podría tardar un momento, gracias por la espera.</p>
-                    <svg class="animate-spin text-primary mt-4 text-center" xmlns="http://www.w3.org/2000/svg"
-                        fill="none" viewBox="0 0 24 24" id="Rotate-Right--Streamline-Sharp" height="20" width="20">
-                        <desc>Rotate Right Streamline Icon: https://streamlinehq.com</desc>
-                        <g id="rotate-right">
-                            <path id="Vector 2754" stroke="currentColor" d="M20.2047 0.5135V4.8893H15.8289"
-                                stroke-width="2"></path>
-                            <path id="Ellipse 1206" stroke="currentColor"
-                                d="M20.2047 4.764C18.2001 2.4929 15.2674 1.0605 12.0001 1.0605C5.9583 1.0605 1.0605 5.9583 1.0605 12C1.0605 16.194 3.4207 19.8367 6.8853 21.6726"
-                                stroke-width="2"></path>
-                            <path id="Ellipse 1207" stroke="currentColor"
-                                d="M9.1081 22.5533C10.0293 22.8051 10.999 22.9395 11.9999 22.9395C13.4231 22.9395 14.7826 22.6678 16.0297 22.1734"
-                                stroke-width="2"></path>
-                            <path id="Ellipse 1208" stroke="currentColor"
-                                d="M17.7655 21.2986C19.2694 20.3641 20.5299 19.0749 21.4301 17.548" stroke-width="2">
-                            </path>
-                            <path id="Ellipse 1209" stroke="currentColor"
-                                d="M22.9395 12C22.9395 13.2879 22.717 14.5237 22.3083 15.6713" stroke-width="2"></path>
-                        </g>
-                    </svg>
-                </div>
-                <div v-else>
-                    <p class="text-secondary">¡Bienvenido a la función de importación de productos! Para facilitar el
-                        proceso y asegurar que todos
-                        los datos se ingresen correctamente, te recomendamos seguir estos pasos simples.</p>
-                    <p class="text-black mt-5">
-                        Primero, descarga la plantilla de importación desde la última subcategoría de cada línea
-                        jerárquica.
-                        Esto permite identificar los productos específicos de cada jerarquía que se van a subir, ya que
-                        cada
-                        subcategoría cuenta con características diferentes.
-                    </p>
-                    <Link :href="route('settings.index')" class="flex items-center space-x-3 text-primary mt-3">
-                    <span class="underline">Descargar plantilla desde categorías</span>
-                    <i class="fa-solid fa-arrow-right-long mt-1"></i>
-                    </Link>
-                    <figure class="border border-grayD9 rounded-[5px] px-5 py-2 mt-4">
-                        <img src="@/../../public/images/import.jpg" alt="logo">
-                    </figure>
-                    <p class="text-black mt-4">
-                        Una vez que hayas agregado todos los productos a la plantilla, adjunta el archivo. El sistema se
-                        encargará automáticamente de procesar la información y agregar tus productos.
-                    </p>
-                    <form @submit.prevent="importProducts" ref="importForm" class="mt-4">
-                        <div>
-                            <FileUploader @files-selected="importForm.file = $event" :multiple="false"
-                                acceptedFormat="excel" />
-                            <InputError :message="importForm.errors.file" />
-                        </div>
-                    </form>
+                    
+                    <div class="flex items-center justify-center w-full">
+                        <label for="dropzone-file" class="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+                            <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                                <i class="fa-solid fa-cloud-arrow-up text-3xl text-gray-400 mb-2"></i>
+                                <p class="text-sm text-gray-500"><span class="font-semibold">Clic para subir</span> o arrastra el archivo</p>
+                                <p class="text-xs text-gray-500">XLSX (MAX. 10MB)</p>
+                            </div>
+                            <input id="dropzone-file" type="file" class="hidden" @input="importForm.file = $event.target.files[0]" accept=".xlsx" />
+                        </label>
+                    </div>
+                    
+                    <div v-if="importForm.file" class="flex items-center gap-2 text-sm text-green-600 bg-green-50 p-2 rounded border border-green-200">
+                        <i class="fa-solid fa-file-excel"></i>
+                        {{ importForm.file.name }}
+                    </div>
+                    <InputError :message="importForm.errors.file" />
                 </div>
             </template>
             <template #footer>
-                <div v-if="!isImporting && !importWasSuccessful && !importWasWrong" class="flex items-center space-x-2">
-                    <CancelButton @click="showImportModal = false; importForm.file = []">
-                        Cancelar
-                    </CancelButton>
-                    <PrimaryButton @click="importProducts()" :disabled="!importForm.file.length">
-                        <i v-if="isImporting" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
-                        Importar
-                    </PrimaryButton>
-                </div>
-                <div v-if="importWasWrong" class="flex items-center space-x-2">
-                    <PrimaryButton @click="importWasWrong = false; importForm.file = []">
-                        Ya corregí mi achivo
-                    </PrimaryButton>
-                </div>
+                <SecondaryButton @click="showImportModal = false" class="mr-2">Cancelar</SecondaryButton>
+                <PrimaryButton @click="importProducts" :disabled="!importForm.file || importForm.processing">
+                    <i v-if="importForm.processing" class="fa-solid fa-circle-notch fa-spin mr-2"></i>
+                    Importar
+                </PrimaryButton>
             </template>
         </DialogModal>
 
-        <!-- modal para imprimir codigos de barras -->
-        <DialogModal :show="showPrintBarcodesModal" @close="showPrintBarcodesModal = false">
-            <template #title> Imprimir Códigos de Barras </template>
-            <template #content>
-                <p class="mb-3 text-sm text-gray-600">Ajusta la cantidad de etiquetas a imprimir para cada producto seleccionado.</p>
-                <div class="space-y-3">
-                    <div v-for="product in productsToPrint" :key="product.id" class="flex justify-between items-center p-2 border rounded-lg">
-                        <div>
-                            <p class="font-semibold">{{ product.description }}</p>
-                            <p class="text-xs text-gray-500">Núm. Parte: {{ product.part_number_supplier }}</p>
-                        </div>
-                        <el-input-number v-model="product.quantity" :min="1" size="small" controls-position="right" class="w-28" />
-                    </div>
-                </div>
-            </template>
-            <template #footer>
-                <div class="flex space-x-2">
-                    <CancelButton @click="showPrintBarcodesModal = false">
-                        Cancelar
-                    </CancelButton>
-                    <PrimaryButton @click="confirmPrintBarcodes">
-                        Imprimir
-                    </PrimaryButton>
-                </div>
-            </template>
-        </DialogModal>
     </AppLayout>
 </template>
 
-<script>
-import AppLayout from '@/Layouts/AppLayout.vue';
-import Loading from "@/Components/MyComponents/Loading.vue";
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import InputError from '@/Components/InputError.vue';
-import DialogModal from '@/Components/DialogModal.vue';
-import CancelButton from '@/Components/MyComponents/CancelButton.vue';
-import FileUploader from '@/Components/MyComponents/FileUploader.vue';
-import { useForm, Link } from '@inertiajs/vue3';
-
-export default {
-    data() {
-        const importForm = useForm({
-            file: [],
-        });
-
-        return {
-            // buscador
-            searchQuery: null,
-            searchedWord: null,
-            search: null,
-            // tabla
-            disableMassiveActions: true,
-            loading: false,
-            // pagination
-            totalPagination: this.products.length / 3, //el componente toma 10 items por pagina pero aqui le pusimos 30, por eso se divide entre 3
-            itemsPerPage: 30,
-            start: 0,
-            end: 30,
-            // importation
-            showImportModal: false,
-            isImporting: false,
-            importWasSuccessful: false,
-            importWasWrong: false,
-            importErrors: [],
-            importForm,
-            //exportacion
-            showExportModal: false,
-            isExporting: false,
-            // impresion de codigos de barras
-            showPrintBarcodesModal: false,
-            productsToPrint: [],
-        }
-    },
-    components: {
-        AppLayout,
-        PrimaryButton,
-        FileUploader,
-        CancelButton,
-        DialogModal,
-        InputError,
-        Loading,
-        Link,
-    },
-    props: {
-        products: Array,
-    },
-    methods: {
-        inputFocus() {
-            this.$nextTick(() => {
-                this.$refs.searchInput.focus();
-            });
-        },
-        handleSearch() {
-            this.search = this.searchQuery;
-            this.searchedWord = this.searchQuery;
-            this.searchQuery = null;
-            this.totalPagination = 1;
-        },
-        closedTag() {
-            this.search = null;
-            this.searchedWord = null;
-            this.totalPagination = this.products.length / 3;
-        },
-        handleSelectionChange(val) {
-            this.$refs.multipleTableRef.value = val;
-
-            if (!this.$refs.multipleTableRef.value.length) {
-                this.disableMassiveActions = true;
-            } else {
-                this.disableMassiveActions = false;
-            }
-        },
-        handlePagination(val) {
-            this.start = (val - 1) * this.itemsPerPage;
-            this.end = val * this.itemsPerPage;
-        },
-        tableRowClassName({ row, rowIndex }) {
-            return 'cursor-pointer text-xs';
-        },
-        handleRowClick(row, column, event) {
-            // Si la columna clickeada es la de selección, togglea la selección y no navega
-            if (column.type === 'selection') {
-                this.$refs.multipleTableRef.toggleRowSelection(row);
-                return;
-            }
-            this.$inertia.visit(route('products.show', row));
-        },
-        handleCommand(command) {
-            const commandName = command.split('-')[0];
-            const rowId = command.split('-')[1];
-
-            this.$inertia.get(route('products.' + commandName, rowId));
-        },
-        handleDropdownCommand(command) {
-            if (command == 'import') {
-                this.showImportModal = true;
-            } else if (command == 'export') {
-                this.showExportModal = true;
-            }
-        },
-        printBarcodes() {
-            // Clona los items seleccionados para no modificar la data original y añade la propiedad 'quantity'
-            this.productsToPrint = JSON.parse(JSON.stringify(this.$refs.multipleTableRef.value)).map(item => ({...item, quantity: 1 }));
-            this.showPrintBarcodesModal = true;
-        },
-        confirmPrintBarcodes() {
-            const products_with_quantity = this.productsToPrint.map(item => ({ id: item.id, quantity: item.quantity }));
-            const url = route('products.print-barcodes', { products: JSON.stringify(products_with_quantity) });
-            window.open(url, '_blank');
-            this.showPrintBarcodesModal = false;
-        },
-        async deleteSelections() {
-            try {
-                const items_ids = this.$refs.multipleTableRef.value.map(item => item.id);
-                const response = await axios.post(route('products.massive-delete', {
-                    items_ids
-                }));
-
-                if (response.status === 200) {
-                    this.$notify({
-                        title: 'Correcto',
-                        message: '',
-                        type: 'success'
-                    });
-
-                    // update list of products
-                    let deletedIndexes = [];
-                    this.products.forEach((product, index) => {
-                        if (items_ids.includes(product.id)) {
-                            deletedIndexes.push(index);
-                        }
-                    });
-
-                    // Ordenar los índices de forma descendente para evitar problemas de desplazamiento al eliminar elementos
-                    deletedIndexes.sort((a, b) => b - a);
-
-                    // Eliminar cotizaciones por índice
-                    for (const index of deletedIndexes) {
-                        this.products.splice(index, 1);
-                    }
-                }
-            } catch (err) {
-                this.$notify({
-                    title: 'No se pudo completar la solicitud',
-                    message: '',
-                    type: 'error'
-                });
-                console.log(err);
-            }
-        },
-        async importProducts() {
-            try {
-                this.isImporting = true;
-                const response = await axios.post(route('products.import'), {
-                    file: this.importForm.file
-                }, {
-                    headers: {
-                        'Content-Type': 'multipart/form-data'
-                    }
-                });
-
-                if (response.status === 200) {
-                    this.isImporting = false;
-                    this.importWasSuccessful = true;
-                    this.importWasWrong = false;
-                    this.$inertia.visit(route('products.index'));
-                    // window.location.reload();
-                }
-            } catch (error) {
-                this.isImporting = false;
-                this.importWasWrong = true;
-                this.importErrors = error.response.data.errors;
-            }
-        },
-    },
-    computed: {
-        filteredTableData() {
-            if (!this.search) {
-                return this.products.filter((item, index) => index >= this.start && index < this.end);
-            } else {
-                // this.loading = true;
-                // console.log(this.loading);
-                const filteredProducts = this.products.filter((product) =>
-                    (product.name && product.name.toLowerCase().includes(this.search.toLowerCase())) ||
-                    product.subcategory.category.name.toLowerCase().includes(this.search.toLowerCase()) ||
-                    (product.part_number_supplier && product.part_number_supplier.toLowerCase().includes(this.search.toLowerCase()))
-                );
-                // console.log('hola');
-                // this.loading = false;
-                return filteredProducts;
-            }
-        }
-    },
-    mounted() {
-        this.inputFocus();
-
-        // buscar si en las variables de url esta el comando para abrir el modal de importacion 
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('openImportModal')) {
-            this.showImportModal = true;
-
-            // Eliminar el parámetro 'openImportModal' de la URL
-            urlParams.delete('openImportModal');
-            const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
-            window.history.replaceState({}, '', newUrl);
-        }
-    }
+<style scoped>
+/* Estilo personalizado para el dropdown split de Element Plus */
+:deep(.el-dropdown-menu__item:not(.is-disabled):focus) {
+    background-color: #f0f9ff;
+    color: #1676A2;
 }
-</script>
+</style>

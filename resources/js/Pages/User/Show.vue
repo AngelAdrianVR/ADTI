@@ -128,7 +128,7 @@ onMounted(() => {
                             <!-- Botón Nuevo -->
                             <button 
                                 @click="router.visit(route('users.create'))" 
-                                class="bg-indigo-600 text-white hover:bg-indigo-700 px-3 py-2 rounded-md shadow-sm transition-colors"
+                                class="bg-primary text-white hover:bg-primary px-3 py-2 rounded-md shadow-sm transition-colors"
                                 title="Crear nuevo usuario"
                             >
                                 <i class="fa-solid fa-plus"></i>
@@ -243,11 +243,11 @@ onMounted(() => {
     padding-top: 12px !important;
 }
 :deep(.el-tabs__item.is-active) {
-    color: #4f46e5;
+    color: #1676A2;
     font-weight: 600;
 }
 :deep(.el-tabs__active-bar) {
-    background-color: #4f46e5;
+    background-color: #1676A2;
     height: 3px;
     border-radius: 3px;
 }

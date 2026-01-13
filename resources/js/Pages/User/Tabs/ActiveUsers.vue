@@ -1,312 +1,295 @@
+<script setup>
+import { ref, computed } from 'vue';
+import { router, useForm } from '@inertiajs/vue3';
+import { ElNotification } from "element-plus";
+import axios from 'axios';
+import DialogModal from '@/Components/DialogModal.vue';
+import InputLabel from '@/Components/InputLabel.vue';
+import TextInput from '@/Components/TextInput.vue';
+import InputError from '@/Components/InputError.vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import SecondaryButton from '@/Components/SecondaryButton.vue';
+
+const props = defineProps({
+    users: Array,
+});
+
+// State
+const search = ref('');
+const currentPage = ref(1);
+const itemsPerPage = ref(10);
+const selectedItems = ref([]);
+const showInactivateModal = ref(false);
+const userToInactivate = ref(null);
+
+const inactivateForm = useForm({
+    inactivate_date: new Date().toISOString().split('T')[0], // Fecha de hoy por defecto
+    inactivate_reason: '',
+});
+
+// Computed
+const filteredUsers = computed(() => {
+    if (!search.value) return props.users;
+    const lowerSearch = search.value.toLowerCase();
+    
+    return props.users.filter(user => 
+        user.name?.toLowerCase().includes(lowerSearch) ||
+        user.email?.toLowerCase().includes(lowerSearch) ||
+        user.org_props?.department?.toLowerCase().includes(lowerSearch) ||
+        user.org_props?.position?.toLowerCase().includes(lowerSearch)
+    );
+});
+
+const paginatedUsers = computed(() => {
+    const start = (currentPage.value - 1) * itemsPerPage.value;
+    const end = start + itemsPerPage.value;
+    return filteredUsers.value.slice(start, end);
+});
+
+// Methods
+const handleSelectionChange = (val) => {
+    selectedItems.value = val;
+};
+
+const handleRowClick = (row) => {
+    router.visit(route('users.show', row.id));
+};
+
+const handlePageChange = (val) => {
+    currentPage.value = val;
+};
+
+const deleteSelections = async () => {
+    try {
+        const items_ids = selectedItems.value.map(item => item.id);
+        const response = await axios.post(route('users.massive-delete'), { items_ids });
+
+        if (response.status === 200) {
+            ElNotification.success({
+                title: 'Operación exitosa',
+                message: 'Usuarios eliminados correctamente',
+            });
+            router.reload();
+        }
+    } catch (err) {
+        ElNotification.error({
+            title: 'Error',
+            message: 'No se pudo eliminar la selección',
+        });
+        console.error(err);
+    }
+};
+
+const editUser = (id) => {
+    router.visit(route('users.edit', id));
+};
+
+const toggleHomeOffice = (user) => {
+    router.put(route('users.toggle-home-office', user.id), {}, {
+        preserveScroll: true,
+        onSuccess: () => {
+            ElNotification.success({
+                title: 'Actualizado',
+                message: `Acceso remoto ${user.home_office ? 'habilitado' : 'deshabilitado'} para ${user.name}`
+            });
+        },
+        onError: () => {
+            user.home_office = !user.home_office; // Revertir visualmente si falla
+            ElNotification.error('No se pudo actualizar el estatus');
+        }
+    });
+};
+
+const openInactivateModal = (user) => {
+    userToInactivate.value = user;
+    inactivateForm.reset();
+    showInactivateModal.value = true;
+};
+
+const submitInactivate = () => {
+    inactivateForm.put(route('users.inactivate', userToInactivate.value.id), {
+        onSuccess: () => {
+            ElNotification.success({
+                title: 'Usuario dado de baja',
+                message: 'El usuario ha sido movido a la lista de inactivos.',
+            });
+            showInactivateModal.value = false;
+        },
+        onError: () => {
+            ElNotification.error('Revisa los campos del formulario');
+        }
+    });
+};
+</script>
+
 <template>
-    <div class="mx-2 lg:mx-10 mt-2">
-        <article class="flex items-center space-x-5 lg:w-1/3">
-            <div class="relative md:mb-0 w-full">
-                <input v-model="searchQuery" @keydown.enter="handleSearch" class="input w-full pl-9"
-                    placeholder="Buscar por ID, nombre, puesto, correo o teléfono" type="search" ref="searchInput" />
-                <i class="fa-solid fa-magnifying-glass text-xs text-gray99 absolute top-[10px] left-4"></i>
+    <div class="px-2">
+        <!-- Toolbar -->
+        <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+            <div class="relative w-full sm:w-72">
+                <input 
+                    v-model="search" 
+                    type="text" 
+                    placeholder="Buscar por nombre, correo o puesto..." 
+                    class="w-full pl-10 pr-4 py-2 rounded-lg border-gray-300 focus:border-[#1676A2] focus:ring-[#1676A2] text-sm shadow-sm"
+                >
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-sm"></i>
             </div>
-            <el-tag @close="closedTag" v-if="searchedWord" closable type="primary">
-                {{ searchedWord }}
-            </el-tag>
-        </article>
-        <!-- pagination -->
-        <div class="flex space-x-2 items-center lg:ml-16 mt-4">
-            <el-pagination @current-change="handlePagination" layout="prev, pager, next" :total="users.length"
-                hide-on-single-page />
-            <div v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')" class="mt-2 lg:mt-0">
-                <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5" title="¿Continuar?"
-                    @confirm="deleteSelections">
+
+            <div class="flex items-center gap-2" v-if="selectedItems.length > 0">
+                <span class="text-xs text-gray-500 mr-2">{{ selectedItems.length }} seleccionados</span>
+                <el-popconfirm 
+                    v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')"
+                    confirm-button-text="Sí, eliminar" 
+                    cancel-button-text="No" 
+                    icon-color="#DC2626" 
+                    title="¿Eliminar usuarios seleccionados?"
+                    @confirm="deleteSelections"
+                >
                     <template #reference>
-                        <el-button type="danger" plain class="mb-3"
-                            :disabled="disableMassiveActions">Eliminar</el-button>
+                        <button class="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border border-red-200">
+                            <i class="fa-solid fa-trash mr-1"></i> Eliminar
+                        </button>
                     </template>
                 </el-popconfirm>
             </div>
         </div>
-        <el-table :data="filteredTableData" @row-click="handleRowClick" max-height="670" style="width: 90%"
-            class="mx-auto" @selection-change="handleSelectionChange" ref="multipleTableRef"
-            :row-class-name="tableRowClassName" :default-sort="{ prop: 'code', order: 'descending' }">
-            <el-table-column v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')" type="selection"
-                width="30" />
-            <el-table-column prop="code" label="ID" width="90" sortable />
-            <el-table-column prop="name" label="Nombre" width="200" sortable>
-                <template #default="scope">
-                    <el-tooltip v-if="scope.row.paused" :content="'Pausó a las ' + scope.row.paused" placement="top">
-                        <p class="flex space-x-1 text-red-400">
-                            <span class="mt-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                    stroke-width="1.5" stroke="currentColor" class="size-4">
-                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                        d="M14.25 9v6m-4.5 0V9M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                                </svg>
-                            </span>
-                            <span>{{ scope.row.name }}</span>
-                        </p>
-                    </el-tooltip>
-                    <p v-else>{{ scope.row.name }}</p>
-                </template>
-            </el-table-column>
-            <el-table-column prop="org_props.position" label="Puesto" width="110" />
-            <el-table-column prop="org_props.email" label="Correo electrónico empresarial" width="180" />
-            <el-table-column prop="phone" label="Teléfono" width="110" />
-            <el-table-column label="Acceso remoto" width="110">
-                <template #default="scope">
-                    <span v-if="scope.row.home_office">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                            stroke="currentColor" class="size-4 text-[#F29513] mr-1">
-                            <path stroke-linecap="round" stroke-linejoin="round"
-                                d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" />
-                        </svg>
-                    </span>
-                </template>
-            </el-table-column>
-            <el-table-column align="right">
-                <template #default="scope">
-                    <el-dropdown trigger="click" @command="handleCommand">
-                        <button @click.stop
-                            class="el-dropdown-link mr-3 justify-center items-center size-8 rounded-full text-primary hover:bg-grayED transition-all duration-200 ease-in-out">
-                            <i class="fa-solid fa-ellipsis-vertical"></i>
-                        </button>
-                        <template #dropdown>
-                            <el-dropdown-menu>
-                                <el-dropdown-item :command="'show-' + scope.row.id">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                        stroke-width="1.5" stroke="currentColor" class="size-4 mr-1">
-                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                            d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
-                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                            d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                                    </svg>
-                                    Ver</el-dropdown-item>
-                                <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Editar usuarios')"
-                                    :command="'edit-' + scope.row.id">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                        stroke-width="1.5" stroke="currentColor" class="size-4 mr-1">
-                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                            d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
-                                    </svg>
-                                    Editar
-                                </el-dropdown-item>
-                                <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Editar usuarios')"
-                                    :command="'homeOffice-' + scope.row.id">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                        stroke-width="1.5" stroke="currentColor" class="size-4 mr-1">
-                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                            d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" />
-                                    </svg>
-                                    {{ scope.row.home_office ? 'Desactivar acceso remoto' : 'Activar acceso remoto' }}
-                                </el-dropdown-item>
-                                <el-dropdown-item
-                                    v-if="$page.props.auth.user.permissions.includes('Inactivar usuarios')"
-                                    :command="'inactivate-' + scope.row.id">
-                                    <svg class="size-4 mr-1" width="14" height="14" viewBox="0 0 14 14" fill="none"
-                                        xmlns="http://www.w3.org/2000/svg">
-                                        <mask id="mask0_14810_295" style="mask-type:alpha" maskUnits="userSpaceOnUse"
-                                            x="0" y="0" width="14" height="14">
-                                            <rect width="14" height="14" fill="#D9D9D9" />
-                                        </mask>
-                                        <g mask="url(#mask0_14810_295)">
-                                            <path
-                                                d="M11.538 13.1974L10.0068 11.6661H2.33594V10.0328C2.33594 9.70226 2.42101 9.39844 2.59115 9.12135C2.76128 8.84427 2.98733 8.63281 3.26927 8.48698C3.70677 8.26337 4.15156 8.08351 4.60365 7.9474C5.05573 7.81128 5.5151 7.7092 5.98177 7.64115L0.804688 2.46406L1.63594 1.63281L12.3693 12.3661L11.538 13.1974ZM3.5026 10.4995H8.8401L7.0901 8.74948H7.0026C6.45816 8.74948 5.91858 8.8151 5.38385 8.94635C4.84913 9.0776 4.31927 9.27448 3.79427 9.53698C3.70677 9.58559 3.63628 9.65365 3.58281 9.74115C3.52934 9.82865 3.5026 9.92587 3.5026 10.0328V10.4995ZM10.7359 8.48698C11.0179 8.62309 11.2415 8.82969 11.4068 9.10677C11.572 9.38385 11.6595 9.68281 11.6693 10.0036L9.7151 8.04948C9.8901 8.11753 10.0627 8.18559 10.2328 8.25365C10.403 8.3217 10.5707 8.39948 10.7359 8.48698ZM8.28594 6.62031L7.42552 5.7599C7.64913 5.6724 7.82899 5.52899 7.9651 5.32969C8.10122 5.13038 8.16927 4.9092 8.16927 4.66615C8.16927 4.34531 8.05503 4.07066 7.82656 3.84219C7.59809 3.61372 7.32344 3.49948 7.0026 3.49948C6.75955 3.49948 6.53837 3.56753 6.33906 3.70365C6.13976 3.83976 5.99635 4.01962 5.90885 4.24323L5.04844 3.38281C5.27205 3.05226 5.55399 2.79462 5.89427 2.6099C6.23455 2.42517 6.60399 2.33281 7.0026 2.33281C7.64427 2.33281 8.19358 2.56128 8.65052 3.01823C9.10746 3.47517 9.33594 4.02448 9.33594 4.66615C9.33594 5.06476 9.24358 5.4342 9.05885 5.77448C8.87413 6.11476 8.61649 6.3967 8.28594 6.62031Z"
-                                                fill="currentColor" />
-                                        </g>
-                                    </svg>
-                                    Dar de baja
-                                </el-dropdown-item>
-                            </el-dropdown-menu>
-                        </template>
-                    </el-dropdown>
-                </template>
-            </el-table-column>
-        </el-table>
-    </div>
-    <DialogModal :show="showInactivatigModal" @close="showInactivatigModal = false" maxWidth="lg">
-        <template #title>
-            <h1>Baja del usuario</h1>
-        </template>
-        <template #content>
-            <form @submit.prevent="inactiveUser">
-                <div>
-                    <InputLabel value="Fecha de baja*" />
-                    <input v-model="form.inactivate_date" class="w-full input" type="date"
-                        placeholder="Selecciona la fecha de nacimiento" />
-                    <InputError :message="form.errors.inactivate_date" />
+
+        <!-- Tabla -->
+        <div class="border border-gray-200 rounded-lg overflow-hidden">
+            <el-table 
+                :data="paginatedUsers" 
+                @selection-change="handleSelectionChange"
+                @row-click="handleRowClick"
+                style="width: 100%"
+                class="cursor-pointer"
+                :row-class-name="'hover:bg-gray-50 transition-colors'"
+            >
+                <el-table-column v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')" type="selection" width="40" />
+                
+                <el-table-column label="Usuario" min-width="200">
+                    <template #default="scope">
+                        <div class="flex items-center gap-3">
+                            <img :src="scope.row.profile_photo_url" class="h-9 w-9 rounded-full object-cover border border-gray-200" alt="">
+                            <div>
+                                <p class="font-bold text-gray-800 text-sm leading-tight">{{ scope.row.name }}</p>
+                                <p class="text-xs text-gray-500">{{ scope.row.email }}</p>
+                            </div>
+                        </div>
+                    </template>
+                </el-table-column>
+
+                <el-table-column label="Puesto / Departamento" min-width="180">
+                    <template #default="scope">
+                        <div>
+                            <p class="text-sm text-gray-700 font-medium">{{ scope.row.org_props?.position || 'N/A' }}</p>
+                            <p class="text-xs text-gray-500">{{ scope.row.org_props?.department || 'General' }}</p>
+                        </div>
+                    </template>
+                </el-table-column>
+
+                <!-- Columna Home Office (Nueva) -->
+                <el-table-column label="Acceso Remoto" width="130" align="center">
+                    <template #default="scope">
+                        <div @click.stop>
+                            <el-switch
+                                v-model="scope.row.home_office"
+                                @change="toggleHomeOffice(scope.row)"
+                                inline-prompt
+                                active-text="Sí"
+                                inactive-text="No"
+                                style="--el-switch-on-color: #1676A2;"
+                            />
+                        </div>
+                    </template>
+                </el-table-column>
+
+                <el-table-column align="right" width="120">
+                    <template #default="scope">
+                        <div class="flex items-center justify-end gap-1">
+                            <!-- Botón Editar -->
+                            <button 
+                                v-if="$page.props.auth.user.permissions.includes('Editar usuarios')"
+                                @click.stop="editUser(scope.row.id)" 
+                                class="p-2 text-gray-400 hover:text-[#1676A2] hover:bg-blue-50 rounded-full transition-colors"
+                                title="Editar"
+                            >
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </button>
+
+                            <!-- Botón Dar de Baja (Nuevo) -->
+                            <button 
+                                v-if="$page.props.auth.user.permissions.includes('Inactivar usuarios')"
+                                @click.stop="openInactivateModal(scope.row)" 
+                                class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                                title="Dar de baja"
+                            >
+                                <i class="fa-solid fa-user-minus"></i>
+                            </button>
+                        </div>
+                    </template>
+                </el-table-column>
+            </el-table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex justify-end mt-4">
+            <el-pagination 
+                layout="prev, pager, next" 
+                :total="filteredUsers.length" 
+                :page-size="itemsPerPage"
+                @current-change="handlePageChange"
+                background
+            />
+        </div>
+
+        <!-- Modal Dar de Baja -->
+        <DialogModal :show="showInactivateModal" @close="showInactivateModal = false" maxWidth="md">
+            <template #title>
+                <span class="font-bold text-gray-800">Dar de Baja Usuario</span>
+            </template>
+            <template #content>
+                <div v-if="userToInactivate" class="space-y-4">
+                    <p class="text-sm text-gray-600">
+                        Estás a punto de desactivar a <span class="font-bold text-gray-800">{{ userToInactivate.name }}</span>. 
+                        Este usuario perderá acceso al sistema inmediatamente.
+                    </p>
+
+                    <div>
+                        <InputLabel value="Fecha de Baja *" />
+                        <TextInput 
+                            v-model="inactivateForm.inactivate_date" 
+                            type="date" 
+                            class="w-full mt-1" 
+                        />
+                        <InputError :message="inactivateForm.errors.inactivate_date" />
+                    </div>
+
+                    <div>
+                        <InputLabel value="Motivo de Baja *" />
+                        <textarea 
+                            v-model="inactivateForm.inactivate_reason" 
+                            rows="3"
+                            class="w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-[#1676A2] focus:ring-[#1676A2] text-sm"
+                            placeholder="Describe el motivo..."
+                        ></textarea>
+                        <InputError :message="inactivateForm.errors.inactivate_reason" />
+                    </div>
                 </div>
-                <div class="mt-3">
-                    <InputLabel value="Motivo de baja* " />
-                    <el-input v-model="form.inactivate_reason" :autosize="{ minRows: 2, maxRows: 6 }" type="textarea"
-                        placeholder="Escribe el motivo de baja " :maxlength="300" show-word-limit clearable />
-                    <InputError :message="form.errors.inactivate_reason" />
-                </div>
-                <div class="mt-3 flex justify-end">
-                    <PrimaryButton :disabled="form.processing">
-                        <i v-if="form.processing" class="fa-sharp fa-solid fa-circle-notch fa-spin mr-2 text-white"></i>
-                        Guardar baja
+            </template>
+            <template #footer>
+                <div class="flex gap-2">
+                    <SecondaryButton @click="showInactivateModal = false">Cancelar</SecondaryButton>
+                    <PrimaryButton 
+                        @click="submitInactivate" 
+                        :disabled="inactivateForm.processing"
+                        class="!bg-red-600 hover:!bg-red-700 border-transparent"
+                    >
+                        Confirmar Baja
                     </PrimaryButton>
                 </div>
-            </form>
-        </template>
-    </DialogModal>
+            </template>
+        </DialogModal>
+
+    </div>
 </template>
-
-<script>
-import DialogModal from '@/Components/DialogModal.vue';
-import InputError from '@/Components/InputError.vue';
-import InputLabel from '@/Components/InputLabel.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import { useForm } from '@inertiajs/vue3';
-import axios from 'axios';
-import { format } from "date-fns";
-
-export default {
-    data() {
-        const form = useForm({
-            inactivate_date: format(new Date(), "yyyy-MM-dd"), // Establece la fecha de hoy por defecto,
-            inactivate_reason: null,
-        });
-
-        return {
-            form,
-            disableMassiveActions: true,
-            showInactivatigModal: false,
-            inactivateUserId: null,
-            // pagination
-            itemsPerPage: 10,
-            start: 0,
-            end: 10,
-            // buscador
-            search: '',
-            searchQuery: null,
-            searchedWord: null,
-        }
-    },
-    components: {
-        DialogModal,
-        InputLabel,
-        InputError,
-        PrimaryButton,
-    },
-    props: {
-        users: Array
-    },
-    computed: {
-        filteredTableData() {
-            if (!this.search) {
-                return this.users.filter((item, index) => index >= this.start && index < this.end);
-            } else {
-                return this.users.filter(
-                    (user) =>
-                        user.code?.toLowerCase().includes(this.search.toLowerCase()) ||
-                        user.name?.toLowerCase().includes(this.search.toLowerCase()) ||
-                        user.email?.toLowerCase().includes(this.search.toLowerCase()) ||
-                        user.phone?.toLowerCase().includes(this.search.toLowerCase()) ||
-                        user.org_props?.position?.toLowerCase().includes(this.search.toLowerCase())
-                )
-            }
-        }
-    },
-    methods: {
-        closedTag() {
-            this.search = null
-            this.searchedWord = null;
-        },
-        handleSearch() {
-            this.search = this.searchQuery;
-            this.searchedWord = this.searchQuery;
-            this.searchQuery = null;
-        },
-        handleSelectionChange(val) {
-            this.$refs.multipleTableRef.value = val;
-
-            if (!this.$refs.multipleTableRef.value.length) {
-                this.disableMassiveActions = true;
-            } else {
-                this.disableMassiveActions = false;
-            }
-        },
-        handlePagination(val) {
-            this.start = (val - 1) * this.itemsPerPage;
-            this.end = val * this.itemsPerPage;
-        },
-        tableRowClassName({ row, rowIndex }) {
-            return 'cursor-pointer text-xs';
-        },
-        handleRowClick(row) {
-            this.$inertia.visit(route('users.show', row));
-        },
-        handleCommand(command) {
-            const commandName = command.split('-')[0];
-            const rowId = command.split('-')[1];
-
-            if (commandName === 'inactivate') {
-                this.showInactivatigModal = true;
-                this.inactivateUserId = rowId;
-            } else if (commandName === 'homeOffice') {
-                this.$inertia.put(route('users.toggle-home-office', rowId));
-            } else {
-                this.$inertia.get(route('users.' + commandName, rowId));
-            }
-
-        },
-        inactiveUser() {
-            this.form.put(route('users.inactivate', this.inactivateUserId), {
-                onSuccess: () => {
-                    this.$notify({
-                        title: 'Correcto',
-                        message: '',
-                        type: 'success',
-                        position: "bottom-right",
-                    });
-                    this.showInactivatigModal = false;
-                    this.form.reset();
-                },
-                onError: (error) => {
-                    console.log(error);
-                }
-            });
-        },
-        async deleteSelections() {
-            try {
-                const items_ids = this.$refs.multipleTableRef.value.map(item => item.id);
-                const response = await axios.post(route('users.massive-delete', {
-                    items_ids
-                }));
-
-                if (response.status === 200) {
-                    this.$notify({
-                        title: 'Correcto',
-                        message: '',
-                        type: 'success',
-                        position: "bottom-right",
-                    });
-
-                    // update list of quotes
-                    let deletedIndexes = [];
-                    this.users.forEach((user, index) => {
-                        if (items_ids.includes(user.id) && user.id != this.$page.props.auth.user.id) {
-                            deletedIndexes.push(index);
-                        }
-                    });
-
-                    // Ordenar los índices de forma descendente para evitar problemas de desplazamiento al eliminar elementos
-                    deletedIndexes.sort((a, b) => b - a);
-
-                    // Eliminar cotizaciones por índice
-                    for (const index of deletedIndexes) {
-                        this.users.splice(index, 1);
-                    }
-                }
-            } catch (err) {
-                this.$notify({
-                    title: 'No se pudo completar la solicitud',
-                    message: '',
-                    type: 'error',
-                    position: "bottom-right",
-                });
-                console.log(err);
-            }
-        },
-    }
-}
-</script>

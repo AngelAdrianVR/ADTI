@@ -76,6 +76,7 @@ class User extends Authenticatable implements HasMedia
             'inactivate_date' => 'date',
             'password' => 'hashed',
             'org_props' => 'array',
+            'home_office' => 'boolean',
         ];
     }
 
