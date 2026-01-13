@@ -17,6 +17,57 @@ class PayrollUserController extends Controller
         //
     }
 
+    public function store(Request $request)
+    {
+        // Método para crear asistencia manual (desde NoAttendanceCard)
+        $payrollUser = PayrollUser::firstOrCreate(
+            [
+                'date' => $request->date,
+                'user_id' => $request->user_id
+            ],
+            [
+                'payroll_id' => $request->payroll_id,
+                'check_in' => $request->check_in,
+                'check_out' => $request->check_out,
+                'incidence' => 'Día normal',
+                'checked_in_platform' => true, // Marca que fue manual/plataforma
+            ]
+        );
+
+        // Si ya existía pero estaba vacío (ej. día futuro), actualizamos
+        if (!$payrollUser->wasRecentlyCreated) {
+            $payrollUser->update([
+                'check_in' => $request->check_in,
+                'check_out' => $request->check_out,
+                'incidence' => 'Día normal',
+            ]);
+        }
+
+        // Calcular tiempos
+        $payrollUser->calculateLate();
+        $payrollUser->calculateExtraTime();
+    }
+
+    // --- NUEVO MÉTODO PARA ACTUALIZAR HORAS ---
+    public function update(Request $request)
+    {
+        $payrollUser = PayrollUser::where('user_id', $request->user_id)
+            ->where('date', $request->date)
+            ->first();
+
+        if ($payrollUser) {
+            $payrollUser->update([
+                'check_in' => $request->check_in,
+                'check_out' => $request->check_out,
+                'incidence' => 'Día normal', // Al poner horas, deja de ser falta/descanso
+            ]);
+
+            // Recalcular lógica de negocio
+            $payrollUser->calculateLate();
+            $payrollUser->calculateExtraTime();
+        }
+    }
+
     public function setIncidence(Request $request)
     {
         // Busca o crea un registro en la tabla PayrollUser basado en el 'date' y el 'user_id'

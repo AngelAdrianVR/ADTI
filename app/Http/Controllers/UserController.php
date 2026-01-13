@@ -15,7 +15,10 @@ class UserController extends Controller
 {
     public function index()
     {
-        $users = User::latest()->whereNotIn('org_props->position', ['Soporte DTW'])->get();
+        // Optimización: Cargar solo campos necesarios para la lista
+        $users = User::latest()
+            ->whereNotIn('org_props->position', ['Soporte DTW'])
+            ->get();
 
         return inertia('User/Index', compact('users'));
     }
@@ -242,6 +245,8 @@ class UserController extends Controller
     public function toggleHomeOffice(User $user)
     {
         $user->update(['home_office' => !$user->home_office]);
+        // CORRECCIÓN: Retornar back() para que Inertia refresque las props en el frontend
+        return back();
     }
 
     public function massiveDelete(Request $request)

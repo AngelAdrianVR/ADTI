@@ -1,211 +1,207 @@
+<script setup>
+import { ref, onMounted, computed } from 'vue';
+import { router } from '@inertiajs/vue3';
+import { ElNotification } from "element-plus";
+
+const props = defineProps({
+    category: Object,
+});
+
+const emit = defineEmits(['deleted']);
+
+const treeData = ref([]);
+const defaultProps = {
+    children: 'children',
+    label: 'label',
+};
+
+// Obtener URL de imagen de manera segura
+const coverImage = computed(() => {
+    return props.category.media?.find(m => m.collection_name === 'default')?.original_url;
+});
+
+// Organizar datos para el Tree View (Optimizado en cliente)
+const organizeSubcategories = () => {
+    if (!props.category.subcategories) return;
+
+    const map = new Map();
+    const roots = [];
+
+    // 1. Mapeo inicial
+    props.category.subcategories.forEach(sub => {
+        map.set(sub.id, {
+            id: sub.id,
+            label: sub.name,
+            features: sub.features,
+            children: []
+        });
+    });
+
+    // 2. Construcción del árbol
+    props.category.subcategories.forEach(sub => {
+        if (sub.prev_subcategory_id) {
+            const parent = map.get(sub.prev_subcategory_id);
+            if (parent) {
+                parent.children.push(map.get(sub.id));
+            }
+        } else {
+            roots.push(map.get(sub.id));
+        }
+    });
+
+    treeData.value = roots;
+};
+
+const editCategory = () => {
+    router.visit(route('categories.edit', props.category.id));
+};
+
+const deleteCategory = () => {
+    router.delete(route('categories.destroy', props.category.id), {
+        onSuccess: () => {
+            ElNotification.success({
+                title: 'Eliminado',
+                message: 'Categoría eliminada correctamente',
+            });
+            emit('deleted');
+        },
+        onError: () => {
+            ElNotification.error({
+                title: 'Error',
+                message: 'No se pudo eliminar. Verifica dependencias.',
+            });
+        }
+    });
+};
+
+onMounted(() => {
+    organizeSubcategories();
+});
+</script>
+
 <template>
-    <div class="border border-grayD9 px-4 py-3 rounded-[10px] self-start">
-        <header class="flex items-center justify-end space-x-1">
-            <button type="button" @click="$inertia.visit(route('categories.edit', category.id))"
-                class="size-6 rounded-full bg-grayED flex items-center justify-center text-primary">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                    stroke="currentColor" class="size-4">
-                    <path stroke-linecap="round" stroke-linejoin="round"
-                        d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
-                </svg>
-            </button>
-            <el-popconfirm confirm-button-text="Si" cancel-button-text="No" icon-color="#0355B5"
-                title="Se borrarán subcategorias y productos relacionados. ¿Continuar?" @confirm="deleteCategory">
-                <template #reference>
-                    <button type="button"
-                        class="size-6 rounded-full bg-grayED flex items-center justify-center text-primary">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                            stroke="currentColor" class="size-4">
-                            <path stroke-linecap="round" stroke-linejoin="round"
-                                d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-                        </svg>
-                    </button>
-                </template>
-            </el-popconfirm>
-        </header>
-        <main class="mt-3">
-            <figure class="w-full h-56 border border-grayD9 rounded-[3px]">
-                <img v-if="category.media.length" :src="category.media[0].original_url" :alt="category.name"
-                    class="h-full object-contain mx-auto">
-                <div v-else class="h-full flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1"
-                        stroke="currentColor" class="size-32 text-grayED">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-                    </svg>
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col h-full group overflow-hidden">
+        
+        <!-- Header con Imagen -->
+        <div class="p-4 border-b border-gray-50 bg-gradient-to-br from-gray-50 to-white relative">
+            <div class="flex items-start gap-4">
+                
+                <!-- Imagen de Portada -->
+                <div class="w-16 h-16 rounded-lg overflow-hidden border border-gray-100 shrink-0 bg-white shadow-sm group-hover:scale-105 transition-transform duration-500">
+                    <img v-if="coverImage" 
+                         :src="coverImage" 
+                         :alt="category.name"
+                         class="w-full h-full object-cover"
+                    >
+                    <div v-else class="w-full h-full flex items-center justify-center bg-gray-50 text-gray-300">
+                        <i class="fa-regular fa-image text-xl"></i>
+                    </div>
                 </div>
-            </figure>
-            <section class="mt-4">
-                <h1 class="font-bold text-primary">{{ category.name }}</h1>
-                <el-tree :data="data" default-expand-all :expand-on-click-node="false" :props="defaultProps"
-                    @node-click="handleNodeClick">
+
+                <!-- Info -->
+                <div class="min-w-0 flex-1 pt-1">
+                    <h3 class="font-bold text-gray-800 text-base leading-tight truncate mb-1" :title="category.name">
+                        {{ category.name }}
+                    </h3>
+                    <div class="flex items-center text-xs text-[#6D6E72] space-x-2">
+                        <span class="bg-gray-100 px-2 py-0.5 rounded text-[10px] font-mono border border-gray-200">
+                            {{ category.key || 'N/A' }}
+                        </span>
+                        <span>{{ category.subcategories?.length || 0 }} subs</span>
+                    </div>
+                </div>
+
+                <!-- Acciones (Flotantes/Visibles en Hover) -->
+                <div class="flex flex-col gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity absolute top-3 right-3 sm:static">
+                    <button 
+                        v-if="$page.props.auth.user.permissions.includes('Editar categorias')"
+                        @click="editCategory"
+                        class="text-[#1676A2] hover:bg-blue-50 bg-white p-1.5 rounded-md shadow-sm border border-gray-100 transition-colors"
+                        title="Editar"
+                    >
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    
+                    <el-popconfirm
+                        v-if="$page.props.auth.user.permissions.includes('Eliminar categorias')"
+                        title="¿Eliminar categoría?"
+                        confirm-button-text="Sí"
+                        cancel-button-text="No"
+                        icon-color="#DC2626"
+                        @confirm="deleteCategory"
+                        width="180"
+                    >
+                        <template #reference>
+                            <button class="text-[#6D6E72] hover:text-red-600 hover:bg-red-50 bg-white p-1.5 rounded-md shadow-sm border border-gray-100 transition-colors" title="Eliminar">
+                                <i class="fa-regular fa-trash-can"></i>
+                            </button>
+                        </template>
+                    </el-popconfirm>
+                </div>
+            </div>
+        </div>
+
+        <!-- Body: Tree View -->
+        <div class="p-4 flex-1 bg-white">
+            <div v-if="treeData.length > 0" class="max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                <el-tree 
+                    :data="treeData" 
+                    :props="defaultProps" 
+                    :expand-on-click-node="false"
+                    node-key="id"
+                    default-expand-all
+                    class="custom-tree"
+                >
                     <template #default="{ node, data }">
-                        <div class="w-full flex items-center justify-between text-xs">
-                            <p :title="node.label" class="w-[85%] truncate">{{ node.label }}</p>
-                            <div v-if="data.features && data.features.length" class="flex items-center w-[41px]">
-                                <el-tooltip content="Exportar productos" placement="top">
-                                    <button @click="openExportModal(data)"
-                                        class="size-5 rounded-full flex items-center justify-center text-secondary hover:text-white hover:bg-primary">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                            stroke-width="1.5" stroke="currentColor" class="size-3">
-                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-                                        </svg>
-                                    </button>
-                                </el-tooltip>
-                                <el-tooltip placement="top">
-                                    <template #content>
-                                        <h1 class="font-bold">Descargar plantilla</h1>
-                                        <p>Si ya tienes los productos en la plantilla da clic en el link</p>
-                                        <p class="text-end">
-                                            <Link :href="route('products.index', { openImportModal: true })">
-                                            <button class="underline text-primarylight">Ir a importación</button>
-                                            </Link>
-                                        </p>
-                                    </template>
-                                    <button @click="downloadTemplate(data)"
-                                        class="size-5 rounded-full flex items-center justify-center text-secondary hover:text-white hover:bg-primary">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                            stroke-width="1.5" stroke="currentColor" class="size-3">
-                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                                        </svg>
-                                    </button>
-                                </el-tooltip>
-                            </div>
-                        </div>
+                        <span class="custom-tree-node flex items-center w-full overflow-hidden">
+                            <span class="node-icon mr-2 shrink-0">
+                                <i v-if="!node.isLeaf" class="fa-regular fa-folder text-amber-400 text-xs"></i>
+                                <i v-else class="fa-solid fa-turn-up rotate-90 text-gray-300 text-[10px] ml-1"></i>
+                            </span>
+                            <span class="truncate text-sm text-gray-600 select-none" :title="node.label">{{ node.label }}</span>
+                            <!-- Indicador sutil de características -->
+                            <span v-if="data.features?.length" class="ml-auto mr-2 w-1.5 h-1.5 rounded-full bg-orange-300" title="Tiene características"></span>
+                        </span>
                     </template>
                 </el-tree>
-            </section>
-        </main>
-    </div>
-
-    <DialogModal :show="showExportModal" @close="showExportModal = false">
-        <template #title> Exportar productos </template>
-        <template #content>
-            <p class="text-black">
-                Al seleccionar “Exportar” el archivo se descargará automáticamente a tu dispositivo. <br><br>
-                Hay
-                <InlineLoading v-if="gettingProducts" />
-                <b v-else class="text-primary">{{ productsToExport.length }}</b>
-                producto(s) para exportar
-            </p>
-        </template>
-        <template #footer>
-            <div class="flex items-center justify-end space-x-1">
-                <PrimaryButton @click="exportProducts()" :disabled="!productsToExport.length">Exportar</PrimaryButton>
             </div>
-        </template>
-    </DialogModal>
+            
+            <div v-else class="h-full flex flex-col items-center justify-center text-center py-8 opacity-60">
+                <i class="fa-solid fa-network-wired text-gray-200 text-3xl mb-2"></i>
+                <p class="text-xs text-gray-400 italic">Sin subcategorías definidas</p>
+            </div>
+        </div>
+        
+    </div>
 </template>
-<script>
-import { Link, useForm } from '@inertiajs/vue3';
-import InlineLoading from '@/Components/MyComponents/InlineLoading.vue';
-import DialogModal from '@/Components/DialogModal.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import axios from 'axios';
 
-export default {
-    data() {
-        const form = useForm({});
-
-        return {
-            form,
-            data: [],
-            defaultProps: {
-                children: 'children',
-                label: 'label',
-            },
-            // carga
-            loading: false,
-            gettingProducts: false,
-            // modals
-            showExportModal: false,
-            // exportacion
-            productsToExport: [],
-            subcategoryToExport: null,
-        }
-    },
-    components: {
-        Link,
-        InlineLoading,
-        DialogModal,
-        PrimaryButton,
-    },
-    emits: ['deleted'],
-    props: {
-        category: Object,
-    },
-    methods: {
-        async openExportModal(data) {
-            this.showExportModal = true;
-            this.subcategoryToExport = data.id;
-            try {
-                this.gettingProducts = true;
-                const response = await axios.get(route('subcategories.get-products', data.id));
-                
-                if (response.status === 200) {
-                    this.productsToExport = response.data.items;
-                }
-            } catch (error) {
-                console.log(error);
-            } finally {
-                this.gettingProducts = false;
-            }
-        },
-        downloadTemplate(data) {
-            const url = route('subcategories.download-excel-template', data.id);
-            window.open(url, '_blank');
-        },
-        exportProducts() {
-            const url = route('subcategories.download-excel-template', { subcategory: this.subcategoryToExport, withProducts: true });
-            window.open(url, '_blank');
-            this.showExportModal = false;
-        },
-        handleNodeClick(data) {
-            console.log(data)
-        },
-        organizeSubcategories() {
-            const map = new Map();
-
-            // Organizar las subcategorías en un mapa por su ID
-            this.category.subcategories.forEach(subcategory => {
-                map.set(subcategory.id, {
-                    id: subcategory.id,
-                    label: subcategory.name,
-                    features: subcategory.features, // Incluyendo las características
-                    children: []
-                });
-            });
-
-            // Crear la estructura jerárquica
-            this.category.subcategories.forEach(subcategory => {
-                if (subcategory.prev_subcategory_id) {
-                    const parent = map.get(subcategory.prev_subcategory_id);
-                    if (parent) {
-                        parent.children.push(map.get(subcategory.id));
-                    }
-                } else {
-                    this.data.push(map.get(subcategory.id));
-                }
-            });
-        },
-        deleteCategory() {
-            this.form.delete(route('categories.destroy', this.category.id), {
-                onSuccess: () => {
-                    this.$notify({
-                        title: 'Correcto',
-                        message: '',
-                        type: 'success',
-                    });
-
-                    this.$emit('deleted');
-                }
-            });
-        },
-    },
-    mounted() {
-        this.organizeSubcategories();
-    }
+<style scoped>
+/* Estilos refinados para el Tree */
+.custom-tree :deep(.el-tree-node__content) {
+    height: 28px;
+    border-radius: 4px;
+    margin-bottom: 1px;
 }
-</script>
+.custom-tree :deep(.el-tree-node__content:hover) {
+    background-color: #f3f4f6;
+}
+.custom-tree :deep(.el-tree-node__expand-icon) {
+    color: #9ca3af;
+    font-size: 10px; 
+    padding: 4px;
+}
+.custom-tree :deep(.el-tree-node__expand-icon.is-leaf) {
+    color: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #e5e7eb;
+    border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #d1d5db;
+}
+</style>
