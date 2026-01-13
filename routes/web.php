@@ -36,7 +36,7 @@ Route::get('/', function () {
     ]);
 })->name('welcome');
 
-// Ver categoría pública
+// Rutas Públicas de Productos
 Route::get('/show-category/{category_id}', function ($category_id) {
     $category = Category::with(['media', 'subcategories.media'])->find($category_id);
     return Inertia::render('LandingPage/ShowCategory', [
@@ -46,12 +46,10 @@ Route::get('/show-category/{category_id}', function ($category_id) {
 })->name('public.show-category');
 
 Route::get('/show-subcategory/{subcategory_id}', function ($subcategory_id) {
-    // Lógica para subcategoría (asumida basada en patrones anteriores)
     return Inertia::render('LandingPage/ShowSubcategory'); 
 })->name('public.show-subcategory');
 
 Route::get('/show-product/{product_id}', function ($product_id) {
-    // Lógica para producto público (asumida)
     return Inertia::render('LandingPage/ShowProduct');
 })->name('public.show-product');
 
@@ -89,26 +87,38 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::resource('departments', DepartmentController::class);
     Route::resource('features', FeatureController::class);
     Route::resource('job-positions', JobPositionController::class);
+    
+    // --- NÓMINAS (PAYROLLS) ---
     Route::resource('payrolls', PayrollController::class);
+    // NUEVA RUTA AGREGADA
+    Route::get('payrolls/{payroll}/pre-payroll', [PayrollController::class, 'prePayrollTemplate'])->name('payrolls.pre-payroll');
+    
+    // --- USUARIOS DE NÓMINA (PAYROLL USERS) ---
+    // Agregamos rutas específicas para las acciones de los empleados en la nómina
+    Route::post('payroll-users/set-attendance', [PayrollUserController::class, 'store'])->name('payroll-users.set-attendance'); // Asistencia manual (admin)
+    Route::put('payroll-users/update-attendance', [PayrollUserController::class, 'update'])->name('payroll-users.update-attendance'); // Editar horas
+    Route::put('payroll-users/set-incidence', [PayrollUserController::class, 'setIncidence'])->name('payroll-users.set-incidence');
+    Route::put('payroll-users/remove-late', [PayrollUserController::class, 'removeLate'])->name('payroll-users.remove-late');
+
     Route::resource('holidays', HolidayController::class);
     Route::resource('kiosks', KioskController::class);
     Route::resource('measure-units', MeasureUnitController::class);
 
     // --- CONFIGURACIONES (SETTINGS) ---
     Route::prefix('settings')->name('settings.')->controller(SettingController::class)->group(function () {
-        Route::get('catalogos', 'index')->name('index');       // Vista Categorías
-        Route::get('permisos', 'permissions')->name('permissions'); // Vista Roles y Permisos (Unified)
-        Route::get('general', 'general')->name('general');     // Vista General
+        Route::get('catalogos', 'index')->name('index');       
+        Route::get('permisos', 'permissions')->name('permissions'); 
+        Route::get('general', 'general')->name('general');     
         
         // Acciones para Roles y Permisos
         Route::name('role-permission.')->group(function() {
             Route::post('store-role', 'storeRole')->name('store-role');
-            Route::put('update-role/{role}', 'updateRole')->name('update-role');
-            Route::delete('delete-role/{role}', 'deleteRole')->name('delete-role');
+            Route::put('update-role/{role_id}', 'updateRole')->name('update-role');
+            Route::delete('delete-role/{role_id}', 'deleteRole')->name('delete-role');
             
             Route::post('store-permission', 'storePermission')->name('store-permission');
-            Route::put('update-permission/{permission}', 'updatePermission')->name('update-permission');
-            Route::delete('delete-permission/{permission}', 'deletePermission')->name('delete-permission');
+            Route::put('update-permission/{permission_id}', 'updatePermission')->name('update-permission');
+            Route::delete('delete-permission/{permission_id}', 'deletePermission')->name('delete-permission');
         });
     });
 

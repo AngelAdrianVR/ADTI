@@ -44,7 +44,7 @@ onMounted(() => {
         <header class="mb-6 mt-4 px-2 lg:px-14">
             <h1 class="text-lg font-bold">Configuraciones</h1>
             <p class="text-sm text-gray-500">
-                <span v-if="section === 'categories'">Gestión del catálogo de productos</span>
+                <span v-if="section === 'categories'">Gestión de categorías</span>
                 <span v-if="section === 'permissions'">Control de acceso y seguridad</span>
                 <span v-if="section === 'general'">Variables generales del sistema</span>
             </p>

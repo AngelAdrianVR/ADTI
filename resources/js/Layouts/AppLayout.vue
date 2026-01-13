@@ -16,9 +16,9 @@ defineProps({
 
 const page = usePage();
 const showingNavigationDropdown = ref(false);
+const showingSettingsSubmenu = ref(route().current('settings.*')); // Auto-expandir si estamos en configuraciones
 const nextAttendance = ref("");
 const isPaused = ref(false);
-// Nueva variable para ocultar el timer inmediatamente al detener
 const isHidden = ref(false);
 
 // --- Lógica del Timer de Proyecto ---
@@ -57,7 +57,6 @@ const stopWork = async () => {
         const response = await axios.post(route('projects.stop', activeEntry.value.project.id));
         
         if (response.status === 200) {
-            // 1. Detener lógica local y Ocultar visualmente INMEDIATAMENTE
             clearInterval(timerInterval);
             isHidden.value = true;
 
@@ -65,8 +64,6 @@ const stopWork = async () => {
                 title: "Tarea detenida",
                 message: `Has dejado de trabajar en: ${activeEntry.value.project.name}`,
             });
-
-            // 2. Recargar datos del servidor en segundo plano
             router.reload({ only: ['auth'] });
         }
     } catch (error) {
@@ -78,10 +75,9 @@ const stopWork = async () => {
     }
 };
 
-// Observar cambios en activeEntry (por si inicias/detienes tarea en otra pestaña o componente)
 watch(activeEntry, (newVal) => {
     if (newVal) {
-        isHidden.value = false; // Resetear ocultamiento si entra una nueva tarea
+        isHidden.value = false;
         startLocalTimer();
     } else {
         clearInterval(timerInterval);
@@ -143,7 +139,6 @@ const setAttendance = async () => {
         const response = await axios.post(route("users.set-attendance"));
         if (response.status === 200) {
             nextAttendance.value = response.data.next;
-            // resetear si habia alguna pausa
             isPaused.value = null;
             ElNotification.success({
                 title: "Registro correcto",
@@ -267,7 +262,7 @@ onMounted(() => {
                     :href="route('payrolls.index')" :active="route().current('payrolls.*')" class="rounded-lg">
                     <div class="flex items-center space-x-3">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5 text-gray-500">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0 1 12 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125-1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5" />
                         </svg>
                         <span>Incidencias</span>
                     </div>
@@ -283,16 +278,52 @@ onMounted(() => {
                     </div>
                 </ResponsiveNavLink>
 
-                <ResponsiveNavLink v-if="$page.props.auth.user?.permissions?.some(permission => {
-                    return ['Ver categorias', 'Ver roles', 'Ver permisos', 'Ver caracteristicas', 'Ver departamentos', 'Ver puestos'].includes(permission);
-                })" :href="route('settings.index')" :active="route().current('settings.*')" class="rounded-lg">
-                    <div class="flex items-center space-x-3">
-                        <svg width="20" height="20" viewBox="0 0 16 15" fill="none" xmlns="http://www.w3.org/2000/svg" class="text-gray-500">
-                            <path d="M6.625 2.25H14.75M6.625 2.25C6.625 2.58152 6.4933 2.89946 6.25888 3.13388C6.02446 3.3683 5.70652 3.5 5.375 3.5C5.04348 3.5 4.72554 3.3683 4.49112 3.13388C4.2567 2.89946 4.125 2.58152 4.125 2.25M6.625 2.25C6.625 1.91848 6.4933 1.60054 6.25888 1.36612C6.02446 1.1317 5.70652 1 5.375 1C5.04348 1 4.72554 1.1317 4.49112 1.36612C4.2567 1.60054 4.125 1.91848 4.125 2.25M4.125 2.25H1M6.625 12.25H14.75M6.625 12.25C6.625 12.5815 6.4933 12.8995 6.25888 13.1339C6.02446 13.3683 5.70652 13.5 5.375 13.5C5.04348 13.5 4.72554 13.3683 4.49112 13.1339C4.2567 12.8995 4.125 12.5815 4.125 12.25M6.625 12.25C6.625 11.9185 6.4933 11.6005 6.25888 11.3661C6.02446 11.1317 5.70652 11 5.375 11C5.04348 11 4.72554 11.1317 4.49112 11.3661C4.2567 11.6005 4.125 11.9185 4.125 12.25M4.125 12.25H1M11.625 7.25H14.75M11.625 7.25C11.625 7.58152 11.4933 7.89946 11.2589 8.13388C11.0245 8.3683 10.7065 8.5 10.375 8.5C10.0435 8.5 9.72554 8.3683 9.49112 8.13388C9.2567 7.89946 9.125 7.58152 9.125 7.25M11.625 7.25C11.625 6.91848 11.4933 6.60054 11.2589 6.36612C11.0245 6.1317 10.7065 6 10.375 6C10.0435 6 9.72554 6.1317 9.49112 6.36612C9.2567 6.60054 9.125 6.91848 9.125 7.25M9.125 7.25H1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-                        </svg>
-                        <span>Configuraciones</span>
+                <!-- Seccion Configuraciones Desplegable -->
+                <div v-if="$page.props.auth.user?.permissions?.some(permission => ['Ver categorias', 'Ver roles', 'Ver permisos', 'Ver caracteristicas', 'Ver departamentos', 'Ver puestos'].includes(permission))" class="pt-1">
+                    <button 
+                        @click="showingSettingsSubmenu = !showingSettingsSubmenu"
+                        class="w-full flex items-center justify-between px-4 py-2 text-base font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition duration-150 ease-in-out"
+                        :class="{'bg-gray-50 text-[#1676A2] font-semibold': route().current('settings.*')}"
+                    >
+                        <div class="flex items-center space-x-3">
+                            <svg width="20" height="20" viewBox="0 0 16 15" fill="none" xmlns="http://www.w3.org/2000/svg" class="text-gray-500">
+                                <path d="M6.625 2.25H14.75M6.625 2.25C6.625 2.58152 6.4933 2.89946 6.25888 3.13388C6.02446 3.3683 5.70652 3.5 5.375 3.5C5.04348 3.5 4.72554 3.3683 4.49112 3.13388C4.2567 2.89946 4.125 2.58152 4.125 2.25M6.625 2.25C6.625 1.91848 6.4933 1.60054 6.25888 1.36612C6.02446 1.1317 5.70652 1 5.375 1C5.04348 1 4.72554 1.1317 4.49112 1.36612C4.2567 1.60054 4.125 1.91848 4.125 2.25M4.125 2.25H1M6.625 12.25H14.75M6.625 12.25C6.625 12.5815 6.4933 12.8995 6.25888 13.1339C6.02446 13.3683 5.70652 13.5 5.375 13.5C5.04348 13.5 4.72554 13.3683 4.49112 13.1339C4.2567 12.8995 4.125 12.5815 4.125 12.25M6.625 12.25C6.625 11.9185 6.4933 11.6005 6.25888 11.3661C6.02446 11.1317 5.70652 11 5.375 11C5.04348 11 4.72554 11.1317 4.49112 11.3661C4.2567 11.6005 4.125 11.9185 4.125 12.25M4.125 12.25H1M11.625 7.25H14.75M11.625 7.25C11.625 7.58152 11.4933 7.89946 11.2589 8.13388C11.0245 8.3683 10.7065 8.5 10.375 8.5C10.0435 8.5 9.72554 8.3683 9.49112 8.13388C9.2567 7.89946 9.125 7.58152 9.125 7.25M11.625 7.25C11.625 6.91848 11.4933 6.60054 11.2589 6.36612C11.0245 6.1317 10.7065 6 10.375 6C10.0435 6 9.72554 6.1317 9.49112 6.36612C9.2567 6.60054 9.125 6.91848 9.125 7.25M9.125 7.25H1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <span>Configuraciones</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-down text-xs transition-transform duration-200" :class="{'rotate-180': showingSettingsSubmenu}"></i>
+                    </button>
+
+                    <!-- Submenú -->
+                    <div v-show="showingSettingsSubmenu" class="mt-1 space-y-1 pl-12 pr-2">
+                        <ResponsiveNavLink 
+                            :href="route('settings.index')" 
+                            :active="route().current('settings.index')"
+                            class="rounded-lg text-sm"
+                        >
+                            Catálogos
+                        </ResponsiveNavLink>
+                        
+                        <ResponsiveNavLink 
+                            v-if="$page.props.auth.user?.permissions?.some(p => ['Ver roles', 'Ver permisos'].includes(p))"
+                            :href="route('settings.permissions')" 
+                            :active="route().current('settings.permissions')"
+                            class="rounded-lg text-sm"
+                        >
+                            Roles y Permisos
+                        </ResponsiveNavLink>
+
+                        <ResponsiveNavLink 
+                            v-if="$page.props.auth.user?.permissions?.some(p => ['Ver caracteristicas', 'Ver departamentos', 'Ver puestos'].includes(p))"
+                            :href="route('settings.general')" 
+                            :active="route().current('settings.general')"
+                            class="rounded-lg text-sm"
+                        >
+                            General
+                        </ResponsiveNavLink>
                     </div>
-                </ResponsiveNavLink>
+                </div>
+
             </div>
 
             <!-- Drawer Footer: Settings & Logout -->

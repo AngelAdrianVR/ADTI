@@ -12,8 +12,8 @@ use Inertia\Inertia;
 
 class SettingController extends Controller
 {
-    // VISTA 1: Categorías
-    // Ruta: settings/catalogos
+    // --- VISTAS PRINCIPALES ---
+
     public function index()
     {
         return Inertia::render('Setting/Index', [
@@ -21,14 +21,12 @@ class SettingController extends Controller
         ]);
     }
 
-    // VISTA 2: Roles y Permisos
-    // Ruta: settings/permisos
     public function permissions()
     {
-        // Cargamos los roles con sus permisos asignados
+        // Cargamos Roles con sus permisos
         $roles = Role::with(['permissions'])->latest()->get();
         
-        // Cargamos todos los permisos y los agrupamos por categoría para facilitar la UI
+        // Cargamos Permisos agrupados por categoría
         $permissions = Permission::all()->groupBy(function ($data) {
             return $data->category;
         });
@@ -40,15 +38,11 @@ class SettingController extends Controller
         ]);
     }
 
-    // VISTA 3: General
-    // Ruta: settings/general
     public function general()
     {
         $features = Feature::latest()->get();
         $departments = Department::latest()->get();
         $job_positions = JobPosition::latest()->get();
-
-        // Tab por defecto si viene en la url
         $currentTab = request('currentTab');
 
         return Inertia::render('Setting/Index', [
@@ -60,61 +54,107 @@ class SettingController extends Controller
         ]);
     }
 
+    // --- LÓGICA DE ROLES ---
+
     public function storeRole(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:191',
+            'name' => 'required|string|max:191|unique:roles,name',
             'permissions' => 'array'
         ]);
 
-        $role = Role::create(['name' => $request->name]);
+        // FIX: Forzar guard 'web' para evitar conflicto con Sanctum
+        $role = Role::create([
+            'name' => $request->name,
+            'guard_name' => 'web' 
+        ]);
+
         if ($request->has('permissions')) {
             $role->syncPermissions($request->permissions);
         }
+        
+        return back();
     }
 
-    public function updateRole(Request $request, Role $role)
+    public function updateRole(Request $request, $role_id)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:255', // Unique validation podría necesitar ignorar el ID actual
             'permissions' => 'array'
         ]);
 
-        $role->name = $request->name;
-        $role->save();
+        $role = Role::find($role_id);
         
-        if ($request->has('permissions')) {
-            $role->syncPermissions($request->permissions);
+        if ($role) {
+            $role->name = $request->name;
+            // Asegurar que el guard sea web si se cambiara, aunque no debería ser necesario editarlo
+            // $role->guard_name = 'web'; 
+            $role->save();
+            
+            if ($request->has('permissions')) {
+                // Sincroniza usando IDs. Como forzamos guard 'web' al crear, esto funcionará.
+                $role->syncPermissions($request->permissions);
+            }
         }
+        
+        return back();
     }
 
-    public function deleteRole(Role $role)
+    public function deleteRole($role_id)
     {
-        $role->delete();
+        $role = Role::find($role_id);
+        if ($role) {
+            $role->delete();
+        }
+        
+        return back();
     }
+
+    // --- LÓGICA DE PERMISOS ---
 
     public function storePermission(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:191',
+            'name' => 'required|string|max:191|unique:permissions,name',
             'category' => 'required|string|max:191'
         ]);
 
-        Permission::create($request->all());
+        // FIX: Forzar guard 'web'
+        Permission::create([
+            'name' => $request->name,
+            'category' => $request->category,
+            'guard_name' => 'web'
+        ]);
+        
+        return back();
     }
 
-    public function updatePermission(Request $request, Permission $permission)
+    public function updatePermission(Request $request, $permission_id)
     {
         $request->validate([
             'name' => 'required|string|max:191',
             'category' => 'required|string|max:191'
         ]);
 
-        $permission->update($request->all());
+        $permission = Permission::find($permission_id);
+        if ($permission) {
+            $permission->update([
+                'name' => $request->name,
+                'category' => $request->category,
+                // 'guard_name' => 'web' // Opcional, mantener consistencia
+            ]);
+        }
+        
+        return back();
     }
 
-    public function deletePermission(Permission $permission)
+    public function deletePermission($permission_id)
     {
-        $permission->delete();
+        $permission = Permission::find($permission_id);
+        if ($permission) {
+            $permission->delete();
+        }
+        
+        return back();
     }
 }

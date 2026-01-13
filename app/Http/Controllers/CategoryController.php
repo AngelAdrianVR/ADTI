@@ -128,7 +128,7 @@ class CategoryController extends Controller
                         'features' => $subCategoryData['features'] ?? null,
                         'prev_subcategory_id' => $prevSubcategoryId,
                     ]);
-    
+
                     // Actualizar la imagen de la subcategoría si se proporciona una nueva
                     if (isset($subCategoryData['image'])) {
                         if ($subcategory->getFirstMedia()) {
@@ -224,7 +224,16 @@ class CategoryController extends Controller
 
     public function getAll()
     {
-        $items = Category::with(['subcategories', 'media'])->latest('id')->get();
+        // OPTIMIZACIÓN:
+        $items = Category::with([
+            'media', 
+            'subcategories' => function ($query) {
+                // Seleccionamos la columna 'features' explícitamente para que el frontend reciba el array
+                $query->select('id', 'name', 'category_id', 'prev_subcategory_id', 'level', 'features');
+            }
+        ])
+        ->latest('id')
+        ->get();
 
         return response()->json(compact('items'));
     }
