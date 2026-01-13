@@ -24,12 +24,6 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-*/
-
 // Página Principal (Landing)
 Route::get('/', function () {
     $categories = Category::with('subcategories', 'media')->get();
@@ -129,6 +123,8 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     // --- NÓMINAS (PAYROLLS) ---
     Route::resource('payrolls', PayrollController::class);
     Route::get('payrolls/{payroll}/pre-payroll', [PayrollController::class, 'prePayrollTemplate'])->name('payrolls.pre-payroll');
+
+    Route::resource('payroll-comments', PayrollCommentController::class)->middleware('auth');
 
     // --- USUARIOS DE NÓMINA (PAYROLL USERS) ---
     // Agregamos rutas específicas para las acciones de los empleados en la nómina
