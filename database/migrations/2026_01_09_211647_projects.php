@@ -34,7 +34,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->foreignId('project_id')->constrained()->onDelete('cascade');
             
-            $table->timestamp('start_time'); // Hora Inicio
+            $table->timestamp('start_time')->nullable(); // Hora Inicio
             $table->timestamp('end_time')->nullable(); // Hora Fin (Null significa en progreso)
             
             // Control de Pausas

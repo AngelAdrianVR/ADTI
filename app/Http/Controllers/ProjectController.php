@@ -15,16 +15,14 @@ class ProjectController extends Controller
 
     public function index()
     {
-        // Obtenemos proyectos con contadores útiles para la vista
         $projects = Project::query()
-            ->with(['users']) // Para ver quiénes han participado
+            ->with(['users'])
             ->withCount(['timeEntries as total_entries'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($project) {
-                // Adjuntamos atributos calculados
-                $project->current_workers = $project->current_workers;
-                $project->consumed_hours = $project->consumed_hours;
+                // Forzamos la carga de los accessors
+                $project->append(['current_workers', 'consumed_hours']);
                 return $project;
             });
 
@@ -32,8 +30,6 @@ class ProjectController extends Controller
         $activeEntry = Auth::user()->activeTimeEntry;
         if ($activeEntry) {
             $activeEntry->load('project');
-            // Forzamos el append del atributo calculado para que llegue al frontend
-            $activeEntry->append('current_duration');
         }
 
         return Inertia::render('Project/Index', [
@@ -84,38 +80,44 @@ class ProjectController extends Controller
     public function show($id)
     {
         $project = Project::with(['timeEntries.user'])->findOrFail($id);
+        
+        // Variables para totales globales
         $projectTotalSeconds = 0;
 
         $projectMembers = $project->timeEntries->groupBy('user_id')->map(function ($entries) use (&$projectTotalSeconds) {
             $user = $entries->first()->user;
             
             $userTotalSeconds = 0;
+
+            // Procesamos cada entrada del usuario
             $entries = $entries->map(function ($entry) use (&$userTotalSeconds) {
+                
+                // Cálculo de duración SIMPLE (Sin pausas)
                 if ($entry->end_time) {
-                    $duration = $entry->total_duration_seconds;
+                    // Si ya terminó, usamos el guardado o calculamos la diferencia fija
+                    $duration = $entry->total_duration_seconds > 0 
+                        ? $entry->total_duration_seconds 
+                        : $entry->start_time->diffInSeconds($entry->end_time);
                 } else {
-                    $now = Carbon::now();
-                    $gross = $entry->start_time->diffInSeconds($now);
-                    $currentPause = ($entry->is_paused && $entry->last_pause_start) 
-                        ? $entry->last_pause_start->diffInSeconds($now) 
-                        : 0;
-                    $duration = max(0, $gross - $entry->total_pause_seconds - $currentPause);
+                    // Si sigue activo (en vivo), calculamos contra AHORA
+                    $duration = $entry->start_time->diffInSeconds(Carbon::now());
                 }
 
                 $userTotalSeconds += $duration;
                 $entry->calculated_duration = $duration;
+                
                 return $entry;
             });
 
             $projectTotalSeconds += $userTotalSeconds;
 
+            // Agrupar por día
             $dailyBreakdown = $entries->groupBy(function ($entry) {
                 return $entry->start_time->format('Y-m-d');
             })->map(function ($dayEntries, $date) {
                 return [
                     'date' => $date,
                     'total_time' => $dayEntries->sum('calculated_duration'),
-                    'total_pause' => $dayEntries->sum('total_pause_seconds'),
                     'entries' => $dayEntries
                 ];
             })->sortKeysDesc();
@@ -136,69 +138,31 @@ class ProjectController extends Controller
         ]);
     }
 
-    // --- LÓGICA DE TIME TRACKING ---
+    // --- LÓGICA DE TIME TRACKING (SIMPLIFICADA) ---
 
     public function startWork(Project $project)
     {
         $user = Auth::user();
         $currentEntry = $user->activeTimeEntry;
 
+        // 1. Si ya hay algo corriendo, lo detenemos primero (Auto-Switch)
         if ($currentEntry) {
+            // Si intenta iniciar el mismo que ya corre, avisamos
             if ($currentEntry->project_id === $project->id) {
-                return redirect()->back()->with('error', 'Ya estás trabajando en este proyecto.');
+                return redirect()->back()->with('info', 'Ya estás trabajando en este proyecto.');
             }
             $this->stopCurrentWorkLogic($currentEntry);
         }
 
+        // 2. Iniciamos nueva sesión limpia
         TimeEntry::create([
             'user_id' => $user->id,
             'project_id' => $project->id,
             'start_time' => now(),
-            'is_paused' => false,
+            // 'is_paused' y demás campos de pausa se quedan en default (false/0)
         ]);
 
         return redirect()->back()->with('message', "Iniciaste trabajo en: {$project->name}");
-    }
-
-    public function togglePause(Project $project)
-    {
-        $user = Auth::user();
-        $entry = $user->activeTimeEntry;
-
-        if (!$entry || $entry->project_id !== $project->id) {
-            return redirect()->back()->with('error', 'No tienes una sesión activa en este proyecto.');
-        }
-
-        // Usamos una sola instancia de tiempo para consistencia
-        $now = Carbon::now();
-
-        if ($entry->is_paused) {
-            // --- REANUDAR ---
-            // Calcular tiempo que duró la pausa
-            // Usamos abs() para evitar negativos por micro-desfases, aunque diffInSeconds suele ser seguro
-            $pauseDuration = 0;
-            if ($entry->last_pause_start) {
-                $pauseDuration = $entry->last_pause_start->diffInSeconds($now);
-            }
-            
-            $entry->update([
-                'is_paused' => false,
-                'total_pause_seconds' => $entry->total_pause_seconds + $pauseDuration,
-                'last_pause_start' => null,
-            ]);
-
-            $msg = 'Has reanudado tu trabajo.';
-        } else {
-            // --- PAUSAR ---
-            $entry->update([
-                'is_paused' => true,
-                'last_pause_start' => $now,
-            ]);
-
-            $msg = 'Trabajo pausado.';
-        }
-
-        return redirect()->back()->with('message', $msg);
     }
 
     public function stopWork(Project $project)
@@ -215,25 +179,18 @@ class ProjectController extends Controller
         return redirect()->back()->with('message', 'Jornada terminada.');
     }
 
+    // Lógica centralizada de cierre
     private function stopCurrentWorkLogic(TimeEntry $entry)
     {
         $now = Carbon::now();
-
-        // Si estaba pausado al detener, cerramos la pausa primero
-        if ($entry->is_paused && $entry->last_pause_start) {
-            $pauseDuration = $entry->last_pause_start->diffInSeconds($now);
-            $entry->total_pause_seconds += $pauseDuration;
-        }
-
-        // Cálculo final robusto
-        $grossDuration = $entry->start_time->diffInSeconds($now);
-        $netDuration = max(0, $grossDuration - $entry->total_pause_seconds);
+        
+        // Cálculo simple: Fin - Inicio
+        // (Ignoramos pausas antiguas si existieran en la migración, asumimos flujo limpio)
+        $duration = $entry->start_time->diffInSeconds($now);
 
         $entry->update([
             'end_time' => $now,
-            'is_paused' => false,
-            'last_pause_start' => null,
-            'total_duration_seconds' => $netDuration,
+            'total_duration_seconds' => $duration,
         ]);
     }
 }

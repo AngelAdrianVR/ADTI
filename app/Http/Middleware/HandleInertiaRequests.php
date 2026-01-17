@@ -50,6 +50,15 @@ class HandleInertiaRequests extends Middleware
 
                 return null;
             },
+            // NUEVO: Compartir la entrada de tiempo activa (si existe)
+            'auth.user.active_entry' => function () use ($request) {
+                if ($request->user()) {
+                    return $request->user()->activeTimeEntry()
+                        ->with('project:id,name') // Solo traemos id y nombre del proyecto
+                        ->first();
+                }
+                return null;
+            },
         ]);
     }
 }
