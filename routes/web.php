@@ -91,8 +91,6 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::resource('products', ProductController::class);
     Route::post('products/update-with-media/{product}', [ProductController::class, 'updateWithMedia'])->name('products.update-with-media');
     Route::post('products/massive-delete', [ProductController::class, 'massiveDelete'])->name('products.massive-delete');
-    Route::get('products-search', [ProductController::class, 'searchProduct'])->name('products.search');
-    Route::get('products-fetch-subcategory-products/{subcategory_id}', [ProductController::class, 'fetchSubcategoryProducts'])->name('products.fetch-subcategory-products');
     Route::post('products/import', [ProductController::class, 'import'])->name('products.import');
     Route::get('products-print-barcodes', [ProductController::class, 'printBarcodes'])->name('products.print-barcodes');
     Route::post('products/get-consecutivo/{subcategory_id}', [ProductController::class, 'getConsecutivo'])->name('products.get-consecutivo');
@@ -162,6 +160,9 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::post('projects/{project}/pause', [ProjectController::class, 'togglePause'])->name('projects.pause');
     Route::post('projects/{project}/stop', [ProjectController::class, 'stopWork'])->name('projects.stop');
 });
+
+Route::get('products-search', [ProductController::class, 'searchProduct'])->name('products.search');
+Route::get('products-fetch-subcategory-products/{subcategory_id}', [ProductController::class, 'fetchSubcategoryProducts'])->name('products.fetch-subcategory-products');
 
 // Comandos de utilidad (Artisan)
 Route::get('/clear-all', function () {
