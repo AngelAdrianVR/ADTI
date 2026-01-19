@@ -31,6 +31,9 @@ const startLocalTimer = () => {
     
     // Función para calcular diferencia
     const updateTimer = () => {
+        // Asegurarse de que start_time existe antes de usarlo
+        if (!activeEntry.value?.start_time) return;
+
         const start = new Date(activeEntry.value.start_time).getTime();
         const now = new Date().getTime();
         const diff = now - start;
@@ -53,6 +56,8 @@ const startLocalTimer = () => {
 };
 
 const stopWork = async () => {
+    if (!activeEntry.value?.project?.id) return;
+
     try {
         const response = await axios.post(route('projects.stop', activeEntry.value.project.id));
         
@@ -62,9 +67,14 @@ const stopWork = async () => {
 
             ElNotification.success({
                 title: "Tarea detenida",
-                message: `Has dejado de trabajar en: ${activeEntry.value.project.name}`,
+                // Usar encadenamiento opcional para evitar error si project ya no existe en el objeto
+                message: `Has dejado de trabajar en: ${activeEntry.value?.project?.name || 'Proyecto'}`,
             });
-            router.reload({ only: ['auth'] });
+            
+            // Recargar toda la página
+            window.location.reload()
+            // Recargar solo auth para actualizar el estado global sin recargar toda la página
+            // router.reload({ only: ['auth'] });
         }
     } catch (error) {
         console.error(error);
@@ -277,7 +287,8 @@ onMounted(() => {
                     </div>
                 </ResponsiveNavLink>
 
-                <ResponsiveNavLink v-if="$page.props.auth.user.permissions.includes('Ver productos')"
+                <!-- CORRECCIÓN: Validación segura de permisos con encadenamiento opcional -->
+                <ResponsiveNavLink v-if="$page.props.auth.user?.permissions?.includes('Ver productos')"
                     :href="route('products.index')" :active="route().current('products.*')" class="rounded-lg">
                     <div class="flex items-center space-x-3">
                         <svg width="20" height="20" viewBox="0 0 17 17" fill="none" xmlns="http://www.w3.org/2000/svg" class="text-gray-500">
@@ -295,7 +306,8 @@ onMounted(() => {
                     </div>
                 </ResponsiveNavLink>
 
-                <ResponsiveNavLink v-if="$page.props.auth.user.permissions.includes('Ver usuarios')"
+                <!-- CORRECCIÓN: Validación segura de permisos -->
+                <ResponsiveNavLink v-if="$page.props.auth.user?.permissions?.includes('Ver usuarios')"
                     :href="route('users.index')" :active="route().current('users.*')" class="rounded-lg">
                     <div class="flex items-center space-x-3">
                         <svg width="20" height="20" viewBox="0 0 18 17" fill="none" xmlns="http://www.w3.org/2000/svg" class="text-gray-500">
@@ -305,7 +317,8 @@ onMounted(() => {
                     </div>
                 </ResponsiveNavLink>
 
-                <ResponsiveNavLink v-if="$page.props.auth.user.permissions.includes('Ver incidencias')"
+                <!-- CORRECCIÓN: Validación segura de permisos -->
+                <ResponsiveNavLink v-if="$page.props.auth.user?.permissions?.includes('Ver incidencias')"
                     :href="route('payrolls.index')" :active="route().current('payrolls.*')" class="rounded-lg">
                     <div class="flex items-center space-x-3">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5 text-gray-500">
@@ -315,7 +328,8 @@ onMounted(() => {
                     </div>
                 </ResponsiveNavLink>
 
-                <ResponsiveNavLink v-if="$page.props.auth.user.permissions.includes('Ver dias festivos')"
+                <!-- CORRECCIÓN: Validación segura de permisos -->
+                <ResponsiveNavLink v-if="$page.props.auth.user?.permissions?.includes('Ver dias festivos')"
                     :href="route('holidays.index')" :active="route().current('holidays.*')" class="rounded-lg">
                     <div class="flex items-center space-x-3">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5 text-gray-500">
@@ -476,7 +490,7 @@ onMounted(() => {
                                                     <svg width="10" height="13" viewBox="0 0 12 15" fill="none"
                                                         class="mr-2" xmlns="http://www.w3.org/2000/svg">
                                                         <path
-                                                            d="M8.50033 3.50033C8.50033 4.16346 8.23691 4.79943 7.768 5.26834C7.2991 5.73724 6.66313 6.00067 6 6.00067C5.33687 6.00067 4.7009 5.73724 4.232 5.26834C3.76309 4.79943 3.49967 4.16346 3.49967 3.50033C3.49967 2.8372 3.76309 2.20123 4.232 1.73233C4.7009 1.26343 5.33687 1 6 1C6.66313 1 7.2991 1.26343 7.768 1.73233C8.23691 2.20123 8.50033 2.8372 8.50033 3.50033ZM1 12.9136C1.02143 11.6016 1.55763 10.3507 2.49298 9.43049C3.42833 8.51029 4.68788 7.99458 6 7.99458C7.31212 7.99458 8.57166 8.51029 9.50702 9.43049C10.4424 10.3507 10.9786 11.6016 11 12.9136C9.43138 13.6329 7.72566 14.0041 6 14.0017C4.21576 14.0017 2.5222 13.6123 1 12.9136Z"
+                                                            d="M8.50033 3.50033C8.50033 4.16346 8.23691 4.79943 7.768 5.26834C7.2991 5.73724 6.66313 6.00067 6 6.00067C5.33687 6.00067 4.7009 5.73724 4.232 5.26834C3.76309 4.79943 3.49967 4.16346 3.49967 2.8372 3.76309 2.20123 4.232 1.73233C4.7009 1.26343 5.33687 1 6 1C6.66313 1 7.2991 1.26343 7.768 1.73233C8.23691 2.20123 8.50033 2.8372 8.50033 3.50033ZM1 12.9136C1.02143 11.6016 1.55763 10.3507 2.49298 9.43049C3.42833 8.51029 4.68788 7.99458 6 7.99458C7.31212 7.99458 8.57166 8.51029 9.50702 9.43049C10.4424 10.3507 10.9786 11.6016 11 12.9136C9.43138 13.6329 7.72566 14.0041 6 14.0017C4.21576 14.0017 2.5222 13.6123 1 12.9136Z"
                                                             stroke="#6D6E72" stroke-width="1.5" stroke-linecap="round"
                                                             stroke-linejoin="round" />
                                                     </svg>
