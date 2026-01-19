@@ -189,7 +189,7 @@ const getProgressStatus = (percentage) => {
                         <div class="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-xl p-6 text-white shadow-lg">
                             <h3 class="font-bold text-lg mb-2">Gestionar Proyectos</h3>
                             <p class="text-indigo-100 text-sm mb-4">Crea nuevos proyectos y asigna presupuestos desde aquí.</p>
-                            <Link :href="route('projects.create')" class="inline-block bg-white text-indigo-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-50 transition shadow-sm">
+                            <Link :href="route('projects.index')" class="inline-block bg-white text-indigo-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-50 transition shadow-sm">
                                 + Nuevo proyecto
                             </Link>
                         </div>
