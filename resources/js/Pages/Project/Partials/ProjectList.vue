@@ -79,7 +79,7 @@ const handlePageChange = (val) => {
                 <template #default="scope">
                     <div class="pr-4">
                         <div class="flex justify-between text-[10px] mb-1 text-gray-500 font-mono">
-                            <span>{{ scope.row.consumed_hours }}h cons.</span>
+                            <span>{{ scope.row.consumed_hours }}h consumidas</span>
                             <span>{{ scope.row.budgeted_hours }}h total</span>
                         </div>
                         <el-progress :percentage="getProgress(scope.row)" :color="getProgressColor" :show-text="false"
