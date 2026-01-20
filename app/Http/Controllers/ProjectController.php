@@ -54,7 +54,7 @@ class ProjectController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'client' => 'required|string|max:255',
-            'start_date' => 'required|date',
+            'start_date' => 'nullable|date',
             'estimated_end_date' => 'nullable|date|after_or_equal:start_date',
             'description' => 'nullable|string',
             'tasks' => 'required|array|min:1',
@@ -124,7 +124,7 @@ class ProjectController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'client' => 'required|string|max:255',
-            'start_date' => 'required|date',
+            'start_date' => 'nullable|date',
             'estimated_end_date' => 'nullable|date|after_or_equal:start_date',
             'description' => 'nullable|string',
             'status' => 'required|in:active,finished',

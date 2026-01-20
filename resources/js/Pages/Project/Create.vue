@@ -88,7 +88,7 @@ const submit = () => {
                             </el-form-item>
 
                             <!-- Fechas -->
-                            <el-form-item label="Fecha de Inicio" :error="form.errors.start_date" required>
+                            <el-form-item label="Fecha de Inicio" :error="form.errors.start_date">
                                 <el-date-picker
                                     v-model="form.start_date"
                                     type="date"

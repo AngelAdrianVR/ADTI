@@ -16,7 +16,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('client'); // Cliente
-            $table->date('start_date');
+            $table->date('start_date')->nullable();
             $table->date('estimated_end_date')->nullable();
             // Este campo ahora será la suma de las tareas, pero lo mantenemos para consultas rápidas
             $table->decimal('budgeted_hours', 10, 2)->default(0); 
