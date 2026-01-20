@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Department;
 use App\Models\Project;
+use App\Models\Task;
 use App\Models\TimeEntry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Carbon\Carbon;
 
@@ -16,17 +19,16 @@ class ProjectController extends Controller
     public function index()
     {
         $projects = Project::query()
-            ->with(['users'])
+            // IMPORTANTE: Cargar 'tasks.department' para que el frontend detecte las tareas
+            ->with(['users', 'tasks.department']) 
             ->withCount(['timeEntries as total_entries'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($project) {
-                // Forzamos la carga de los accessors
                 $project->append(['current_workers', 'consumed_hours']);
                 return $project;
             });
 
-        // Verificamos si el usuario actual tiene una tarea activa
         $activeEntry = Auth::user()->activeTimeEntry;
         if ($activeEntry) {
             $activeEntry->load('project');
@@ -38,6 +40,15 @@ class ProjectController extends Controller
         ]);
     }
 
+    public function create()
+    {
+        $departments = Department::all(['id', 'name']);
+        
+        return Inertia::render('Project/Create', [
+            'departments' => $departments
+        ]);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -45,13 +56,67 @@ class ProjectController extends Controller
             'client' => 'required|string|max:255',
             'start_date' => 'required|date',
             'estimated_end_date' => 'nullable|date|after_or_equal:start_date',
-            'budgeted_hours' => 'required|numeric|min:0',
             'description' => 'nullable|string',
+            'tasks' => 'required|array|min:1',
+            'tasks.*.department_id' => 'required|exists:departments,id',
+            'tasks.*.description' => 'required|string|max:255',
+            'tasks.*.hours' => 'required|numeric|min:0.1',
         ]);
 
-        Project::create($validated);
+        try {
+            DB::beginTransaction();
 
-        return redirect()->back()->with('message', 'Proyecto creado exitosamente');
+            $totalBudgetedHours = collect($request->tasks)->sum('hours');
+
+            $project = Project::create([
+                'name' => $request->name,
+                'client' => $request->client,
+                'start_date' => $request->start_date,
+                'estimated_end_date' => $request->estimated_end_date,
+                'budgeted_hours' => $totalBudgetedHours,
+                'description' => $request->description,
+                'status' => 'active'
+            ]);
+
+            foreach ($request->tasks as $taskData) {
+                Task::create([
+                    'project_id' => $project->id,
+                    'department_id' => $taskData['department_id'],
+                    'description' => $taskData['description'],
+                    'budgeted_hours' => $taskData['hours'],
+                ]);
+            }
+
+            DB::commit();
+
+            return to_route('projects.index');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->withErrors(['error' => 'Error al crear el proyecto: ' . $e->getMessage()]);
+        }
+    }
+
+    public function show(Project $project)
+    {
+        // Agregamos 'timeEntries.task' para que se cargue la info de la tarea en cada registro de tiempo
+        $project->load(['tasks.department', 'timeEntries.user', 'timeEntries.task']);
+        $project->append(['consumed_hours']);
+        
+        return Inertia::render('Project/Show', [
+            'project' => $project
+        ]);
+    }
+
+    public function edit(Project $project)
+    {
+        $departments = Department::all(['id', 'name']);
+        $project->load('tasks');
+
+        return Inertia::render('Project/Edit', [
+            'project' => $project,
+            'departments' => $departments
+        ]);
     }
 
     public function update(Request $request, Project $project)
@@ -61,108 +126,105 @@ class ProjectController extends Controller
             'client' => 'required|string|max:255',
             'start_date' => 'required|date',
             'estimated_end_date' => 'nullable|date|after_or_equal:start_date',
-            'budgeted_hours' => 'required|numeric|min:0',
-            'status' => 'required|in:active,finished',
             'description' => 'nullable|string',
+            'status' => 'required|in:active,finished',
+            'tasks' => 'required|array|min:1',
+            'tasks.*.id' => 'nullable|exists:tasks,id',
+            'tasks.*.department_id' => 'required|exists:departments,id',
+            'tasks.*.description' => 'required|string|max:255',
+            'tasks.*.hours' => 'required|numeric|min:0.1',
         ]);
 
-        $project->update($validated);
+        try {
+            DB::beginTransaction();
 
-        return redirect()->back()->with('message', 'Proyecto actualizado');
+            $totalBudgetedHours = collect($request->tasks)->sum('hours');
+
+            $project->update([
+                'name' => $request->name,
+                'client' => $request->client,
+                'start_date' => $request->start_date,
+                'estimated_end_date' => $request->estimated_end_date,
+                'budgeted_hours' => $totalBudgetedHours,
+                'description' => $request->description,
+                'status' => $request->status,
+            ]);
+
+            $taskIdsToKeep = collect($request->tasks)->pluck('id')->filter()->toArray();
+            
+            $project->tasks()->whereNotIn('id', $taskIdsToKeep)->delete();
+
+            foreach ($request->tasks as $taskData) {
+                if (isset($taskData['id'])) {
+                    Task::where('id', $taskData['id'])->update([
+                        'department_id' => $taskData['department_id'],
+                        'description' => $taskData['description'],
+                        'budgeted_hours' => $taskData['hours'],
+                    ]);
+                } else {
+                    Task::create([
+                        'project_id' => $project->id,
+                        'department_id' => $taskData['department_id'],
+                        'description' => $taskData['description'],
+                        'budgeted_hours' => $taskData['hours'],
+                    ]);
+                }
+            }
+
+            DB::commit();
+
+            return to_route('projects.index');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->withErrors(['error' => 'Error al actualizar el proyecto: ' . $e->getMessage()]);
+        }
     }
 
     public function destroy(Project $project)
     {
         $project->delete();
-        return redirect()->back()->with('message', 'Proyecto eliminado');
+        return to_route('projects.index');
     }
 
-    public function show($id)
-    {
-        $project = Project::with(['timeEntries.user'])->findOrFail($id);
-        
-        // Variables para totales globales
-        $projectTotalSeconds = 0;
+    // --- TIME TRACKING LOGIC ---
 
-        $projectMembers = $project->timeEntries->groupBy('user_id')->map(function ($entries) use (&$projectTotalSeconds) {
-            $user = $entries->first()->user;
-            
-            $userTotalSeconds = 0;
-
-            // Procesamos cada entrada del usuario
-            $entries = $entries->map(function ($entry) use (&$userTotalSeconds) {
-                
-                // Cálculo de duración SIMPLE (Sin pausas)
-                if ($entry->end_time) {
-                    // Si ya terminó, usamos el guardado o calculamos la diferencia fija
-                    $duration = $entry->total_duration_seconds > 0 
-                        ? $entry->total_duration_seconds 
-                        : $entry->start_time->diffInSeconds($entry->end_time);
-                } else {
-                    // Si sigue activo (en vivo), calculamos contra AHORA
-                    $duration = $entry->start_time->diffInSeconds(Carbon::now());
-                }
-
-                $userTotalSeconds += $duration;
-                $entry->calculated_duration = $duration;
-                
-                return $entry;
-            });
-
-            $projectTotalSeconds += $userTotalSeconds;
-
-            // Agrupar por día
-            $dailyBreakdown = $entries->groupBy(function ($entry) {
-                return $entry->start_time->format('Y-m-d');
-            })->map(function ($dayEntries, $date) {
-                return [
-                    'date' => $date,
-                    'total_time' => $dayEntries->sum('calculated_duration'),
-                    'entries' => $dayEntries
-                ];
-            })->sortKeysDesc();
-
-            return [
-                'user' => $user,
-                'total_seconds' => $userTotalSeconds,
-                'daily_breakdown' => $dailyBreakdown
-            ];
-        })->values();
-
-        $project->real_total_seconds = $projectTotalSeconds;
-        $project->real_consumed_hours = round($projectTotalSeconds / 3600, 2);
-
-        return Inertia::render('Project/Show', [
-            'project' => $project,
-            'members' => $projectMembers,
-        ]);
-    }
-
-    // --- LÓGICA DE TIME TRACKING (SIMPLIFICADA) ---
-
-    public function startWork(Project $project)
+    public function startWork(Request $request, Project $project)
     {
         $user = Auth::user();
-        $currentEntry = $user->activeTimeEntry;
 
-        // 1. Si ya hay algo corriendo, lo detenemos primero (Auto-Switch)
+        // 1. Validar tarea si se envía
+        $taskId = $request->input('task_id');
+        if ($taskId) {
+            $task = Task::where('id', $taskId)->where('project_id', $project->id)->first();
+            if (!$task) {
+                return redirect()->back()->with('error', 'La tarea seleccionada no pertenece a este proyecto.');
+            }
+        }
+
+        // 2. Detener tarea actual si existe
+        $currentEntry = $user->activeTimeEntry;
         if ($currentEntry) {
-            // Si intenta iniciar el mismo que ya corre, avisamos
             if ($currentEntry->project_id === $project->id) {
                 return redirect()->back()->with('info', 'Ya estás trabajando en este proyecto.');
             }
             $this->stopCurrentWorkLogic($currentEntry);
         }
 
-        // 2. Iniciamos nueva sesión limpia
+        // 3. Iniciar nueva sesión
         TimeEntry::create([
             'user_id' => $user->id,
             'project_id' => $project->id,
+            'task_id' => $taskId, 
             'start_time' => now(),
-            // 'is_paused' y demás campos de pausa se quedan en default (false/0)
         ]);
 
         return redirect()->back()->with('message', "Iniciaste trabajo en: {$project->name}");
+    }
+
+    public function togglePause(Project $project)
+    {
+        // Lógica de pausa...
     }
 
     public function stopWork(Project $project)
@@ -179,18 +241,15 @@ class ProjectController extends Controller
         return redirect()->back()->with('message', 'Jornada terminada.');
     }
 
-    // Lógica centralizada de cierre
     private function stopCurrentWorkLogic(TimeEntry $entry)
     {
         $now = Carbon::now();
-        
-        // Cálculo simple: Fin - Inicio
-        // (Ignoramos pausas antiguas si existieran en la migración, asumimos flujo limpio)
         $duration = $entry->start_time->diffInSeconds($now);
 
         $entry->update([
             'end_time' => $now,
-            'total_duration_seconds' => $duration,
+            'total_duration_seconds' => $duration - $entry->total_pause_seconds,
+            'is_paused' => false,
         ]);
     }
 }
