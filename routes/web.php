@@ -178,6 +178,11 @@ Route::get('/storage-link', function () {
     return 'Storage link created.';
 });
 
+Route::get('/payrolls-close', function () {
+    Artisan::call('payrolls:close');
+    return 'Listo!';
+});
+
 // --- OTROS / API ---
 Route::get('/api/process-transaction/{time}/{emp_code}', [PayrollUserController::class, 'processBioTimeTransaction']);
 Route::get('/api/get-total-processed-count/', [BioTimeTransactionsController::class, 'getTotalProcessedCount']);

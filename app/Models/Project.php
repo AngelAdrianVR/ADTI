@@ -32,6 +32,11 @@ class Project extends Model
 
     // --- Relaciones ---
 
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class);
+    }
+
     public function timeEntries(): HasMany
     {
         return $this->hasMany(TimeEntry::class);

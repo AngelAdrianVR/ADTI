@@ -18,31 +18,46 @@ return new class extends Migration
             $table->string('client'); // Cliente
             $table->date('start_date');
             $table->date('estimated_end_date')->nullable();
-            $table->decimal('budgeted_hours', 10, 2)->default(0); // Horas Presupuestadas
+            // Este campo ahora será la suma de las tareas, pero lo mantenemos para consultas rápidas
+            $table->decimal('budgeted_hours', 10, 2)->default(0); 
             
             // Estado para los filtros (Activos, Terminados)
             $table->enum('status', ['active', 'finished'])->default('active'); 
             
             $table->text('description')->nullable();
             $table->timestamps();
-            $table->softDeletes(); // Buena práctica en ERPs
+            $table->softDeletes();
         });
 
-        // 2. Tabla de Registros de Tiempo (Time Tracking)
+        // 2. Tabla de Tareas del Proyecto (NUEVA)
+        Schema::create('tasks', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('project_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('department_id')->constrained(); // Relación con departamentos
+            $table->string('description'); // Descripción de la tarea (ej. "Diseño de Planos")
+            $table->decimal('budgeted_hours', 8, 2); // Horas asignadas a esta tarea específica
+            $table->timestamps();
+        });
+
+        // 3. Tabla de Registros de Tiempo (Time Tracking)
         Schema::create('time_entries', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->foreignId('project_id')->constrained()->onDelete('cascade');
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('project_id')->constrained()->cascadeOnDelete();
             
-            $table->timestamp('start_time')->nullable(); // Hora Inicio
-            $table->timestamp('end_time')->nullable(); // Hora Fin (Null significa en progreso)
+            // ACTUALIZACIÓN: Vinculamos el tiempo a una tarea específica. 
+            // Puede ser nullable si permites registrar tiempo "general" al proyecto sin tarea específica.
+            $table->foreignId('task_id')->nullable()->constrained()->nullOnDelete(); 
+
+            $table->timestamp('start_time')->nullable(); 
+            $table->timestamp('end_time')->nullable(); 
             
             // Control de Pausas
-            $table->boolean('is_paused')->default(false); // ¿Está pausado actualmente?
-            $table->timestamp('last_pause_start')->nullable(); // ¿Cuándo empezó la pausa actual?
-            $table->integer('total_pause_seconds')->default(0); // Acumulador de segundos pausados
+            $table->boolean('is_paused')->default(false); 
+            $table->timestamp('last_pause_start')->nullable(); 
+            $table->integer('total_pause_seconds')->default(0); 
             
-            $table->integer('total_duration_seconds')->default(0); // Duración final real (End - Start - Pausas)
+            $table->integer('total_duration_seconds')->default(0); 
             
             $table->timestamps();
         });
@@ -54,6 +69,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('time_entries');
+        Schema::dropIfExists('tasks'); // Eliminar primero por la FK
         Schema::dropIfExists('projects');
     }
 };
