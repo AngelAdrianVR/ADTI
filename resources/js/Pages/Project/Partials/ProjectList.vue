@@ -65,7 +65,7 @@ const handlePageChange = (val) => {
             :default-sort="{ prop: 'client', order: 'ascending' }"
         >
             <!-- Columna: Proyecto/Cliente -->
-            <el-table-column label="Proyecto / Cliente" min-width="280" prop="name" sortable>
+            <el-table-column label="Proyecto / Cliente" min-width="280" prop="client" sortable>
                 <template #default="scope">
                     <div class="py-2">
                         <p class="font-bold text-gray-800 text-sm leading-tight mb-0.5">{{ scope.row.name }}</p>
