@@ -113,6 +113,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::put('users/{user}/update-vacations', [UserController::class, 'updateVacations'])->name('users.update-vacations');
     Route::put('users/{user}/toggle-home-office', [UserController::class, 'toggleHomeOffice'])->name('users.toggle-home-office');
     Route::get('users/reactivatation/{user}', [UserController::class, 'reactivation'])->name('users.reactivation');
+    Route::get('users/{user}/performance', [UserController::class, 'getPerformance'])->name('users.get-performance');
 
     Route::resource('departments', DepartmentController::class);
     Route::resource('features', FeatureController::class);
@@ -159,6 +160,10 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::post('projects/{project}/start', [ProjectController::class, 'startWork'])->name('projects.start');
     Route::post('projects/{project}/pause', [ProjectController::class, 'togglePause'])->name('projects.pause');
     Route::post('projects/{project}/stop', [ProjectController::class, 'stopWork'])->name('projects.stop');
+
+    // --- CATÁLOGO DE TAREAS ---
+    Route::post('default-tasks', [ProjectController::class, 'storeDefaultTask'])->name('default-tasks.store');
+    Route::delete('default-tasks/{default_task}', [ProjectController::class, 'destroyDefaultTask'])->name('default-tasks.destroy');
 });
 
 Route::get('products-search', [ProductController::class, 'searchProduct'])->name('products.search');

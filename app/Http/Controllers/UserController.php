@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Department;
 use App\Models\JobPosition;
 use App\Models\PayrollUser;
+use App\Models\TimeEntry;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -304,6 +306,8 @@ class UserController extends Controller
         $media->save();
     }
 
+    // --- MÉTODOS DE ASISTENCIA ---
+
     public function getNextAttendance()
     {
         $next = auth()->user()->getNextAttendance();
@@ -337,5 +341,34 @@ class UserController extends Controller
             : "Se ha reanudado tu tiempo laboral";
 
         return response()->json(['message' => $message, 'status' => $is_paused]);
+    }
+
+    // --- NUEVO: API para Desempeño ---
+    public function getPerformance(Request $request, User $user)
+    {
+        $range = $request->input('range', 'today'); // 'today', 'week', 'month'
+
+        $query = TimeEntry::with(['project', 'task.department'])
+            ->where('user_id', $user->id)
+            ->whereNotNull('end_time') // Solo tiempos finalizados
+            ->orderBy('start_time', 'desc');
+
+        // Filtros de fecha
+        switch ($range) {
+            case 'today':
+                $query->whereDate('start_time', Carbon::today());
+                break;
+            case 'week':
+                $query->whereBetween('start_time', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()]);
+                break;
+            case 'month':
+                $query->whereMonth('start_time', Carbon::now()->month)
+                      ->whereYear('start_time', Carbon::now()->year);
+                break;
+        }
+
+        $entries = $query->get();
+
+        return response()->json(['items' => $entries]);
     }
 }

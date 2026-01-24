@@ -7,8 +7,14 @@ import SecondaryButton from "@/Components/SecondaryButton.vue";
 import Back from "@/Components/MyComponents/Back.vue";
 import General from "./Tabs/General.vue";
 import DigitalDocuments from "./Tabs/DigitalDocuments.vue";
+import Performance from "./Tabs/Performance.vue"; // Importar nuevo componente
 import axios from "axios";
 import { ElNotification } from "element-plus";
+import { 
+    User,
+    Folder,
+    DataLine // Icono para desempeño
+} from '@element-plus/icons-vue';
 
 const props = defineProps({
     user: Object,
@@ -128,7 +134,7 @@ onMounted(() => {
                             <!-- Botón Nuevo -->
                             <button 
                                 @click="router.visit(route('users.create'))" 
-                                class="bg-primary text-white hover:bg-primary px-3 py-2 rounded-md shadow-sm transition-colors"
+                                class="bg-cyan-600 text-white hover:bg-cyan-700 px-3 py-2 rounded-md shadow-sm transition-colors"
                                 title="Crear nuevo usuario"
                             >
                                 <i class="fa-solid fa-plus"></i>
@@ -200,7 +206,7 @@ onMounted(() => {
                                 <el-tab-pane name="1">
                                     <template #label>
                                         <span class="flex items-center gap-2">
-                                            <i class="fa-regular fa-id-badge"></i> Información General
+                                            <el-icon><User /></el-icon> Información General
                                         </span>
                                     </template>
                                     <div class="py-6 animate-fade-in">
@@ -211,11 +217,23 @@ onMounted(() => {
                                 <el-tab-pane name="2">
                                     <template #label>
                                         <span class="flex items-center gap-2">
-                                            <i class="fa-regular fa-folder-open"></i> Expediente Digital
+                                            <el-icon><Folder /></el-icon> Expediente Digital
                                         </span>
                                     </template>
                                     <div class="py-6 animate-fade-in">
                                         <DigitalDocuments :user="user" />
+                                    </div>
+                                </el-tab-pane>
+
+                                <!-- NUEVA PESTAÑA DESEMPEÑO -->
+                                <el-tab-pane name="3">
+                                    <template #label>
+                                        <span class="flex items-center gap-2">
+                                            <el-icon><DataLine /></el-icon> Desempeño
+                                        </span>
+                                    </template>
+                                    <div class="py-6 animate-fade-in">
+                                        <Performance :user="user" />
                                     </div>
                                 </el-tab-pane>
 
@@ -230,7 +248,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* Personalización de Tabs similar a ProductShow */
+/* Personalización de Tabs */
 :deep(.el-tabs__nav-wrap::after) {
     background-color: #f3f4f6;
     height: 1px;
