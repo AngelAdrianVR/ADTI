@@ -130,7 +130,7 @@ const toggleHomeOffice = () => {
                             @change="toggleHomeOffice"
                             active-text="Habilitado"
                             inactive-text="Deshabilitado"
-                            style="--el-switch-on-color: #4f46e5;"
+                            style="--el-switch-on-color: #1676A2;"
                         />
                     </div>
                 </div>
@@ -139,7 +139,7 @@ const toggleHomeOffice = () => {
                 <div class="flex flex-col">
                     <span class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2">Vacaciones</span>
                     <el-dropdown trigger="click" placement="bottom-start">
-                        <button class="flex items-center justify-between w-full md:w-auto px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition-colors border border-indigo-200">
+                        <button class="flex items-center justify-between w-full md:w-auto px-4 py-2 bg-cyan-50 hover:bg-cyan-100 text-cyan-700 rounded-lg transition-colors border border-cyan-200">
                             <span class="font-bold mr-2">{{ Math.floor(user.org_props?.vacations || 0) }} días disponibles</span>
                             <i class="fa-solid fa-chevron-down text-xs"></i>
                         </button>
@@ -151,7 +151,7 @@ const toggleHomeOffice = () => {
                                 <div class="mb-4">
                                     <div class="flex justify-between items-center mb-1">
                                         <span class="text-xs text-gray-500">Saldo actual</span>
-                                        <button v-if="!editVacations" @click="editVacations = true" class="text-xs text-indigo-600 hover:underline">Modificar</button>
+                                        <button v-if="!editVacations" @click="editVacations = true" class="text-xs text-cyan-600 hover:underline">Modificar</button>
                                     </div>
                                     
                                     <div v-if="editVacations" class="flex items-center gap-2">

@@ -1,19 +1,27 @@
 <script setup>
-import { computed } from 'vue';
-import { Head, useForm, Link } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { Head, useForm, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import DialogModal from '@/Components/DialogModal.vue';
 import { 
     Plus, 
     Delete, 
     Back, 
     CircleCheck,
     Connection,
-    EditPen
+    EditPen,
+    Setting,
+    Search
 } from '@element-plus/icons-vue';
+import { ElNotification } from "element-plus";
 
 const props = defineProps({
     project: Object,
     departments: {
+        type: Array,
+        default: () => []
+    },
+    defaultTasks: { // Catálogo recibido del back
         type: Array,
         default: () => []
     }
@@ -27,35 +35,109 @@ const form = useForm({
     estimated_end_date: props.project.estimated_end_date,
     description: props.project.description,
     status: props.project.status,
-    // Mapeamos las tareas existentes
+    // Mapeamos las tareas existentes asegurando que tengan el formato correcto
     tasks: props.project.tasks.length > 0 
         ? props.project.tasks.map(t => ({
-            id: t.id, // Importante para saber qué actualizar
+            id: t.id, 
             department_id: t.department_id,
             description: t.description,
-            hours: Number(t.budgeted_hours) // Asegurar número
+            hours: Number(t.budgeted_hours)
         }))
         : [{ department_id: '', description: '', hours: 0 }]
 });
+
+// --- Estado Modal Gestión Tareas ---
+const showTaskCatalogModal = ref(false);
+const catalogForm = useForm({
+    name: '',
+    department_id: null
+});
+const catalogSearch = ref('');
+
+// --- Computed ---
 
 // Computed para sumar horas en tiempo real
 const totalBudgetedHours = computed(() => {
     return form.tasks.reduce((sum, task) => sum + Number(task.hours || 0), 0);
 });
 
-// Métodos para gestión de tareas
+const filteredCatalog = computed(() => {
+    if (!catalogSearch.value) return props.defaultTasks;
+    const q = catalogSearch.value.toLowerCase();
+    return props.defaultTasks.filter(t => t.name.toLowerCase().includes(q));
+});
+
+// --- Métodos para gestión de tareas ---
 const addTask = () => {
     form.tasks.push({ department_id: '', description: '', hours: 0 });
 };
 
 const removeTask = (index) => {
-    if (form.tasks.length > 1) {
+    // Permitir dejar vacío si se desea eliminar todo, o mantener al menos una
+    if (form.tasks.length > 0) {
         form.tasks.splice(index, 1);
     }
 };
 
 const submit = () => {
     form.put(route('projects.update', props.project.id));
+};
+
+// --- Lógica de Autocompletado ---
+const querySearch = (queryString, cb, departmentId) => {
+    let results = props.defaultTasks;
+
+    // 1. Filtrar por departamento si está seleccionado en la fila
+    if (departmentId) {
+        const deptTasks = results.filter(t => t.department_id === departmentId);
+        const otherTasks = results.filter(t => t.department_id !== departmentId);
+        
+        if (!queryString) {
+            results = [...deptTasks, ...otherTasks];
+        }
+    }
+
+    // 2. Filtrar por texto
+    if (queryString) {
+        results = results.filter(item => 
+            item.name.toLowerCase().includes(queryString.toLowerCase())
+        );
+    }
+
+    // Mapear al formato que pide element plus
+    const suggestions = results.map(item => ({ 
+        value: item.name, 
+        department: item.department?.name, 
+        id: item.id
+    }));
+    
+    cb(suggestions);
+};
+
+const handleSelectTask = (item, index) => {
+    const taskDef = props.defaultTasks.find(t => t.id === item.id);
+    if (taskDef?.department_id && !form.tasks[index].department_id) {
+        form.tasks[index].department_id = taskDef.department_id;
+    }
+};
+
+// --- Métodos Catálogo ---
+const addDefaultTask = () => {
+    catalogForm.post(route('default-tasks.store'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            ElNotification.success('Tarea agregada al catálogo');
+            catalogForm.reset();
+        },
+        onError: () => ElNotification.error('Error al agregar tarea')
+    });
+};
+
+const deleteDefaultTask = (id) => {
+    router.delete(route('default-tasks.destroy', id), {
+        preserveScroll: true,
+        onSuccess: () => ElNotification.success('Tarea eliminada del catálogo')
+    });
 };
 </script>
 
@@ -104,7 +186,7 @@ const submit = () => {
                             </el-form-item>
 
                             <!-- Fechas -->
-                            <el-form-item label="Fecha de Inicio" :error="form.errors.start_date" required>
+                            <el-form-item label="Fecha de Inicio" :error="form.errors.start_date">
                                 <el-date-picker
                                     v-model="form.start_date"
                                     type="date"
@@ -129,8 +211,16 @@ const submit = () => {
                             <!-- Estatus (Solo visible en edición) -->
                             <el-form-item label="Estado del Proyecto" :error="form.errors.status">
                                 <el-select v-model="form.status" class="!w-full">
-                                    <el-option label="En Curso (Activo)" value="active" />
-                                    <el-option label="Terminado" value="finished" />
+                                    <el-option label="En Curso (Activo)" value="active">
+                                        <span class="flex items-center gap-2">
+                                            <span class="w-2 h-2 rounded-full bg-green-500"></span> En Curso
+                                        </span>
+                                    </el-option>
+                                    <el-option label="Terminado" value="finished">
+                                        <span class="flex items-center gap-2">
+                                            <span class="w-2 h-2 rounded-full bg-gray-400"></span> Terminado
+                                        </span>
+                                    </el-option>
                                 </el-select>
                             </el-form-item>
 
@@ -155,9 +245,14 @@ const submit = () => {
                                 <el-icon class="mr-2 text-[#1676A2]"><Connection /></el-icon>
                                 Planificación de Tareas
                             </h2>
-                            <div class="text-right bg-blue-50 px-3 py-1 rounded-lg border border-blue-100">
-                                <span class="text-xs text-gray-500 uppercase font-bold block">Total Presupuestado</span>
-                                <p class="text-lg font-bold text-[#1676A2]">{{ totalBudgetedHours.toFixed(1) }} hrs</p>
+                            <div class="flex items-center gap-4">
+                                <button type="button" @click="showTaskCatalogModal = true" class="text-xs text-[#1676A2] hover:underline flex items-center">
+                                    <el-icon class="mr-1"><Setting /></el-icon> Gestionar Catálogo
+                                </button>
+                                <div class="text-right bg-blue-50 px-3 py-1 rounded-lg border border-blue-100">
+                                    <span class="text-xs text-gray-500 uppercase font-bold block">Total Presupuestado</span>
+                                    <p class="text-lg font-bold text-[#1676A2]">{{ totalBudgetedHours.toFixed(1) }} hrs</p>
+                                </div>
                             </div>
                         </div>
 
@@ -202,17 +297,27 @@ const submit = () => {
                                         </el-form-item>
                                     </div>
 
-                                    <!-- Descripción -->
+                                    <!-- Descripción (Con Autocomplete) -->
                                     <div class="col-span-6">
                                         <el-form-item 
                                             :error="form.errors[`tasks.${index}.description`]"
                                             class="!mb-0"
                                         >
-                                            <el-input 
-                                                v-model="task.description" 
-                                                placeholder="Ej. Instalación eléctrica" 
-                                                size="default"
-                                            />
+                                            <el-autocomplete
+                                                v-model="task.description"
+                                                :fetch-suggestions="(qs, cb) => querySearch(qs, cb, task.department_id)"
+                                                placeholder="Ej. Instalación eléctrica"
+                                                class="!w-full"
+                                                clearable
+                                                @select="(item) => handleSelectTask(item, index)"
+                                            >
+                                                <template #default="{ item }">
+                                                    <div class="flex justify-between items-center w-full">
+                                                        <span>{{ item.value }}</span>
+                                                        <span class="text-xs text-gray-400 ml-2" v-if="item.department">{{ item.department }}</span>
+                                                    </div>
+                                                </template>
+                                            </el-autocomplete>
                                         </el-form-item>
                                     </div>
 
@@ -240,7 +345,6 @@ const submit = () => {
                                             link 
                                             :icon="Delete" 
                                             @click="removeTask(index)" 
-                                            :disabled="form.tasks.length === 1"
                                             title="Eliminar fila"
                                         />
                                     </div>
@@ -278,5 +382,58 @@ const submit = () => {
                 </el-form>
             </div>
         </main>
+
+        <!-- MODAL GESTIÓN CATÁLOGO -->
+        <DialogModal :show="showTaskCatalogModal" @close="showTaskCatalogModal = false" maxWidth="md">
+            <template #title>
+                <div class="flex items-center gap-2">
+                    <el-icon class="text-[#1676A2]"><Setting /></el-icon>
+                    Catálogo de Tareas Frecuentes
+                </div>
+            </template>
+            <template #content>
+                <div class="space-y-4">
+                    <div class="flex gap-2">
+                        <div class="flex-1 space-y-2">
+                            <el-input v-model="catalogForm.name" placeholder="Nombre de la nueva tarea..." />
+                            <el-select :teleported="false" filterable v-model="catalogForm.department_id" placeholder="Depto. (Opcional)" class="!w-full" clearable>
+                                <el-option v-for="dept in departments" :key="dept.id" :label="dept.name" :value="dept.id" />
+                            </el-select>
+                        </div>
+                        <el-button type="primary" color="#1676A2" @click="addDefaultTask" :disabled="!catalogForm.name || catalogForm.processing" class="h-auto">
+                            <el-icon><Plus /></el-icon>
+                        </el-button>
+                    </div>
+                    <div v-if="catalogForm.errors.name" class="text-xs text-red-500">{{ catalogForm.errors.name }}</div>
+
+                    <div class="border-t border-gray-100 pt-4">
+                        <el-input v-model="catalogSearch" placeholder="Buscar en catálogo..." size="small" class="mb-3">
+                            <template #prefix><el-icon><Search /></el-icon></template>
+                        </el-input>
+                        
+                        <div class="max-h-60 overflow-y-auto border border-gray-100 rounded-lg">
+                            <div v-if="filteredCatalog.length === 0" class="p-4 text-center text-xs text-gray-400">
+                                No se encontraron tareas.
+                            </div>
+                            <div v-for="item in filteredCatalog" :key="item.id" class="flex justify-between items-center p-2 hover:bg-gray-50 border-b border-gray-50 last:border-0 text-sm">
+                                <div>
+                                    <span class="text-gray-700">{{ item.name }}</span>
+                                    <span v-if="item.department" class="ml-2 text-[10px] bg-blue-50 text-[#1676A2] px-1.5 rounded">{{ item.department.name }}</span>
+                                </div>
+                                <el-popconfirm :teleported="false" title="¿Eliminar del catálogo?" confirm-button-text="Sí" cancel-button-text="No" @confirm="deleteDefaultTask(item.id)">
+                                    <template #reference>
+                                        <el-button type="danger" link size="small"><el-icon><Delete /></el-icon></el-button>
+                                    </template>
+                                </el-popconfirm>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            <template #footer>
+                <el-button @click="showTaskCatalogModal = false">Cerrar</el-button>
+            </template>
+        </DialogModal>
+
     </AppLayout>
 </template>
