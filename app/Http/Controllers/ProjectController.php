@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DefaultTask;
 use App\Models\Department;
 use App\Models\Project;
 use App\Models\Task;
@@ -19,9 +20,10 @@ class ProjectController extends Controller
     public function index()
     {
         $projects = Project::query()
-            // IMPORTANTE: Cargar 'tasks.department' para que el frontend detecte las tareas
             ->with(['users', 'tasks.department']) 
             ->withCount(['timeEntries as total_entries'])
+            // ORDENAMIENTO: Primero por Cliente (Agrupar), luego por fecha de creación (Recientes primero)
+            ->orderBy('client', 'asc')
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($project) {
@@ -40,12 +42,15 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function create()
+   public function create()
     {
         $departments = Department::all(['id', 'name']);
+        // NUEVO: Cargamos el catálogo de tareas
+        $defaultTasks = DefaultTask::with('department:id,name')->latest()->get();
         
         return Inertia::render('Project/Create', [
-            'departments' => $departments
+            'departments' => $departments,
+            'defaultTasks' => $defaultTasks // Pasamos a la vista
         ]);
     }
 
@@ -99,7 +104,6 @@ class ProjectController extends Controller
 
     public function show(Project $project)
     {
-        // Agregamos 'timeEntries.task' para que se cargue la info de la tarea en cada registro de tiempo
         $project->load(['tasks.department', 'timeEntries.user', 'timeEntries.task']);
         $project->append(['consumed_hours']);
         
@@ -108,14 +112,18 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function edit(Project $project)
+   public function edit(Project $project)
     {
         $departments = Department::all(['id', 'name']);
+        // NUEVO: Cargar catálogo para la edición
+        $defaultTasks = DefaultTask::with('department:id,name')->latest()->get();
+        
         $project->load('tasks');
 
         return Inertia::render('Project/Edit', [
             'project' => $project,
-            'departments' => $departments
+            'departments' => $departments,
+            'defaultTasks' => $defaultTasks // Pasamos a la vista
         ]);
     }
 
@@ -193,7 +201,6 @@ class ProjectController extends Controller
     {
         $user = Auth::user();
 
-        // 1. Validar tarea si se envía
         $taskId = $request->input('task_id');
         if ($taskId) {
             $task = Task::where('id', $taskId)->where('project_id', $project->id)->first();
@@ -202,7 +209,6 @@ class ProjectController extends Controller
             }
         }
 
-        // 2. Detener tarea actual si existe
         $currentEntry = $user->activeTimeEntry;
         if ($currentEntry) {
             if ($currentEntry->project_id === $project->id) {
@@ -211,7 +217,6 @@ class ProjectController extends Controller
             $this->stopCurrentWorkLogic($currentEntry);
         }
 
-        // 3. Iniciar nueva sesión
         TimeEntry::create([
             'user_id' => $user->id,
             'project_id' => $project->id,
@@ -251,5 +256,25 @@ class ProjectController extends Controller
             'total_duration_seconds' => $duration - $entry->total_pause_seconds,
             'is_paused' => false,
         ]);
+    }
+
+    // --- NUEVOS MÉTODOS: GESTIÓN CATÁLOGO TAREAS ---
+
+    public function storeDefaultTask(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255|unique:default_tasks,name',
+            'department_id' => 'nullable|exists:departments,id'
+        ]);
+
+        DefaultTask::create($request->all());
+        
+        return back(); // Inertia recargará los props automáticamente
+    }
+
+    public function destroyDefaultTask(DefaultTask $default_task)
+    {
+        $default_task->delete();
+        return back();
     }
 }
