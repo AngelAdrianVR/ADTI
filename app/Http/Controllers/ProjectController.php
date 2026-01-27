@@ -19,13 +19,18 @@ class ProjectController extends Controller
     public function index()
     {
         $projects = Project::query()
-            ->with(['users', 'tasks.department']) 
+            ->with([
+                'users', 
+                'tasks.department',
+                'activeTimeEntries.user', 
+                'activeTimeEntries.task'
+            ]) 
             ->withCount(['timeEntries as total_entries'])
             ->orderBy('client', 'asc')
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($project) {
-                $project->append(['current_workers', 'consumed_hours']);
+                $project->append(['consumed_hours']);
                 return $project;
             });
 
@@ -34,15 +39,17 @@ class ProjectController extends Controller
             $activeEntry->load('project');
         }
 
-        // NUEVO: Obtener todos los usuarios para el selector administrativo
+        // NUEVO: Obtener usuarios activos con su estado de trabajo actual
+        // Necesario para el modal de administración "Iniciar tarea a tercero"
         $users = User::where('is_active', true)
-            ->whereNotIn('org_props->position', ['Soporte DTW']) // Opcional: Filtros de tu lógica
+            ->whereNotIn('org_props->position', ['Soporte DTW']) 
+            ->with('activeTimeEntry') // Cargamos si tienen tarea activa
             ->get(['id', 'name', 'profile_photo_path']);
 
         return Inertia::render('Project/Index', [
             'projects' => $projects,
             'activeEntry' => $activeEntry,
-            'users' => $users // Pasamos los usuarios a la vista
+            'users' => $users 
         ]);
     }
 
@@ -68,7 +75,7 @@ class ProjectController extends Controller
             'tasks' => 'required|array|min:1',
             'tasks.*.department_id' => 'required|exists:departments,id',
             'tasks.*.description' => 'required|string|max:255',
-            'tasks.*.hours' => 'required|numeric|min:0.1',
+            'tasks.*.hours' => 'required|numeric|min:0',
         ]);
 
         try {
@@ -141,7 +148,7 @@ class ProjectController extends Controller
             'tasks.*.id' => 'nullable|exists:tasks,id',
             'tasks.*.department_id' => 'required|exists:departments,id',
             'tasks.*.description' => 'required|string|max:255',
-            'tasks.*.hours' => 'required|numeric|min:0.1',
+            'tasks.*.hours' => 'required|numeric|min:0',
         ]);
 
         try {
@@ -202,6 +209,7 @@ class ProjectController extends Controller
     {
         // 1. Determinar usuario objetivo (Admin puede forzar otro usuario)
         $targetUserId = Auth::id();
+        
         if ($request->has('user_id') && Auth::user()->can('Gestionar tiempo en tareas')) {
             $targetUserId = $request->user_id;
         }
@@ -214,13 +222,17 @@ class ProjectController extends Controller
             if (!$task) {
                 return back()->with('error', 'La tarea seleccionada no pertenece a este proyecto.');
             }
+            // Validar que la tarea no esté finalizada
+            if ($task->completed_at) {
+                return back()->with('error', 'No se puede iniciar trabajo en una tarea finalizada.');
+            }
         }
 
-        // 3. Detener tarea actual del usuario objetivo
+        // 3. Detener tarea actual del usuario objetivo (si existe)
         $currentEntry = $user->activeTimeEntry;
         if ($currentEntry) {
-            if ($currentEntry->project_id === $project->id) {
-                return back()->with('info', "{$user->name} ya está trabajando en este proyecto.");
+            if ($currentEntry->project_id === $project->id && $currentEntry->task_id == $taskId) {
+                return back()->with('info', "{$user->name} ya está trabajando en esta tarea.");
             }
             $this->stopCurrentWorkLogic($currentEntry);
         }
@@ -233,7 +245,7 @@ class ProjectController extends Controller
             'start_time' => now(),
         ]);
 
-        return back()->with('message', "Trabajo iniciado para {$user->name} en: {$project->name}");
+        return back()->with('message', "Trabajo iniciado para {$user->name}.");
     }
 
     public function togglePause(Project $project)
@@ -243,8 +255,8 @@ class ProjectController extends Controller
 
     public function stopWork(Request $request, Project $project)
     {
-        // 1. Determinar usuario objetivo
         $targetUserId = Auth::id();
+        
         if ($request->has('user_id') && Auth::user()->can('Gestionar tiempo en tareas')) {
             $targetUserId = $request->user_id;
         }
@@ -273,19 +285,18 @@ class ProjectController extends Controller
         ]);
     }
 
-    // --- NUEVO: AGREGAR TIEMPO MANUALMENTE ---
     public function addTimeEntry(Request $request)
     {
         $request->validate([
             'project_id' => 'required|exists:projects,id',
             'user_id' => 'required|exists:users,id',
             'task_id' => 'nullable|exists:tasks,id',
-            'duration' => 'required|numeric|min:0.1', // Horas
+            'duration' => 'required|numeric|min:0.1', 
             'date' => 'required|date',
         ]);
 
         $durationSeconds = (int)($request->duration * 3600);
-        $startTime = Carbon::parse($request->date)->setTime(9, 0, 0); // Default 9 AM
+        $startTime = Carbon::parse($request->date)->setTime(9, 0, 0); 
         $endTime = $startTime->copy()->addSeconds($durationSeconds);
 
         TimeEntry::create([

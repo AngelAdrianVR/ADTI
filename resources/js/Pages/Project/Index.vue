@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed } from 'vue';
-import { Head, router, usePage, useForm } from '@inertiajs/vue3';
+import { ref, computed, watch } from 'vue';
+import { router, usePage, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import ProjectList from './Partials/ProjectList.vue';
 import ProjectCalendar from './Partials/ProjectCalendar.vue';
@@ -10,14 +10,17 @@ import {
     Plus, 
     List,
     Calendar,
-    Connection
+    Connection,
+    User,
+    VideoPlay,
+    OfficeBuilding
 } from '@element-plus/icons-vue';
 import axios from 'axios';
 
 const props = defineProps({
     projects: Array,
     activeEntry: Object,
-    users: Array // NUEVA PROP: Todos los usuarios
+    users: Array // Todos los usuarios (incluye info de su active_time_entry)
 });
 
 const page = usePage();
@@ -26,20 +29,28 @@ const page = usePage();
 const canCreate = computed(() => page.props.auth.user?.permissions?.includes('Crear proyectos'));
 const canEdit = computed(() => page.props.auth.user?.permissions?.includes('Editar proyectos'));
 const canDelete = computed(() => page.props.auth.user?.permissions?.includes('Eliminar proyectos'));
+const canManageTime = computed(() => page.props.auth.user?.permissions?.includes('Gestionar tiempo en tareas'));
 
 // --- Estado ---
 const search = ref('');
-const activeTab = ref('active'); // 'active' | 'finished' | 'all'
-const viewMode = ref('list'); // 'list' | 'calendar'
+const activeTab = ref('active'); 
+const viewMode = ref('list'); 
 
-// --- Estado Modal Inicio Tarea ---
+// --- Estado Modal Inicio Tarea (Usuario Normal) ---
 const showTaskSelectionModal = ref(false);
 const projectToStart = ref(null);
 const taskForm = useForm({
     task_id: null,
 });
 
-// --- Computed ---
+// --- Estado Modal Asignación Administrativa (Admin) ---
+const showAdminAssignModal = ref(false);
+const adminAssignForm = useForm({
+    user_id: null,
+    project_id: null,
+    task_id: null,
+});
+
 // --- Computed Counts ---
 const totalActive = computed(() => props.projects.filter(p => p.status === 'active').length);
 const totalFinished = computed(() => props.projects.filter(p => p.status === 'finished').length);
@@ -47,12 +58,9 @@ const totalAll = computed(() => props.projects.length);
 
 const filteredProjects = computed(() => {
     let result = props.projects;
-
-    // Filtros de Tab
     if (viewMode.value === 'list' && activeTab.value !== 'all') {
         result = result.filter(p => p.status === activeTab.value);
     }
-
     if (search.value) {
         const q = search.value.toLowerCase();
         result = result.filter(p => 
@@ -61,8 +69,20 @@ const filteredProjects = computed(() => {
             p.description?.toLowerCase().includes(q)
         );
     }
-
     return result;
+});
+
+// Usuarios libres (sin tarea activa) para el selector administrativo
+const freeUsers = computed(() => {
+    if (!props.users) return [];
+    return props.users.filter(u => !u.active_time_entry);
+});
+
+// Tareas del proyecto seleccionado en el modal administrativo
+const adminSelectedProjectTasks = computed(() => {
+    if (!adminAssignForm.project_id) return [];
+    const project = props.projects.find(p => p.id === adminAssignForm.project_id);
+    return project ? project.tasks : [];
 });
 
 // --- Acciones Generales ---
@@ -85,8 +105,7 @@ const handleDelete = (project) => {
     });
 };
 
-// --- Lógica Iniciar/Detener Trabajo ---
-
+// --- Lógica Iniciar/Detener Trabajo (Usuario Normal) ---
 const handleStartWork = (project) => {
     if (project.tasks && project.tasks.length > 0) {
         projectToStart.value = project;
@@ -121,7 +140,7 @@ const startWorkRequest = async (projectId, taskId) => {
         }
     } catch (error) {
         console.error(error);
-        ElNotification.error('Error al iniciar el trabajo. Intenta de nuevo.');
+        ElNotification.error(error.response?.data?.message || 'Error al iniciar el trabajo.');
     }
 };
 
@@ -134,6 +153,35 @@ const handleStopWork = async (project) => {
         ElNotification.error('No se pudo detener el trabajo');
     }
 };
+
+// --- Lógica Asignación Administrativa ---
+const openAdminAssignModal = () => {
+    adminAssignForm.reset();
+    showAdminAssignModal.value = true;
+};
+
+const submitAdminAssignment = () => {
+    if (!adminAssignForm.user_id || !adminAssignForm.project_id) {
+        ElNotification.warning('Usuario y Proyecto son obligatorios');
+        return;
+    }
+
+    axios.post(route('projects.start', adminAssignForm.project_id), {
+        user_id: adminAssignForm.user_id,
+        task_id: adminAssignForm.task_id
+    }).then(() => {
+        ElNotification.success('Tarea iniciada correctamente para el usuario.');
+        showAdminAssignModal.value = false;
+        router.reload();
+    }).catch(err => {
+        ElNotification.error(err.response?.data?.message || 'Error al asignar tarea');
+    });
+};
+
+// Resetear tarea si cambia el proyecto en admin modal
+watch(() => adminAssignForm.project_id, () => {
+    adminAssignForm.task_id = null;
+});
 </script>
 
 <template>
@@ -167,6 +215,17 @@ const handleStopWork = async (project) => {
                                 <template #prefix><el-icon><Search /></el-icon></template>
                             </el-input>
                         </div>
+                        
+                        <!-- Botón Asignar Tarea (Solo Admin) -->
+                        <el-button 
+                            v-if="canManageTime" 
+                            type="warning" 
+                            plain
+                            @click="openAdminAssignModal" 
+                            class="!rounded-lg w-full sm:w-auto"
+                        >
+                            <el-icon class="mr-2"><VideoPlay /></el-icon> Asignar
+                        </el-button>
 
                         <!-- Botón Crear -->
                         <el-button v-if="canCreate" type="primary" @click="createProject" color="#1676A2" class="!rounded-lg w-full sm:w-auto">
@@ -180,7 +239,7 @@ const handleStopWork = async (project) => {
                     
                     <!-- Tabs -->
                      <el-tabs v-if="viewMode === 'list'" v-model="activeTab" class="px-6 pt-4 project-tabs">
-                        <el-tab-pane :label="`En Curso (${totalActive})`" name="active" />
+                        <el-tab-pane :label="`En curso (${totalActive})`" name="active" />
                         <el-tab-pane :label="`Terminados (${totalFinished})`" name="finished" />
                         <el-tab-pane :label="`Todos (${totalAll})`" name="all" />
                     </el-tabs>
@@ -192,7 +251,7 @@ const handleStopWork = async (project) => {
                         :active-entry="activeEntry"
                         :can-edit="canEdit"
                         :can-delete="canDelete"
-                        :users="users" 
+                        :users="users"
                         @edit="handleEdit"
                         @delete="handleDelete"
                         @view="handleView"
@@ -214,10 +273,10 @@ const handleStopWork = async (project) => {
             </div>
         </main>
 
-        <!-- MODAL: SELECCIÓN DE TAREA -->
+        <!-- MODAL: SELECCIÓN DE TAREA (USUARIO NORMAL) -->
         <el-dialog 
             v-model="showTaskSelectionModal" 
-            title="Iniciar Trabajo" 
+            title="Iniciar trabajo" 
             width="450px" 
             align-center 
             destroy-on-close
@@ -235,7 +294,7 @@ const handleStopWork = async (project) => {
                     <el-form-item label="Tarea Asignada">
                         <el-select 
                             v-model="taskForm.task_id" 
-                            placeholder="Selecciona una tarea de la lista" 
+                            placeholder="Selecciona una tarea" 
                             class="!w-full" 
                             filterable
                             size="large"
@@ -245,11 +304,15 @@ const handleStopWork = async (project) => {
                                 v-for="task in projectToStart?.tasks" 
                                 :key="task.id" 
                                 :label="task.description" 
-                                :value="task.id" 
+                                :value="task.id"
+                                :disabled="!!task.completed_at"
                             >
-                                <div class="flex justify-between items-center w-full">
+                                <div class="flex justify-between items-center w-full" :class="{'opacity-50': task.completed_at}">
                                     <span>{{ task.description }}</span>
-                                    <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{{ task.department?.name }}</span>
+                                    <div class="flex items-center gap-2">
+                                        <span v-if="task.completed_at" class="text-[10px] text-green-600 font-bold bg-green-100 px-1 rounded">FINALIZADA</span>
+                                        <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{{ task.department?.name }}</span>
+                                    </div>
                                 </div>
                             </el-option>
                         </el-select>
@@ -261,6 +324,122 @@ const handleStopWork = async (project) => {
                     <el-button @click="showTaskSelectionModal = false">Cancelar</el-button>
                     <el-button type="primary" color="#1676A2" @click="confirmStartWithTask" :disabled="!taskForm.task_id">
                         Comenzar
+                    </el-button>
+                </div>
+            </template>
+        </el-dialog>
+
+        <!-- MODAL: ASIGNACIÓN ADMINISTRATIVA (ADMIN) -->
+        <el-dialog 
+            v-model="showAdminAssignModal" 
+            title="Asignar tarea a colaborador" 
+            width="500px" 
+            align-center 
+            destroy-on-close
+            class="!rounded-xl"
+        >
+            <div class="space-y-4">
+                <div class="bg-orange-50 p-3 rounded-lg border border-orange-100 mb-4 text-sm text-gray-700">
+                    <p class="flex items-center gap-2">
+                        <el-icon class="text-orange-500"><User /></el-icon>
+                        Solo se muestran usuarios que <b>no tienen tareas activas</b>.
+                    </p>
+                </div>
+
+                <el-form label-position="top">
+                    <!-- Selector de Usuario -->
+                    <el-form-item label="1. Seleccionar colaborador disponible">
+                        <el-select 
+                            v-model="adminAssignForm.user_id" 
+                            placeholder="Buscar usuario libre..." 
+                            class="!w-full" 
+                            filterable
+                            size="large"
+                        >
+                            <template #prefix><el-icon><User /></el-icon></template>
+                            <el-option 
+                                v-for="user in freeUsers" 
+                                :key="user.id" 
+                                :label="user.name" 
+                                :value="user.id" 
+                            >
+                                <div class="flex items-center gap-2">
+                                    <el-avatar :size="20" :src="user.profile_photo_url" />
+                                    <span>{{ user.name }}</span>
+                                </div>
+                            </el-option>
+                            <template #empty>
+                                <div class="p-3 text-center text-gray-400 text-sm">No hay usuarios libres en este momento.</div>
+                            </template>
+                        </el-select>
+                    </el-form-item>
+
+                    <!-- Selector de Proyecto -->
+                    <el-form-item label="2. Seleccionar proyecto">
+                        <el-select 
+                            v-model="adminAssignForm.project_id" 
+                            placeholder="Buscar proyecto..." 
+                            class="!w-full" 
+                            filterable
+                            size="large"
+                            :disabled="!adminAssignForm.user_id"
+                        >
+                            <template #prefix><el-icon><OfficeBuilding /></el-icon></template>
+                            <el-option 
+                                v-for="proj in projects.filter(p => p.status === 'active')" 
+                                :key="proj.id" 
+                                :label="proj.name" 
+                                :value="proj.id" 
+                            >
+                                <div class="flex justify-between w-full">
+                                    <span>{{ proj.name }}</span>
+                                    <span class="text-xs text-gray-400">{{ proj.client }}</span>
+                                </div>
+                            </el-option>
+                        </el-select>
+                    </el-form-item>
+
+                    <!-- Selector de Tarea -->
+                    <el-form-item label="3. Seleccionar tarea (Opcional)">
+                        <el-select 
+                            v-model="adminAssignForm.task_id" 
+                            placeholder="Selecciona tarea..." 
+                            class="!w-full" 
+                            filterable
+                            size="large"
+                            :disabled="!adminAssignForm.project_id"
+                            no-data-text="Selecciona un proyecto primero"
+                        >
+                            <template #prefix><el-icon><Connection /></el-icon></template>
+                            <el-option 
+                                v-for="task in adminSelectedProjectTasks" 
+                                :key="task.id" 
+                                :label="task.description" 
+                                :value="task.id"
+                                :disabled="!!task.completed_at"
+                            >
+                                <div class="flex justify-between items-center w-full" :class="{'opacity-50': task.completed_at}">
+                                    <span>{{ task.description }}</span>
+                                    <div class="flex items-center gap-2">
+                                        <span v-if="task.completed_at" class="text-[10px] text-green-600 font-bold bg-green-100 px-1 rounded">FINALIZADA</span>
+                                        <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{{ task.department?.name }}</span>
+                                    </div>
+                                </div>
+                            </el-option>
+                        </el-select>
+                    </el-form-item>
+                </el-form>
+            </div>
+            <template #footer>
+                <div class="flex justify-end gap-2">
+                    <el-button @click="showAdminAssignModal = false">Cancelar</el-button>
+                    <el-button 
+                        type="warning" 
+                        plain 
+                        @click="submitAdminAssignment" 
+                        :disabled="!adminAssignForm.user_id || !adminAssignForm.project_id"
+                    >
+                        <el-icon class="mr-1"><VideoPlay /></el-icon> Iniciar Tarea
                     </el-button>
                 </div>
             </template>
