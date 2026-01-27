@@ -1,6 +1,5 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
-import { usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -18,7 +17,8 @@ const props = defineProps({
 // State
 const loading = ref(false);
 const timeEntries = ref([]);
-const currentRange = ref('today'); // 'today', 'week', 'month'
+const currentRange = ref('today'); // 'today', 'week', 'month', 'custom'
+const customDateRange = ref([]); // [Date, Date]
 
 // --- Computed Stats ---
 const totalTime = computed(() => {
@@ -40,11 +40,24 @@ const tasksCount = computed(() => {
 
 // --- Methods ---
 const fetchData = async () => {
+    // Si es personalizado y no hay fechas, no hacemos nada
+    if (currentRange.value === 'custom' && (!customDateRange.value || customDateRange.value.length !== 2)) {
+        return;
+    }
+
     loading.value = true;
     try {
+        const params = { range: currentRange.value };
+        
+        if (currentRange.value === 'custom') {
+            params.start_date = customDateRange.value[0];
+            params.end_date = customDateRange.value[1];
+        }
+
         const response = await axios.get(route('users.get-performance', props.user.id), {
-            params: { range: currentRange.value }
+            params: params
         });
+        
         if (response.status === 200) {
             timeEntries.value = response.data.items;
         }
@@ -73,9 +86,18 @@ onMounted(() => {
     fetchData();
 });
 
-// Refetch on filter change
-watch(currentRange, () => {
-    fetchData();
+// Watchers
+watch(currentRange, (newVal) => {
+    if (newVal !== 'custom') {
+        fetchData();
+    }
+});
+
+// Watch para cuando cambien las fechas custom
+watch(customDateRange, (newVal) => {
+    if (currentRange.value === 'custom' && newVal && newVal.length === 2) {
+        fetchData();
+    }
 });
 </script>
 
@@ -83,17 +105,36 @@ watch(currentRange, () => {
     <div class="px-2 pb-6">
         
         <!-- Header & Filtros -->
-        <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <h3 class="text-lg font-bold text-gray-800 flex items-center">
                 <el-icon class="mr-2 text-[#1676A2]"><Timer /></el-icon>
                 Registro de Actividades
             </h3>
             
-            <el-radio-group v-model="currentRange" size="small">
-                <el-radio-button label="today">Hoy</el-radio-button>
-                <el-radio-button label="week">Esta semana</el-radio-button>
-                <el-radio-button label="month">Este mes</el-radio-button>
-            </el-radio-group>
+            <div class="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
+                <el-radio-group v-model="currentRange" size="small">
+                    <el-radio-button label="today">Hoy</el-radio-button>
+                    <el-radio-button label="week">Semana</el-radio-button>
+                    <el-radio-button label="month">Mes</el-radio-button>
+                    <el-radio-button label="custom">Personalizado</el-radio-button>
+                </el-radio-group>
+
+                <!-- Date Picker condicional -->
+                <div v-if="currentRange === 'custom'" class="w-full sm:w-64">
+                    <el-date-picker
+                        v-model="customDateRange"
+                        type="daterange"
+                        range-separator="a"
+                        start-placeholder="Inicio"
+                        end-placeholder="Fin"
+                        size="small"
+                        format="DD/MM/YYYY"
+                        value-format="YYYY-MM-DD"
+                        :clearable="false"
+                        class="!w-full"
+                    />
+                </div>
+            </div>
         </div>
 
         <!-- Cards Resumen -->
@@ -141,7 +182,7 @@ watch(currentRange, () => {
                 <el-table-column label="Proyecto" min-width="180">
                     <template #default="scope">
                         <span class="font-bold text-gray-700">{{ scope.row.project?.name || 'Desconocido' }}</span>
-                        <p class="text-sm text-gray-600">{{ scope.row.project?.description || 'Sin descripción' }}</p>
+                        <p class="text-xs text-gray-400">{{ scope.row.project?.client }}</p>
                     </template>
                 </el-table-column>
 

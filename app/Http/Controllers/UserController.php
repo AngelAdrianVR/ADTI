@@ -15,16 +15,34 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
-    public function index()
+   public function index()
     {
-        // Optimización: Cargar solo campos necesarios para la lista
+        // Rango de la semana actual
+        $startOfWeek = now()->startOfWeek();
+        $endOfWeek = now()->endOfWeek();
+
         $users = User::latest()
             ->whereNotIn('org_props->position', ['Soporte DTW'])
-            ->get();
+            // Sumar segundos de las tareas de la semana actual
+            ->withSum(['timeEntries as current_week_seconds' => function ($query) use ($startOfWeek, $endOfWeek) {
+                $query->whereBetween('start_time', [$startOfWeek, $endOfWeek]);
+            }], 'total_duration_seconds')
+            ->get()
+            ->map(function ($user) {
+                // Formatear segundos a "Xh Ym"
+                $seconds = $user->current_week_seconds ?? 0;
+                $h = floor($seconds / 3600);
+                $m = floor(($seconds % 3600) / 60);
+                
+                // Agregamos el atributo formateado
+                $user->weekly_time_formatted = "{$h}h {$m}m";
+                
+                return $user;
+            });
 
         return inertia('User/Index', compact('users'));
     }
-
+    
     public function create()
     {
         $roles = Role::all();
@@ -346,7 +364,9 @@ class UserController extends Controller
     // --- NUEVO: API para Desempeño ---
     public function getPerformance(Request $request, User $user)
     {
-        $range = $request->input('range', 'today'); // 'today', 'week', 'month'
+        $range = $request->input('range', 'today'); // 'today', 'week', 'month', 'custom'
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
 
         $query = TimeEntry::with(['project', 'task.department'])
             ->where('user_id', $user->id)
@@ -364,6 +384,13 @@ class UserController extends Controller
             case 'month':
                 $query->whereMonth('start_time', Carbon::now()->month)
                       ->whereYear('start_time', Carbon::now()->year);
+                break;
+            case 'custom':
+                if ($startDate && $endDate) {
+                    $start = Carbon::parse($startDate)->startOfDay();
+                    $end = Carbon::parse($endDate)->endOfDay();
+                    $query->whereBetween('start_time', [$start, $end]);
+                }
                 break;
         }
 
