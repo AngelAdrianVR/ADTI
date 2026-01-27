@@ -36,6 +36,7 @@ return new class extends Migration
             $table->foreignId('department_id')->constrained(); // Relación con departamentos
             $table->string('description'); // Descripción de la tarea (ej. "Diseño de Planos")
             $table->decimal('budgeted_hours', 8, 2); // Horas asignadas a esta tarea específica
+            $table->timestamp('completed_at')->nullable(); // Fecha de finalización de la tarea
             $table->timestamps();
         });
 

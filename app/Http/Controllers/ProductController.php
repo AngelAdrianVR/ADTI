@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 
 class ProductController extends Controller
 {
@@ -413,33 +414,38 @@ class ProductController extends Controller
         }
     }
 
-    public function printBarcodes()
+    public function printBarcodes(Request $request)
     {
-        // Decodifica el string JSON de la solicitud. El segundo parámetro `true` convierte objetos a arrays asociativos.
-        $products_with_quantity = json_decode(request('products'), true);
+        // Laravel parsea automáticamente el query param 'products' como array
+        $productsData = $request->input('products', []);
 
-        // Obtiene un array con los IDs de los productos
-        $product_ids = array_column($products_with_quantity, 'id');
+        // Obtenemos los IDs de los productos solicitados
+        $ids = collect($productsData)->pluck('id')->toArray();
+        
+        // Consultamos la info base de la BD
+        $dbProducts = Product::whereIn('id', $ids)->get()->keyBy('id');
+        
+        $productsToPrint = collect();
+        
+        // Construimos la colección final repitiendo según la cantidad solicitada
+        foreach ($productsData as $item) {
+            // Asegurarse de que $item sea un array (en caso de que venga como objeto)
+            $itemId = is_array($item) ? $item['id'] : $item;
+            $quantity = is_array($item) ? ($item['quantity'] ?? 1) : 1;
 
-        // Carga los productos desde la base de datos para mejorar el rendimiento
-        $product_models = Product::whereIn('id', $product_ids)
-                                 ->get(['id', 'name', 'part_number'])
-                                 ->keyBy('id');
-
-        // Crea la colección final de productos para imprimir, duplicándolos según la cantidad especificada
-        $products = collect();
-        foreach ($products_with_quantity as $product_data) {
-            // Verifica si el producto existe en los modelos cargados
-            if (isset($product_models[$product_data['id']])) {
-                $product_model = $product_models[$product_data['id']];
-                // Agrega el modelo del producto a la colección la cantidad de veces necesaria
-                for ($i = 0; $i < $product_data['quantity']; $i++) {
-                    $products->push($product_model);
+            if (isset($dbProducts[$itemId])) {
+                $productModel = $dbProducts[$itemId];
+                
+                // Agregamos N copias del producto a la lista
+                for ($i = 0; $i < $quantity; $i++) {
+                    $productsToPrint->push($productModel);
                 }
             }
         }
 
-        return inertia('Product/BarcodeTemplate', compact('products'));
+        return Inertia::render('Product/BarcodeTemplate', [
+            'products' => $productsToPrint
+        ]);
     }
 
     public function getConsecutivo($subcategory_id)
