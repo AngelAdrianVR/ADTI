@@ -11,7 +11,9 @@ import {
     Connection,
     EditPen,
     Setting,
-    Search
+    Search,
+    MagicStick,
+    InfoFilled
 } from '@element-plus/icons-vue';
 import { ElNotification } from "element-plus";
 
@@ -53,6 +55,7 @@ const catalogForm = useForm({
     department_id: null
 });
 const catalogSearch = ref('');
+const quickFillDepartmentId = ref(null);
 
 // --- Computed ---
 
@@ -81,6 +84,37 @@ const removeTask = (index) => {
 
 const submit = () => {
     form.put(route('projects.update', props.project.id));
+};
+
+// --- Lógica de Llenado Rápido ---
+const handleQuickFill = () => {
+    if (!quickFillDepartmentId.value) return;
+
+    // 1. Buscar tareas del catálogo para este departamento
+    const tasksToAdd = props.defaultTasks.filter(t => t.department_id === quickFillDepartmentId.value);
+
+    if (tasksToAdd.length === 0) {
+        ElNotification.warning('No hay tareas predefinidas en el catálogo para este departamento.');
+        quickFillDepartmentId.value = null;
+        return;
+    }
+
+    // 2. Si la lista tiene solo una fila vacía y sin datos, la limpiamos antes de agregar
+    if (form.tasks.length === 1 && !form.tasks[0].description && !form.tasks[0].department_id && form.tasks[0].hours === 0 && !form.tasks[0].id) {
+        form.tasks = [];
+    }
+
+    // 3. Agregar tareas
+    tasksToAdd.forEach(task => {
+        form.tasks.push({
+            department_id: task.department_id,
+            description: task.name,
+            hours: 0 // Se inicia en 0 para que el usuario defina el presupuesto
+        });
+    });
+
+    ElNotification.success(`${tasksToAdd.length} tareas agregadas del catálogo.`);
+    quickFillDepartmentId.value = null; // Resetear selector
 };
 
 // --- Lógica de Autocompletado ---
@@ -240,23 +274,47 @@ const deleteDefaultTask = (id) => {
 
                     <!-- Sección 2: Desglose de Tareas (Presupuesto) -->
                     <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                        <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 border-b border-gray-100 pb-2 gap-3">
                             <h2 class="text-lg font-semibold text-gray-700 flex items-center">
                                 <el-icon class="mr-2 text-[#1676A2]"><Connection /></el-icon>
                                 Planificación de Tareas
                             </h2>
-                            <div class="flex items-center gap-4">
-                                <button type="button" @click="showTaskCatalogModal = true" class="text-xs text-[#1676A2] hover:underline flex items-center">
-                                    <el-icon class="mr-1"><Setting /></el-icon> Gestionar Catálogo
-                                </button>
-                                <div class="text-right bg-blue-50 px-3 py-1 rounded-lg border border-blue-100">
-                                    <span class="text-xs text-gray-500 uppercase font-bold block">Total Presupuestado</span>
-                                    <p class="text-lg font-bold text-[#1676A2]">{{ totalBudgetedHours.toFixed(1) }} hrs</p>
-                                </div>
+                            
+                            <div class="text-right bg-blue-50 px-3 py-1 rounded-lg border border-blue-100">
+                                <span class="text-xs text-gray-500 uppercase font-bold block">Total Presupuestado</span>
+                                <p class="text-lg font-bold text-[#1676A2]">{{ totalBudgetedHours.toFixed(1) }} hrs</p>
                             </div>
                         </div>
 
-                        <!-- Headers Tabla (Solo Desktop) -->
+                        <!-- BARRA DE HERRAMIENTAS DE TAREAS -->
+                        <div class="bg-gray-50 p-3 rounded-lg border border-gray-200 mb-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-gray-500 uppercase">Herramientas:</span>
+                                <button type="button" @click="showTaskCatalogModal = true" class="text-xs text-[#1676A2] hover:underline flex items-center bg-white px-2 py-1 rounded border border-gray-200 hover:border-[#1676A2] transition-colors">
+                                    <el-icon class="mr-1"><Setting /></el-icon> Gestionar Catálogo
+                                </button>
+                            </div>
+
+                            <div class="flex items-center gap-2 w-full md:w-auto">
+                                <span class="text-xs text-gray-500">Llenado rápido:</span>
+                                <el-select 
+                                    v-model="quickFillDepartmentId" 
+                                    placeholder="Selecciona departamento..." 
+                                    size="small" 
+                                    class="!w-48"
+                                    filterable
+                                    @change="handleQuickFill"
+                                >
+                                    <template #prefix><el-icon class="text-[#1676A2]"><MagicStick /></el-icon></template>
+                                    <el-option v-for="dept in departments" :key="dept.id" :label="dept.name" :value="dept.id" />
+                                </el-select>
+                                <el-tooltip content="Agrega automáticamente todas las tareas del catálogo asociadas al departamento seleccionado" placement="top">
+                                    <el-icon class="text-gray-400 cursor-help"><InfoFilled /></el-icon>
+                                </el-tooltip>
+                            </div>
+                        </div>
+
+                        <!-- Headers Tabla -->
                         <div class="hidden md:grid grid-cols-12 gap-4 text-xs font-bold text-gray-500 uppercase px-2 mb-2">
                             <div class="col-span-3">Departamento</div>
                             <div class="col-span-6">Tarea / Descripción</div>
@@ -265,7 +323,6 @@ const deleteDefaultTask = (id) => {
                         </div>
 
                         <div class="space-y-3">
-                            <!-- Filas de Tareas -->
                             <div 
                                 v-for="(task, index) in form.tasks" 
                                 :key="index" 
@@ -297,7 +354,7 @@ const deleteDefaultTask = (id) => {
                                         </el-form-item>
                                     </div>
 
-                                    <!-- Descripción (Con Autocomplete) -->
+                                    <!-- Descripción (AUTOCOMPLETE) -->
                                     <div class="col-span-6">
                                         <el-form-item 
                                             :error="form.errors[`tasks.${index}.description`]"
@@ -312,7 +369,7 @@ const deleteDefaultTask = (id) => {
                                                 @select="(item) => handleSelectTask(item, index)"
                                             >
                                                 <template #default="{ item }">
-                                                    <div class="flex justify-between items-center w-full">
+                                                    <div class="flex justify-between w-full">
                                                         <span>{{ item.value }}</span>
                                                         <span class="text-xs text-gray-400 ml-2" v-if="item.department">{{ item.department }}</span>
                                                     </div>
@@ -384,19 +441,13 @@ const deleteDefaultTask = (id) => {
         </main>
 
         <!-- MODAL GESTIÓN CATÁLOGO -->
-        <DialogModal :show="showTaskCatalogModal" @close="showTaskCatalogModal = false" maxWidth="md">
-            <template #title>
-                <div class="flex items-center gap-2">
-                    <el-icon class="text-[#1676A2]"><Setting /></el-icon>
-                    Catálogo de Tareas Frecuentes
-                </div>
-            </template>
-            <template #content>
+         <el-dialog v-model="showTaskCatalogModal" title="Catálogo de tareas frecuentes" width="450px" align-center
+            destroy-on-close class="!rounded-xl">
                 <div class="space-y-4">
                     <div class="flex gap-2">
                         <div class="flex-1 space-y-2">
                             <el-input v-model="catalogForm.name" placeholder="Nombre de la nueva tarea..." />
-                            <el-select :teleported="false" filterable v-model="catalogForm.department_id" placeholder="Depto. (Opcional)" class="!w-full" clearable>
+                            <el-select v-model="catalogForm.department_id" placeholder="Depto. (Opcional)" class="!w-full" clearable>
                                 <el-option v-for="dept in departments" :key="dept.id" :label="dept.name" :value="dept.id" />
                             </el-select>
                         </div>
@@ -420,7 +471,7 @@ const deleteDefaultTask = (id) => {
                                     <span class="text-gray-700">{{ item.name }}</span>
                                     <span v-if="item.department" class="ml-2 text-[10px] bg-blue-50 text-[#1676A2] px-1.5 rounded">{{ item.department.name }}</span>
                                 </div>
-                                <el-popconfirm :teleported="false" title="¿Eliminar del catálogo?" confirm-button-text="Sí" cancel-button-text="No" @confirm="deleteDefaultTask(item.id)">
+                                <el-popconfirm title="¿Eliminar del catálogo?" confirm-button-text="Sí" cancel-button-text="No" @confirm="deleteDefaultTask(item.id)">
                                     <template #reference>
                                         <el-button type="danger" link size="small"><el-icon><Delete /></el-icon></el-button>
                                     </template>
@@ -429,11 +480,10 @@ const deleteDefaultTask = (id) => {
                         </div>
                     </div>
                 </div>
-            </template>
             <template #footer>
                 <el-button @click="showTaskCatalogModal = false">Cerrar</el-button>
             </template>
-        </DialogModal>
+        </el-dialog>
 
     </AppLayout>
 </template>
