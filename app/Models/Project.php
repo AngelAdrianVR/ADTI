@@ -42,7 +42,16 @@ class Project extends Model
         return $this->hasMany(TimeEntry::class);
     }
 
-    // Obtener los usuarios que han trabajado en este proyecto
+    // Nueva relación: Obtener sesiones de tiempo activas (sin hora de fin)
+    // Esto nos permite saber QUIÉN está trabajando y en QUÉ tarea actualmente.
+    public function activeTimeEntries(): HasMany
+    {
+        return $this->hasMany(TimeEntry::class)
+            ->whereNull('end_time')
+            ->where('is_paused', false);
+    }
+
+    // Obtener los usuarios que han trabajado en este proyecto (Histórico)
     public function users()
     {
         return $this->belongsToMany(User::class, 'time_entries')->distinct();
@@ -61,18 +70,6 @@ class Project extends Model
     }
 
     // --- Helpers para la Vista ---
-
-    // Obtener usuarios trabajando ACTUALMENTE en este proyecto
-    public function getCurrentWorkersAttribute()
-    {
-        return $this->timeEntries()
-            ->whereNull('end_time')
-            ->where('is_paused', false)
-            ->with('user')
-            ->get()
-            ->pluck('user')
-            ->unique('id');
-    }
 
     // Calcular horas reales consumidas (suma de duraciones cerradas + duración actual en vivo)
     public function getConsumedHoursAttribute()

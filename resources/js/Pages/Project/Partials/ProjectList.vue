@@ -8,16 +8,12 @@ import {
     VideoPlay,
     CircleCheck,
     OfficeBuilding,
-    Clock,
     List,
-    User,
-    Calendar
 } from '@element-plus/icons-vue';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { router, usePage, useForm } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import { ElNotification } from "element-plus";
-import DialogModal from '@/Components/DialogModal.vue'; 
 import axios from 'axios';
 
 const props = defineProps({
@@ -25,7 +21,6 @@ const props = defineProps({
     activeEntry: Object, 
     canEdit: Boolean,
     canDelete: Boolean,
-    users: Array 
 });
 
 const page = usePage();
@@ -38,18 +33,6 @@ const canManageTime = computed(() => page.props.auth.user?.permissions?.includes
 // --- Estado ---
 const currentPage = ref(1);
 const itemsPerPage = ref(50);
-const showAdminTimeModal = ref(false);
-const adminProject = ref(null);
-const isSubmitting = ref(false); // Estado de carga manual
-
-const adminForm = useForm({
-    user_id: null,
-    project_id: null,
-    task_id: null,
-    action: 'start', 
-    duration: 1, 
-    date: new Date().toISOString().split('T')[0],
-});
 
 // --- Computed ---
 const paginatedProjects = computed(() => {
@@ -78,11 +61,19 @@ const getProgressColor = (percent) => {
     return '#1676A2';                    // Azul
 };
 
-// Color específico para tareas
 const getTaskProgressColor = (task) => {
-    if (task.completed_at) return '#13ce66'; // Verde fuerte (Success Element Plus)
+    if (task.completed_at) return '#13ce66'; 
     const p = getProgress(task.budgeted_hours, task.consumed_hours);
     return getProgressColor(p);
+};
+
+// Verificar si hay alguien trabajando en una tarea específica
+const getActiveUsersInTask = (projectId, taskId) => {
+    const project = props.projects.find(p => p.id === projectId);
+    if (!project || !project.active_time_entries) return [];
+    
+    // Retorna las entries que coinciden con la tarea
+    return project.active_time_entries.filter(entry => entry.task_id === taskId);
 };
 
 const handlePageChange = (val) => {
@@ -104,52 +95,16 @@ const handleToggleTask = (task) => {
     });
 };
 
-const openTimeManager = (project) => {
-    adminProject.value = project;
-    adminForm.reset();
-    adminForm.project_id = project.id; 
-    adminForm.action = 'start';
-    showAdminTimeModal.value = true;
-};
-
-const submitAdminTime = () => {
-    if (!adminForm.user_id) {
-        ElNotification.warning('Selecciona un usuario');
-        return;
-    }
-
-    isSubmitting.value = true;
-
-    if (adminForm.action === 'add') {
-        adminForm.post(route('projects.add-time-entry'), {
-            onSuccess: () => {
-                showAdminTimeModal.value = false;
-                ElNotification.success('Tiempo agregado correctamente');
-                router.reload();
-            },
-            onFinish: () => {
-                isSubmitting.value = false;
-            }
-        });
-    } else {
-        const url = adminForm.action === 'stop' 
-            ? route('projects.stop', adminProject.value.id)
-            : route('projects.start', adminProject.value.id);
-
-        axios.post(url, {
-            user_id: adminForm.user_id,
-            task_id: adminForm.task_id
-        }).then(() => {
-            ElNotification.success(`Acción ejecutada correctamente.`);
-            showAdminTimeModal.value = false;
-            router.reload(); 
-        }).catch(err => {
-            console.error(err);
-            ElNotification.error(err.response?.data?.message || 'Error al ejecutar acción');
-        }).finally(() => {
-            isSubmitting.value = false;
-        });
-    }
+const stopUserWork = (projectId, userId, userName) => {
+    axios.post(route('projects.stop', projectId), {
+        user_id: userId
+    }).then(() => {
+        ElNotification.success(`Se detuvo la tarea de ${userName}`);
+        // Recargar para ver cambios
+        router.reload(); 
+    }).catch(err => {
+        ElNotification.error(err.response?.data?.message || 'Error al detener la tarea');
+    });
 };
 </script>
 
@@ -163,7 +118,7 @@ const submitAdminTime = () => {
             :row-class-name="'hover:bg-gray-50 transition-colors'"
             row-key="id"
         >
-            <!-- Columna Expandible: Detalle de Tareas -->
+            <!-- Columna Expandible: Desglose de tareas -->
             <el-table-column type="expand">
                 <template #default="props">
                     <div class="px-4 md:px-12 py-4 bg-gray-50/50 border-y border-gray-100">
@@ -202,13 +157,56 @@ const submitAdminTime = () => {
                                             >
                                                 {{ task.description }}
                                             </span>
-                                            <div class="flex items-center gap-2">
+                                            <div class="flex items-center gap-2 mt-1">
                                                 <el-tag size="small" type="info" effect="plain" class="!text-[10px]">
                                                     {{ task.department?.name || 'General' }}
                                                 </el-tag>
                                                 <el-tag v-if="task.completed_at" size="small" type="success" effect="dark" class="!text-[10px]">
-                                                    TERMINADA
+                                                    Terminada
                                                 </el-tag>
+                                            </div>
+                                        </div>
+
+                                        <!-- AVATARS EN LA TAREA ESPECÍFICA -->
+                                        <!-- Mostramos quién trabaja en ESTA tarea -->
+                                        <div class="flex -space-x-2 overflow-hidden ml-4">
+                                            <div v-for="entry in getActiveUsersInTask(props.row.id, task.id)" :key="entry.id" @click.stop>
+                                                <el-popconfirm
+                                                    v-if="canManageTime"
+                                                    title="¿Detener tarea?"
+                                                    confirm-button-text="Sí"
+                                                    cancel-button-text="No"
+                                                    width="200"
+                                                    @confirm="stopUserWork(props.row.id, entry.user.id, entry.user.name)"
+                                                >
+                                                    <template #reference>
+                                                        <!-- Wrapper div para asegurar el click -->
+                                                        <div class="inline-block cursor-pointer">
+                                                            <el-tooltip :content="`Trabajando: ${entry.user.name}`" placement="top">
+                                                                <div class="inline-block h-8 w-8 rounded-full ring-2 ring-white relative group">
+                                                                    <img 
+                                                                        :src="entry.user.profile_photo_url" 
+                                                                        :alt="entry.user.name"
+                                                                        class="h-full w-full object-cover rounded-full"
+                                                                    />
+                                                                    <!-- Overlay rojo al hacer hover -->
+                                                                    <div class="absolute inset-0 bg-red-500/20 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                                        <div class="w-1.5 h-1.5 bg-red-600 rounded-full"></div>
+                                                                    </div>
+                                                                </div>
+                                                            </el-tooltip>
+                                                        </div>
+                                                    </template>
+                                                </el-popconfirm>
+                                                
+                                                <!-- Si no tiene permisos, solo ve el avatar -->
+                                                <el-tooltip v-else :content="`Trabajando: ${entry.user.name}`" placement="top">
+                                                     <img 
+                                                        :src="entry.user.profile_photo_url" 
+                                                        :alt="entry.user.name"
+                                                        class="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover"
+                                                    />
+                                                </el-tooltip>
                                             </div>
                                         </div>
                                     </div>
@@ -218,11 +216,9 @@ const submitAdminTime = () => {
                                         <div class="text-xs font-mono text-gray-600 flex justify-between w-full">
                                             <span>Progreso:</span>
                                             <span class="font-bold">
-                                                <!-- Ahora usa task.consumed_hours del modelo -->
                                                 {{ task.consumed_hours }} / {{ task.budgeted_hours }} h
                                             </span>
                                         </div>
-                                        <!-- Barra de progreso ajustada -->
                                         <el-progress 
                                             :percentage="task.completed_at ? 100 : getProgress(task.budgeted_hours, task.consumed_hours)" 
                                             :color="getTaskProgressColor(task)"
@@ -271,6 +267,64 @@ const submitAdminTime = () => {
                 </template>
             </el-table-column>
 
+             <!-- NUEVA COLUMNA: EQUIPO ACTIVO -->
+            <el-table-column label="Equipo activo" min-width="150">
+                <template #default="scope">
+                    <div v-if="scope.row.active_time_entries && scope.row.active_time_entries.length > 0" class="flex flex-wrap gap-1" @click.stop>
+                        
+                        <div v-for="entry in scope.row.active_time_entries" :key="entry.id">
+                            <el-popconfirm
+                                v-if="canManageTime"
+                                title="¿Detener tarea?"
+                                confirm-button-text="Sí"
+                                cancel-button-text="No"
+                                width="220"
+                                @confirm="stopUserWork(scope.row.id, entry.user.id, entry.user.name)"
+                            >
+                                <template #reference>
+                                    <!-- SOLUCIÓN AL BUG: Envolver el contenido en un div para capturar el click correctamente -->
+                                    <div class="cursor-pointer inline-block">
+                                        <el-tooltip effect="dark" placement="top">
+                                            <template #content>
+                                                <div class="text-xs">
+                                                    <p class="font-bold">{{ entry.user.name }}</p>
+                                                    <p class="opacity-80">Tarea: {{ entry.task ? entry.task.description : 'General' }}</p>
+                                                    <p class="text-[10px] text-yellow-300 mt-1">Clic para detener</p>
+                                                </div>
+                                            </template>
+                                            <div class="relative group">
+                                                <el-avatar 
+                                                    :size="32" 
+                                                    :src="entry.user.profile_photo_url"
+                                                    class="border-2 border-white shadow-sm transition-transform hover:scale-110"
+                                                />
+                                            </div>
+                                        </el-tooltip>
+                                    </div>
+                                </template>
+                            </el-popconfirm>
+
+                            <!-- Versión solo lectura para usuarios sin permisos -->
+                            <el-tooltip v-else effect="dark" placement="top">
+                                <template #content>
+                                    <div class="text-xs">
+                                        <p class="font-bold">{{ entry.user.name }}</p>
+                                        <p class="opacity-80">Tarea: {{ entry.task ? entry.task.description : 'General' }}</p>
+                                    </div>
+                                </template>
+                                <el-avatar 
+                                    :size="32" 
+                                    :src="entry.user.profile_photo_url"
+                                    class="border-2 border-white shadow-sm"
+                                />
+                            </el-tooltip>
+                        </div>
+
+                    </div>
+                    <span v-else class="text-xs text-gray-300 italic">Inactivo</span>
+                </template>
+            </el-table-column>
+
             <el-table-column label="Fechas" min-width="170" prop="start_date" sortable>
                 <template #default="scope">
                     <div class="text-xs text-gray-600 space-y-1">
@@ -286,17 +340,10 @@ const submitAdminTime = () => {
                 </template>
             </el-table-column>
 
-            <el-table-column fixed="right" label="Acciones" width="160" align="right">
+            <el-table-column fixed="right" label="Acciones" width="120" align="right">
                 <template #default="scope">
                     <div class="flex items-center justify-end gap-2" @click.stop>
                         
-                        <!-- Botón Admin Time -->
-                        <el-tooltip v-if="canManageTime" content="Gestionar tiempo (Admin)" placement="top">
-                            <el-button type="warning" circle plain size="small" @click="openTimeManager(scope.row)">
-                                <el-icon><Clock /></el-icon>
-                            </el-button>
-                        </el-tooltip>
-
                         <!-- Botón Play/Stop (Personal) -->
                         <el-tooltip 
                             v-if="scope.row.status === 'active'" 
@@ -350,88 +397,5 @@ const submitAdminTime = () => {
                 background
             />
         </div>
-
-        <!-- MODAL ADMINISTRACIÓN DE TIEMPO -->
-        <!-- Se sustituyó DialogModal por el-dialog para consistencia de UI -->
-        <el-dialog
-            v-model="showAdminTimeModal"
-            title="Gestión de tiempo administrativa"
-            width="500px"
-            destroy-on-close
-            align-center
-        >
-            <div v-if="adminProject" class="space-y-4">
-                <div class="bg-orange-50 p-3 rounded-lg border border-orange-100 text-sm text-gray-600 flex items-center gap-3">
-                    <el-icon class="text-orange-500 text-xl"><OfficeBuilding /></el-icon>
-                    <div>
-                        <p class="text-xs uppercase text-gray-400 font-bold">Proyecto</p>
-                        <p class="font-bold text-gray-800">{{ adminProject.name }}</p>
-                    </div>
-                </div>
-
-                <el-form label-position="top">
-                    <el-form-item label="Seleccionar colaborador">
-                        <el-select v-model="adminForm.user_id" placeholder="Buscar usuario" class="!w-full" filterable>
-                            <template #prefix><el-icon><User /></el-icon></template>
-                            <el-option 
-                                v-for="user in users" 
-                                :key="user.id" 
-                                :label="user.name" 
-                                :value="user.id" 
-                            />
-                        </el-select>
-                        <div v-if="adminForm.errors.user_id" class="text-red-500 text-xs mt-1">{{ adminForm.errors.user_id }}</div>
-                    </el-form-item>
-
-                    <el-form-item label="Tarea (Opcional)">
-                        <el-select v-model="adminForm.task_id" placeholder="General del proyecto" class="!w-full" clearable filterable>
-                            <template #prefix><el-icon><List /></el-icon></template>
-                            <el-option 
-                                v-for="task in adminProject.tasks" 
-                                :key="task.id" 
-                                :label="task.description" 
-                                :value="task.id" 
-                            />
-                        </el-select>
-                    </el-form-item>
-
-                    <el-form-item label="Acción a realizar">
-                        <el-radio-group v-model="adminForm.action">
-                            <el-radio-button label="start" class="flex-1">Iniciar timer</el-radio-button>
-                            <el-radio-button label="stop" class="flex-1">Detener timer</el-radio-button>
-                            <el-radio-button label="add" class="flex-1">Agregar horas</el-radio-button>
-                        </el-radio-group>
-                    </el-form-item>
-
-                    <div v-if="adminForm.action === 'add'" class="animate-fade-in bg-gray-50 p-4 rounded-lg border border-gray-100">
-                        <div class="grid grid-cols-2 gap-4">
-                            <el-form-item label="Horas a agregar">
-                                <el-input-number v-model="adminForm.duration" :min="0.1" :step="0.5" class="!w-full" controls-position="right" />
-                            </el-form-item>
-                            <el-form-item label="Fecha">
-                                <el-date-picker 
-                                    v-model="adminForm.date" 
-                                    type="date" 
-                                    placeholder="Selecciona fecha" 
-                                    class="!w-full"
-                                    format="DD/MM/YYYY"
-                                    value-format="YYYY-MM-DD"
-                                    :clearable="false"
-                                />
-                            </el-form-item>
-                        </div>
-                    </div>
-                </el-form>
-            </div>
-            
-            <template #footer>
-                <div class="flex justify-end gap-2">
-                    <el-button @click="showAdminTimeModal = false" :disabled="isSubmitting || adminForm.processing">Cancelar</el-button>
-                    <el-button type="primary" @click="submitAdminTime" :loading="isSubmitting || adminForm.processing" color="#1676A2">
-                        Ejecutar acción
-                    </el-button>
-                </div>
-            </template>
-        </el-dialog>
     </div>
 </template>
