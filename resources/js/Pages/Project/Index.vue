@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, router, Link, usePage, useForm } from '@inertiajs/vue3';
+import { Head, router, usePage, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import ProjectList from './Partials/ProjectList.vue';
 import ProjectCalendar from './Partials/ProjectCalendar.vue';
@@ -16,7 +16,8 @@ import axios from 'axios';
 
 const props = defineProps({
     projects: Array,
-    activeEntry: Object
+    activeEntry: Object,
+    users: Array // NUEVA PROP: Todos los usuarios
 });
 
 const page = usePage();
@@ -38,16 +39,16 @@ const taskForm = useForm({
     task_id: null,
 });
 
+// --- Computed ---
 // --- Computed Counts ---
 const totalActive = computed(() => props.projects.filter(p => p.status === 'active').length);
 const totalFinished = computed(() => props.projects.filter(p => p.status === 'finished').length);
 const totalAll = computed(() => props.projects.length);
 
-// --- Computed Filter ---
 const filteredProjects = computed(() => {
     let result = props.projects;
 
-    // Filtros de Tab (Solo aplica a la lista, el calendario muestra todo o filtra internamente)
+    // Filtros de Tab
     if (viewMode.value === 'list' && activeTab.value !== 'all') {
         result = result.filter(p => p.status === activeTab.value);
     }
@@ -87,14 +88,11 @@ const handleDelete = (project) => {
 // --- Lógica Iniciar/Detener Trabajo ---
 
 const handleStartWork = (project) => {
-    // 1. Verificamos si el proyecto tiene tareas
     if (project.tasks && project.tasks.length > 0) {
-        // Si tiene tareas, abrimos modal para que el usuario seleccione
         projectToStart.value = project;
         taskForm.reset();
         showTaskSelectionModal.value = true;
     } else {
-        // Si NO tiene tareas, iniciamos directamente (task_id = null)
         startWorkRequest(project.id, null);
     }
 };
@@ -119,7 +117,6 @@ const startWorkRequest = async (projectId, taskId) => {
                 title: 'Trabajo iniciado',
                 message: taskId ? 'Registrando tiempo en la tarea seleccionada.' : 'Registrando tiempo general en el proyecto.'
              });
-             // Recarga completa para asegurar que el Timer Global (AppLayout) se actualice
              window.location.reload(); 
         }
     } catch (error) {
@@ -132,7 +129,6 @@ const handleStopWork = async (project) => {
     try {
         await axios.post(route('projects.stop', project.id));
         ElNotification.success('Trabajo detenido correctamente');
-        // Recarga completa para limpiar el Timer Global
         window.location.reload();
     } catch (error) {
         ElNotification.error('No se pudo detener el trabajo');
@@ -182,8 +178,8 @@ const handleStopWork = async (project) => {
                 <!-- CONTENIDO PRINCIPAL -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden min-h-[600px] animate-fade-in">
                     
-                    <!-- Tabs (Solo visible en modo lista) -->
-                    <el-tabs v-if="viewMode === 'list'" v-model="activeTab" class="px-6 pt-4 project-tabs">
+                    <!-- Tabs -->
+                     <el-tabs v-if="viewMode === 'list'" v-model="activeTab" class="px-6 pt-4 project-tabs">
                         <el-tab-pane :label="`En Curso (${totalActive})`" name="active" />
                         <el-tab-pane :label="`Terminados (${totalFinished})`" name="finished" />
                         <el-tab-pane :label="`Todos (${totalAll})`" name="all" />
@@ -196,6 +192,7 @@ const handleStopWork = async (project) => {
                         :active-entry="activeEntry"
                         :can-edit="canEdit"
                         :can-delete="canDelete"
+                        :users="users" 
                         @edit="handleEdit"
                         @delete="handleDelete"
                         @view="handleView"

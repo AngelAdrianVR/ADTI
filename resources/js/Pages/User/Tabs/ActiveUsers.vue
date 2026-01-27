@@ -9,6 +9,7 @@ import TextInput from '@/Components/TextInput.vue';
 import InputError from '@/Components/InputError.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
+import { Clock } from '@element-plus/icons-vue';
 
 const props = defineProps({
     users: Array,
@@ -90,7 +91,7 @@ const toggleHomeOffice = (user) => {
         onSuccess: () => {
             ElNotification.success({
                 title: 'Actualizado',
-                message: `Acceso remoto ${user.home_office ? 'habilitado' : 'deshabilitado'} para ${user.name}`
+                message: `Acceso remoto ${!user.home_office ? 'habilitado' : 'deshabilitado'} para ${user.name}`
             });
         },
         onError: () => {
@@ -107,7 +108,7 @@ const openInactivateModal = (user) => {
 };
 
 const submitInactivate = () => {
-    inactivateForm.put(route('users.inactivate', userToInactivate.value.id), {
+    inactivateForm.post(route('users.inactivate', userToInactivate.value.id), {
         onSuccess: () => {
             ElNotification.success({
                 title: 'Usuario dado de baja',
@@ -188,7 +189,16 @@ const submitInactivate = () => {
                     </template>
                 </el-table-column>
 
-                <!-- Columna Home Office (Nueva) -->
+                <!-- NUEVA COLUMNA: TIEMPO SEMANA -->
+                <el-table-column label="Tiempo (Semana)" width="150" align="center">
+                    <template #default="scope">
+                        <div class="flex items-center justify-center gap-1.5 text-xs font-bold text-[#1676A2] bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
+                            <el-icon><Clock /></el-icon>
+                            {{ scope.row.weekly_time_formatted }}
+                        </div>
+                    </template>
+                </el-table-column>
+
                 <el-table-column label="Acceso Remoto" width="130" align="center">
                     <template #default="scope">
                         <div @click.stop>
@@ -198,6 +208,8 @@ const submitInactivate = () => {
                                 inline-prompt
                                 active-text="Sí"
                                 inactive-text="No"
+                                :active-value="true"
+                                :inactive-value="false"
                                 style="--el-switch-on-color: #1676A2;"
                             />
                         </div>
@@ -217,7 +229,7 @@ const submitInactivate = () => {
                                 <i class="fa-solid fa-pen-to-square"></i>
                             </button>
 
-                            <!-- Botón Dar de Baja (Nuevo) -->
+                            <!-- Botón Dar de Baja -->
                             <button 
                                 v-if="$page.props.auth.user.permissions.includes('Inactivar usuarios')"
                                 @click.stop="openInactivateModal(scope.row)" 
@@ -285,7 +297,7 @@ const submitInactivate = () => {
                         :disabled="inactivateForm.processing"
                         class="!bg-red-600 hover:!bg-red-700 border-transparent"
                     >
-                        Confirmar Baja
+                        Confirmar baja
                     </PrimaryButton>
                 </div>
             </template>

@@ -88,11 +88,11 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::get('subcategories-download-excel-template/{subcategory}', [SubcategoryController::class, 'generateExcelTemplate'])->name('subcategories.download-excel-template');
     Route::get('subcategories-get-products/{subcategory}', [SubcategoryController::class, 'getSubcategoryProducts'])->name('subcategories.get-products');
 
+    Route::get('products-print-barcodes', [ProductController::class, 'printBarcodes'])->name('products.print-barcodes');
     Route::resource('products', ProductController::class);
     Route::post('products/update-with-media/{product}', [ProductController::class, 'updateWithMedia'])->name('products.update-with-media');
     Route::post('products/massive-delete', [ProductController::class, 'massiveDelete'])->name('products.massive-delete');
     Route::post('products/import', [ProductController::class, 'import'])->name('products.import');
-    Route::get('products-print-barcodes', [ProductController::class, 'printBarcodes'])->name('products.print-barcodes');
     Route::post('products/get-consecutivo/{subcategory_id}', [ProductController::class, 'getConsecutivo'])->name('products.get-consecutivo');
     Route::delete('products/delete-file/{file_id}', [ProductController::class, 'deleteFile'])->name('products.delete-file');
     Route::get('/products/{id}/next', [ProductController::class, 'getNextProduct'])->name('products.next');
@@ -160,6 +160,10 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::post('projects/{project}/start', [ProjectController::class, 'startWork'])->name('projects.start');
     Route::post('projects/{project}/pause', [ProjectController::class, 'togglePause'])->name('projects.pause');
     Route::post('projects/{project}/stop', [ProjectController::class, 'stopWork'])->name('projects.stop');
+    Route::post('projects/add-time-entry', [ProjectController::class, 'addTimeEntry'])->name('projects.add-time-entry');
+
+    // marcar tarea como terminada/pendiente
+    Route::put('tasks/{task}/toggle-status', [ProjectController::class, 'toggleTaskStatus'])->name('tasks.toggle-status');
 
     // --- CATÁLOGO DE TAREAS ---
     Route::post('default-tasks', [ProjectController::class, 'storeDefaultTask'])->name('default-tasks.store');
