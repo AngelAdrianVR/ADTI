@@ -13,6 +13,11 @@ class PayrollComment extends Model
         'payroll_id',
         'user_id',
         'comments',
+        'date', // Agregado
+    ];
+
+    protected $casts = [
+        'date' => 'date',
     ];
 
     // relaciones
