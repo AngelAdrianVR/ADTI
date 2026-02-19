@@ -75,6 +75,8 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     // Dashboard
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
 
+    Route::get('my-payrolls', [UserController::class, 'myPayrolls'])->name('my-payrolls');
+
     // Catálogos Generales (Resources)
     Route::resource('categories', CategoryController::class);
     Route::get('categories/fetch-subcategories/{category}', [CategoryController::class, 'fetchSubcategories'])->name('categories.fetch-subcategories');
@@ -108,7 +110,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::post('users/{user}/store-media', [UserController::class, 'storeMedia'])->name('users.store-media');
     Route::post('users-set-attendance', [UserController::class, 'setAttendance'])->name('users.set-attendance');
     Route::put('users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
-    Route::put('users/inactivate/{user}', [UserController::class, 'inactivate'])->name('users.inactivate');
+    Route::post('users/inactivate/{user}', [UserController::class, 'inactivate'])->name('users.inactivate');
     Route::put('users/media/{media}/update-name', [UserController::class, 'updateMediaName'])->name('users.update-media-name');
     Route::put('users/{user}/update-vacations', [UserController::class, 'updateVacations'])->name('users.update-vacations');
     Route::put('users/{user}/toggle-home-office', [UserController::class, 'toggleHomeOffice'])->name('users.toggle-home-office');

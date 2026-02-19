@@ -165,6 +165,30 @@
                     </el-input>
                     <InputError :message="form.errors['org_props.month_complement']" />
                 </div>
+                
+                <!-- NUEVO CAMPO: Empleados a Cargo -->
+                <div class="col-span-full">
+                    <InputLabel value="Empleados a cargo" />
+                    <el-select 
+                        v-model="form.employees_in_charge" 
+                        multiple 
+                        filterable 
+                        placeholder="Selecciona los empleados"
+                        class="w-full"
+                        no-data-text="No hay usuarios registrados"
+                        no-match-text="No se encontraron coincidencias"
+                    >
+                        <el-option 
+                            v-for="user in users" 
+                            :key="user.id" 
+                            :label="user.name" 
+                            :value="user.id" 
+                        />
+                    </el-select>
+                    <p class="text-xs text-gray-500 mt-1">Selecciona los usuarios que estarán bajo la supervisión de este nuevo usuario.</p>
+                    <InputError :message="form.errors.employees_in_charge" />
+                </div>
+
                 <div class="col-span-full">
                     <InputLabel value="Foto del usuario" />
                     <InputFilePreview @imagen="saveImage" @cleared="form.image = null" />
@@ -286,6 +310,7 @@ export default {
                 vacations: null,
                 updated_date_vacations: null,
             },
+            employees_in_charge: [], // Inicializar como array vacío
             image: null,
             roles: [],
         });
@@ -326,6 +351,7 @@ export default {
         roles: Array,
         departments: Array,
         job_positions: Array,
+        users: Array, // Nueva prop
     },
     methods: {
         storeDepartment() {

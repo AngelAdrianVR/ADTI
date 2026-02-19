@@ -7,19 +7,22 @@ import SecondaryButton from "@/Components/SecondaryButton.vue";
 import Back from "@/Components/MyComponents/Back.vue";
 import General from "./Tabs/General.vue";
 import DigitalDocuments from "./Tabs/DigitalDocuments.vue";
-import Performance from "./Tabs/Performance.vue"; // Importar nuevo componente
+import Performance from "./Tabs/Performance.vue";
+import EmployeesInCharge from "./Tabs/EmployeesInCharge.vue"; // Importar componente nuevo
 import axios from "axios";
 import { ElNotification } from "element-plus";
 import { 
     User,
     Folder,
-    DataLine // Icono para desempeño
+    DataLine,
+    Avatar // Icono para la nueva pestaña
 } from '@element-plus/icons-vue';
 
 const props = defineProps({
     user: Object,
     users: Array,
     vacations: Array,
+    employeesInCharge: Array, // Nueva prop recibida del controlador
 });
 
 // State
@@ -225,7 +228,6 @@ onMounted(() => {
                                     </div>
                                 </el-tab-pane>
 
-                                <!-- NUEVA PESTAÑA DESEMPEÑO -->
                                 <el-tab-pane name="3">
                                     <template #label>
                                         <span class="flex items-center gap-2">
@@ -234,6 +236,19 @@ onMounted(() => {
                                     </template>
                                     <div class="py-6 animate-fade-in">
                                         <Performance :user="user" />
+                                    </div>
+                                </el-tab-pane>
+
+                                <!-- NUEVA PESTAÑA: PERSONAL A CARGO -->
+                                <el-tab-pane name="4" v-if="employeesInCharge.length > 0 || user.employees_in_charge?.length > 0">
+                                    <template #label>
+                                        <span class="flex items-center gap-2">
+                                            <el-icon><Avatar /></el-icon> Personal a Cargo
+                                            <span v-if="employeesInCharge.length" class="ml-1 bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded-full">{{ employeesInCharge.length }}</span>
+                                        </span>
+                                    </template>
+                                    <div class="py-6 animate-fade-in">
+                                        <EmployeesInCharge :employees="employeesInCharge" />
                                     </div>
                                 </el-tab-pane>
 

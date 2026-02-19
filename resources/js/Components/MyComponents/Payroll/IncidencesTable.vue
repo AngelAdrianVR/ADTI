@@ -15,6 +15,8 @@ const props = defineProps({
     payroll: Object
 });
 
+const emit = defineEmits(['edit-comment']);
+
 // State
 const isOpen = ref(false); // Controla el acordeón
 const showAttendanceModal = ref(false);
@@ -103,6 +105,17 @@ const handleCommand = (command) => {
         showAttendanceModal.value = true;
     } else if (action === 'remove_late') {
         removeLate();
+    } else if (action === 'edit_comment') {
+        const register = props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(date)));
+        // Recuperar el comentario del objeto inyectado por el controlador (si existe)
+        const currentComment = register?.comment?.comments || '';
+        
+        emit('edit-comment', {
+            userId: props.payrollUser.user.id,
+            userName: props.payrollUser.user.name,
+            date: form.date,
+            comments: currentComment
+        });
     } else {
         // Es una incidencia directa
         form.incidence = action;
@@ -191,9 +204,16 @@ const removeLate = () => {
                     <div 
                         v-for="(day, index) in payrollUser.incidences" 
                         :key="index" 
-                        class="flex flex-col w-28 border rounded-lg bg-white overflow-hidden shadow-sm transition-all hover:shadow-md"
+                        class="flex flex-col w-28 border rounded-lg bg-white overflow-hidden shadow-sm transition-all hover:shadow-md relative"
                         :class="getIncidenceColor(day)"
                     >
+                        <!-- Indicador de Comentario (Nuevo) -->
+                        <div v-if="day.comment" class="absolute top-1 left-1 z-10">
+                            <el-tooltip :content="day.comment.comments" placement="top" effect="dark">
+                                <i class="fa-solid fa-comment-dots text-indigo-500 text-xs drop-shadow-sm"></i>
+                            </el-tooltip>
+                        </div>
+
                         <!-- Fecha Header -->
                         <div class="text-center py-1.5 text-[10px] uppercase font-bold tracking-wider border-b border-gray-100" :class="day.check_in ? 'bg-gray-50 text-gray-600' : 'bg-white text-gray-400'">
                             {{ getDayName(day.date) }} <span class="text-gray-800">{{ formatDate(day.date) }}</span>
@@ -212,6 +232,9 @@ const removeLate = () => {
                                         <el-dropdown-menu>
                                             <el-dropdown-item :command="`edit_time|${day.date}`">
                                                 <i class="fa-regular fa-clock mr-2"></i> Editar Horas
+                                            </el-dropdown-item>
+                                            <el-dropdown-item :command="`edit_comment|${day.date}`">
+                                                <i class="fa-regular fa-comment mr-2"></i> Comentario
                                             </el-dropdown-item>
                                             <el-dropdown-item v-if="day.late" :command="`remove_late|${day.date}`">
                                                 <i class="fa-solid fa-eraser mr-2"></i> Quitar Retardo
