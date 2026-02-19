@@ -318,7 +318,7 @@ onMounted(() => {
                 </ResponsiveNavLink>
 
                 <!-- CORRECCIÓN: Validación segura de permisos -->
-                <ResponsiveNavLink v-if="$page.props.auth.user?.permissions?.includes('Ver incidencias')"
+                <ResponsiveNavLink v-if="$page.props.auth.user?.permissions?.includes('Ver incidencias') || (page.props.auth.user.employees_in_charge && page.props.auth.user.employees_in_charge.length > 0)"
                     :href="route('payrolls.index')" :active="route().current('payrolls.*')" class="rounded-lg">
                     <div class="flex items-center space-x-3">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5 text-gray-500">
@@ -391,6 +391,11 @@ onMounted(() => {
             <div class="border-t border-gray-100 p-4 bg-gray-50">
                 <ResponsiveNavLink :href="route('profile.show')" :active="route().current('profile.show')" class="rounded-lg mb-2">
                     <span class="text-gray-600">Perfil</span>
+                </ResponsiveNavLink>
+
+                <!-- BOTÓN AGREGADO: VISTA MÓVIL -->
+                <ResponsiveNavLink :href="route('my-payrolls')" :active="route().current('my-payrolls')" class="rounded-lg mb-2">
+                    <span class="text-gray-600">Mis Nóminas</span>
                 </ResponsiveNavLink>
 
                 <form method="POST" @submit.prevent="logout">
@@ -513,6 +518,11 @@ onMounted(() => {
 
                                             <DropdownLink :href="route('profile.show')">
                                                 Perfil
+                                            </DropdownLink>
+
+                                            <!-- BOTÓN AGREGADO: VISTA ESCRITORIO -->
+                                            <DropdownLink :href="route('my-payrolls')">
+                                                Mis Nóminas
                                             </DropdownLink>
 
                                             <div class="border-t border-gray-200" />

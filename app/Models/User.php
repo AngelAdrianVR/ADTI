@@ -45,6 +45,7 @@ class User extends Authenticatable implements HasMedia
         'profile_photo_path',
         'home_office',
         'paused',
+        'employees_in_charge', // Nuevo campo
     ];
 
     /**
@@ -77,6 +78,7 @@ class User extends Authenticatable implements HasMedia
             'password' => 'hashed',
             'org_props' => 'array',
             'home_office' => 'boolean',
+            'employees_in_charge' => 'array', // Cast automático a array
         ];
     }
 

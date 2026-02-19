@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Department;
 use App\Models\JobPosition;
+use App\Models\Payroll;
 use App\Models\PayrollUser;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Models\Holiday;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -42,14 +44,62 @@ class UserController extends Controller
 
         return inertia('User/Index', compact('users'));
     }
+
+    // Método para "Mis Nóminas"
+    public function myPayrolls()
+    {
+        $user = auth()->user();
+
+        $payrolls = Payroll::whereHas('users', function ($q) use ($user) {
+            $q->where('user_id', $user->id);
+        })
+        ->orderBy('start_date', 'desc')
+        ->get();
+
+        if ($payrolls->isEmpty()) {
+            return inertia('User/MyPayrolls', ['payrolls' => []]);
+        }
+
+        $allAttendances = PayrollUser::whereIn('payroll_id', $payrolls->pluck('id'))
+            ->where('user_id', $user->id)
+            ->get()
+            ->groupBy('payroll_id');
+
+        $minDate = $payrolls->min('start_date');
+        $maxDate = $payrolls->max('start_date')->copy()->addDays(14);
+        $allHolidays = Holiday::whereBetween('date', [$minDate, $maxDate])->get();
+
+        $processedPayrolls = $payrolls->map(function ($payroll) use ($user, $allAttendances, $allHolidays) {
+            $rawAttendances = $allAttendances->get($payroll->id);
+            
+            $endDate = $payroll->start_date->copy()->addDays(14);
+            $payrollHolidays = $allHolidays->filter(function($holiday) use ($payroll, $endDate) {
+                return $holiday->date >= $payroll->start_date && $holiday->date <= $endDate;
+            });
+
+            return [
+                'id' => $payroll->id,
+                'biweekly' => $payroll->biweekly,
+                'start_date' => $payroll->start_date,
+                'is_active' => $payroll->is_active,
+                'incidences' => $payroll->getProcessedAttendances($user->id, $rawAttendances, $payrollHolidays),
+            ];
+        });
+
+        return inertia('User/MyPayrolls', [
+            'payrolls' => $processedPayrolls
+        ]);
+    }
     
     public function create()
     {
         $roles = Role::all();
         $departments = Department::latest()->get();
         $job_positions = JobPosition::latest()->get();
+        // Obtener todos los usuarios activos para el selector de "Empleados a cargo"
+        $users = User::where('is_active', true)->orderBy('name')->get(['id', 'name']);
 
-        return inertia('User/Create', compact('roles' ,'departments', 'job_positions'));
+        return inertia('User/Create', compact('roles' ,'departments', 'job_positions', 'users'));
     }
 
     public function edit(User $user)
@@ -58,8 +108,13 @@ class UserController extends Controller
         $user_roles = $user->roles->pluck('id');
         $departments = Department::latest()->get();
         $job_positions = JobPosition::latest()->get();
+        // Obtener usuarios para editar empleados a cargo (excluyendo al mismo usuario)
+        $users = User::where('is_active', true)
+            ->where('id', '!=', $user->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
-        return inertia('User/Edit', compact('user', 'roles', 'user_roles','departments', 'job_positions'));
+        return inertia('User/Edit', compact('user', 'roles', 'user_roles','departments', 'job_positions', 'users'));
     }
 
     public function reactivation(User $user)
@@ -94,6 +149,7 @@ class UserController extends Controller
             'org_props.vacations' => 'nullable',
             'org_props.updated_date_vacations' => 'nullable',
             'roles' => 'required|array|min:1',
+            'employees_in_charge' => 'nullable|array', // Validación array
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ], [
             'org_props.entry_date.required' => 'Campo obligatorio.',
@@ -101,16 +157,13 @@ class UserController extends Controller
             'org_props.email.required' => 'Campo obligatorio.',
         ]);
 
-        // agregar propiedades de vacaciones
         $validated['org_props']['vacations'] = 0;
         $validated['org_props']['updated_date_vacations'] = now()->toDateString();
 
         $user = User::create($validated + ['password' => bcrypt('123456')]);
 
-        // guardar foto de perfil en caso de haberse seleccionado una
         if ($request->hasFile('image')) {
             $this->storeProfilePhoto($request, $user);
-            // convertir a int los roles para que no ocurra error al guardar
             $roles = array_map('intval', $request->roles);
             $user->syncRoles($roles);
         } else {
@@ -125,11 +178,11 @@ class UserController extends Controller
         $users = User::get(['id', 'name']);
         $user->load(['media']);
 
-        // Obtener vacaciones y agruparlas por año
+        // Obtener vacaciones
         $vacations = PayrollUser::where(['user_id' => $user->id, 'incidence' => 'Vacaciones'])
             ->get()
             ->groupBy(function ($vacation) {
-                return $vacation->date->format('Y'); // Agrupar por año
+                return $vacation->date->format('Y'); 
             })
             ->map(function ($vacations, $year) {
                 return [
@@ -141,15 +194,21 @@ class UserController extends Controller
                     })->values()->all()
                 ];
             })->values()->all();
+        
+        // Cargar objetos User completos de los empleados a cargo
+        $employeesInCharge = [];
+        if (!empty($user->employees_in_charge)) {
+            $employeesInCharge = User::whereIn('id', $user->employees_in_charge)->get(['id', 'name', 'profile_photo_path', 'org_props']);
+        }
 
-        return inertia('User/Show', compact('user', 'users', 'vacations'));
+        return inertia('User/Show', compact('user', 'users', 'vacations', 'employeesInCharge'));
     }
 
     public function update(Request $request, User $user)
     {
         $validated = $request->validate([
             'code' => 'nullable|string|max:10',
-            'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
+            'name' => 'required|string|max:255|unique:users,name,' . $user->id,
             'email' => 'nullable',
             'phone' => 'nullable|string|max:15',
             'birthdate' => 'nullable|date',
@@ -169,6 +228,7 @@ class UserController extends Controller
             'org_props.month_complement' => 'nullable|numeric|min:1',
             'org_props.net_salary' => 'nullable|numeric|min:1',
             'roles' => 'required|array|min:1',
+            'employees_in_charge' => 'nullable|array', // Validación array
         ], [
             'org_props.entry_date.required' => 'Campo obligatorio.',
             'org_props.position.required' => 'Campo obligatorio.',
@@ -190,7 +250,7 @@ class UserController extends Controller
     {
         $validated = $request->validate([
             'code' => 'nullable|string|max:10',
-            'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
+            'name' => 'required|string|max:255|unique:users,name,' . $user->id,
             'email' => 'nullable',
             'phone' => 'nullable|string|max:15',
             'birthdate' => 'nullable|date',
@@ -210,6 +270,7 @@ class UserController extends Controller
             'org_props.month_complement' => 'nullable|numeric|min:1',
             'org_props.net_salary' => 'nullable|numeric|min:1',
             'roles' => 'required|array|min:1',
+            'employees_in_charge' => 'nullable|array',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ], [
             'org_props.entry_date.required' => 'Campo obligatorio.',
@@ -218,7 +279,6 @@ class UserController extends Controller
         ]);
 
         $user->update($request->all());
-        // convertir a int los roles para que no ocurra error
         $roles = array_map('intval', $request->roles);
         $user->syncRoles($roles);
 
@@ -235,11 +295,8 @@ class UserController extends Controller
 
     public function storeProfilePhoto($request, User $user)
     {
-        // Guarda la imagen en el sistema de archivos.
         $path = $request->file('image')->store('public/profile-photos');
-        // Elimina el prefijo 'public' de la ruta.
         $path = str_replace('public/', '', $path);
-        // Actualiza la propiedad 'profile_photo_path' del usuario.
         $user->update([
             'profile_photo_path' => $path,
         ]);
@@ -265,14 +322,12 @@ class UserController extends Controller
     public function toggleHomeOffice(User $user)
     {
         $user->update(['home_office' => !$user->home_office]);
-        // CORRECCIÓN: Retornar back() para que Inertia refresque las props en el frontend
         return back();
     }
 
     public function massiveDelete(Request $request)
     {
         foreach ($request->items_ids as $id) {
-            // evitar eliminar al usuario autenticado
             if ($id != auth()->id()) {
                 $item = User::find($id);
                 $item?->delete();

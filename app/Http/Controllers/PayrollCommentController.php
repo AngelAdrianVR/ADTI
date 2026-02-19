@@ -7,35 +7,30 @@ use Illuminate\Http\Request;
 
 class PayrollCommentController extends Controller
 {
-    public function index()
-    {
-        //
-    }
-
-    public function create()
-    {
-        //
-    }
-
     public function store(Request $request)
     {
         $request->validate([
-            'comments' => 'required|string|max:1200'
+            'comments' => 'required|string|max:1200',
+            'user_id' => 'required|exists:users,id',
+            'payroll_id' => 'required|exists:payrolls,id',
+            'date' => 'nullable|date',
         ]);
 
-        PayrollComment::create($request->all());
+        // Usamos updateOrCreate para evitar duplicados en la misma fecha/usuario/nómina
+        PayrollComment::updateOrCreate(
+            [
+                'payroll_id' => $request->payroll_id,
+                'user_id' => $request->user_id,
+                'date' => $request->date, // Puede ser null para comentarios generales
+            ],
+            [
+                'comments' => $request->comments
+            ]
+        );
     }
 
-    public function show(PayrollComment $payrollComment)
-    {
-        //
-    }
-
-    public function edit(PayrollComment $payrollComment)
-    {
-        //
-    }
-
+    // El método update original ya no es estrictamente necesario si usas store con updateOrCreate,
+    // pero lo dejamos por compatibilidad si se llama directamente.
     public function update(Request $request, PayrollComment $payrollComment)
     {
         $request->validate([

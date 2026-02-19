@@ -49,14 +49,14 @@ const submit = () => {
                     <!-- Logo Grande en Blanco/Transparente -->
                      <img src="/images/logo_colors.webp" alt="Logo" class="w-40 h-auto bg-white p-2 rounded-xl shadow-lg opacity-90 backdrop-blur-sm">
                 </div>
-                <h2 class="text-4xl font-bold mb-4 tracking-tight">Bienvenido a ERP ADTI</h2>
+                <h2 class="text-4xl font-bold mb-4 tracking-tight">Bienvenido a ADTI</h2>
                 <p class="text-blue-100 text-lg font-light leading-relaxed">
                     Gestiona tus proyectos, nóminas y recursos de manera eficiente en una sola plataforma.
                 </p>
             </div>
             
             <div class="absolute bottom-4 text-xs text-blue-200">
-                &copy; {{ new Date().getFullYear() }} ERP. Todos los derechos reservados.
+                &copy; {{ new Date().getFullYear() }}. Todos los derechos reservados.
             </div>
         </div>
 
