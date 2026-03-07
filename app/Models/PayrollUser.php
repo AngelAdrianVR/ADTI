@@ -59,30 +59,30 @@ class PayrollUser extends Pivot
                 return;
             }
 
-            $extra_hours = 0;
-            $extra_minutes = 0;
+            $total_extra_minutes = 0;
 
             // Si es fin de semana, todo el tiempo trabajado es extra
             if (Carbon::parse($this->date)->isWeekend()) {
-                $total_minutes = $check_in->diffInMinutes($check_out);
-                $extra_hours = intdiv($total_minutes, 60);
-                $extra_minutes = $total_minutes % 60;
+                $total_extra_minutes = $check_in->diffInMinutes($check_out);
             } else {
-                // De lunes a viernes, calcula el tiempo trabajado después de las 18:00 hrs
+                // De lunes a viernes
+                $start_of_day = Carbon::createFromTime(9, 0); // 09:00 hrs
                 $end_of_day = Carbon::createFromTime(18, 0); // 18:00 hrs
 
+                // 1. Calcula el tiempo extra si llega ANTES de las 09:00 hrs
+                if ($check_in->lessThan($start_of_day)) {
+                    $total_extra_minutes += $check_in->diffInMinutes($start_of_day);
+                }
+
+                // 2. Calcula el tiempo trabajado DESPUÉS de las 18:00 hrs
                 if ($check_out->greaterThan($end_of_day)) {
-                    $extra_time = $end_of_day->diffInMinutes($check_out);
-                    $extra_hours = intdiv($extra_time, 60);
-                    $extra_minutes = $extra_time % 60;
+                    $total_extra_minutes += $end_of_day->diffInMinutes($check_out);
                 }
             }
 
-            // Ajusta si los minutos exceden 60
-            if ($extra_minutes >= 60) {
-                $extra_hours += intdiv($extra_minutes, 60);
-                $extra_minutes = $extra_minutes % 60;
-            }
+            // Convertir el total de minutos extra acumulados a horas y minutos
+            $extra_hours = intdiv($total_extra_minutes, 60);
+            $extra_minutes = $total_extra_minutes % 60;
 
             // Actualiza los campos de horas y minutos extra
             $this->update([
