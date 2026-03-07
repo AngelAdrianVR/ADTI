@@ -237,4 +237,35 @@ class PayrollUserController extends Controller
 
         $payrollUser->update(['late' => 0]);
     }
+
+    // --- NUEVO MÉTODO PARA RECALCULAR TIEMPO EXTRA ---
+    public function recalculateExtraTime()
+    {
+        // 1. Obtener la nómina activa actual
+        $currentPayroll = Payroll::firstWhere('is_active', true);
+
+        if (!$currentPayroll) {
+            return response()->json(['message' => 'No hay una nómina activa actualmente para recalcular.'], 404);
+        }
+
+        // 2. Obtener todos los registros de asistencia de esta nómina
+        $attendances = PayrollUser::where('payroll_id', $currentPayroll->id)->get();
+        $processedCount = 0;
+
+        // 3. Iterar y recalcular
+        foreach ($attendances as $attendance) {
+            // Solo recalculamos si tiene hora de entrada y salida registradas
+            if ($attendance->check_in && $attendance->check_out) {
+                // El método ya hace el $this->update() por dentro
+                $attendance->calculateExtraTime();
+                $processedCount++;
+            }
+        }
+
+        return response()->json([
+            'message' => 'Recálculo completado con éxito.',
+            'payroll_id' => $currentPayroll->id,
+            'records_updated' => $processedCount
+        ]);
+    }
 }

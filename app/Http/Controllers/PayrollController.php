@@ -54,14 +54,18 @@ class PayrollController extends Controller
         $currentUser = auth()->user();
         
         // 1. Determinar qué usuarios mostrar basado en permisos y jerarquía
-        // Si tiene permiso global, ve todo. Si no, verificamos si tiene empleados a cargo.
         if ($currentUser->can('Ver incidencias')) {
             // Cargar todos los usuarios de la nómina
             $payroll->load('users');
             $usersCollection = $payroll->users;
         } elseif (!empty($currentUser->employees_in_charge)) {
-            // Solo cargar los usuarios que están a su cargo Y que están en esta nómina
+            // Cargar los usuarios a su cargo + A SÍ MISMO
             $employeesIds = $currentUser->employees_in_charge;
+            
+            // Asegurarse de que el ID del supervisor esté en el array
+            if (!in_array($currentUser->id, $employeesIds)) {
+                $employeesIds[] = $currentUser->id;
+            }
             
             $usersCollection = $payroll->users()
                 ->whereIn('users.id', $employeesIds)
@@ -71,7 +75,7 @@ class PayrollController extends Controller
             $usersCollection = collect([]);
         }
 
-        // Si se pasaron IDs específicos para filtrar (ej. desde el buscador o para imprimir), aplicarlo sobre la colección permitida
+        // Si se pasaron IDs específicos para filtrar, aplicarlo sobre la colección permitida
         if (!empty($userIds)) {
             $usersCollection = $usersCollection->whereIn('id', $userIds);
         }
@@ -158,8 +162,12 @@ class PayrollController extends Controller
         // Aplicar el mismo filtro de permisos para la lista de "Sin Asistencia"
         if (!$currentUser->can('Ver incidencias')) {
             if (!empty($currentUser->employees_in_charge)) {
-                // Solo ver empleados a su cargo
-                $query->whereIn('id', $currentUser->employees_in_charge);
+                // Solo ver empleados a su cargo + A SÍ MISMO
+                $employeesIds = $currentUser->employees_in_charge;
+                if (!in_array($currentUser->id, $employeesIds)) {
+                    $employeesIds[] = $currentUser->id;
+                }
+                $query->whereIn('id', $employeesIds);
             } else {
                 // Si no tiene permisos ni empleados, no ve a nadie (retorna vacío)
                 $query->whereRaw('1 = 0');

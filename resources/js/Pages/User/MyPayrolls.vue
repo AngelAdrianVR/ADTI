@@ -37,8 +37,6 @@ const getPeriodRange = (startDate) => {
 };
 
 // --- Construir objeto PayrollUser artificialmente ---
-// El componente IncidencesTable espera un objeto { user, incidences }.
-// Nosotros tenemos 'incidences' dentro de cada objeto 'payroll' de la prop.
 const getPayrollUserObject = (payrollItem) => {
     return {
         user: currentUser, // Usamos el usuario autenticado
@@ -77,7 +75,7 @@ onMounted(() => {
                         </p>
                     </div>
 
-                    <!-- Stats Resumen (Opcional) -->
+                    <!-- Stats Resumen -->
                     <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex gap-6 text-sm">
                         <div>
                             <span class="block text-xs text-gray-400 uppercase font-bold">Total Nóminas</span>
@@ -124,15 +122,11 @@ onMounted(() => {
 
                         <!-- Componente de Tabla de Incidencias (Reutilizado) -->
                         <div class="p-2 sm:p-4">
-                            <!-- 
-                                IMPORTANTE: 
-                                Pasamos :payroll="{ ...payroll, is_active: false }" 
-                                para FORZAR que el componente hijo oculte los botones de edición,
-                                cumpliendo el requerimiento de 'solo lectura'.
-                            -->
+                            <!-- IMPORTANTE: Usamos :canEdit="false" para hacerla totalmente de solo lectura -->
                             <IncidencesTable 
                                 :payrollUser="getPayrollUserObject(payroll)"
-                                :payroll="{ ...payroll, is_active: false }" 
+                                :payroll="payroll" 
+                                :canEdit="false"
                             />
                         </div>
                     </div>
