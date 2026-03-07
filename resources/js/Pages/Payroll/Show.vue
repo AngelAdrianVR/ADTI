@@ -109,7 +109,6 @@ const filteredPayrollUsers = computed(() => {
 });
 
 // --- Computed: Usuarios Visibles (Paginados) ---
-// Esta es la lista que realmente se renderiza en el DOM
 const visiblePayrollUsers = computed(() => {
     return filteredPayrollUsers.value.slice(0, limit.value);
 });
@@ -126,7 +125,6 @@ watch([search, selectedDepartment], () => {
     limit.value = 5;
     selectedUsers.value = [];
     selectAll.value = false;
-    // Re-observar el trigger después de que el DOM se actualice (por si desapareció)
     nextTick(() => {
         if (loadMoreTrigger.value && observer) {
             observer.disconnect();
@@ -138,7 +136,6 @@ watch([search, selectedDepartment], () => {
 // --- Lógica de Selección (Checkbox) ---
 const toggleSelectAll = (val) => {
     if (val) {
-        // Seleccionar TODOS los filtrados (incluso los no visibles aún)
         selectedUsers.value = filteredPayrollUsers.value.map(item => item.user.id);
     } else {
         selectedUsers.value = [];
@@ -208,9 +205,8 @@ const saveComment = () => {
                 
                 <!-- Header con Navegación -->
                 <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                    <Back :route="route('payrolls.index')" class="mr-4" />
                     <div class="flex items-center w-full md:w-auto">
-                        
+                        <Back :route="route('payrolls.index')" class="mr-4" />
                         <div class="flex items-center gap-4">
                             <Link 
                                 v-if="adjacentPayrolls.prev" 
@@ -284,7 +280,6 @@ const saveComment = () => {
                     </div>
                     
                     <div v-if="filteredPayrollUsers.length > 0" class="space-y-3">
-                        <!-- Iteramos sobre visiblePayrollUsers (Paginado) en lugar de todo el array -->
                         <div 
                             v-for="(item, index) in visiblePayrollUsers" 
                             :key="item.user.id" 
@@ -294,9 +289,11 @@ const saveComment = () => {
                                 <el-checkbox :value="item.user.id" v-model="selectedUsers" @change="handleSingleSelect" size="large" />
                             </div>
                             <div class="flex-1 min-w-0">
+                                <!-- AQUI pasamos :canEdit="true" para que los que pueden ver esto, SIEMPRE puedan editar -->
                                 <IncidencesTable 
                                     :payrollUser="item"
                                     :payroll="payroll" 
+                                    :canEdit="true"
                                     @edit-comment="openCommentModal"
                                 />
                             </div>
@@ -377,3 +374,16 @@ const saveComment = () => {
         </main>
     </AppLayout>
 </template>
+
+<style scoped>
+:deep(.el-input__wrapper) {
+    border-radius: 0.5rem;
+    box-shadow: 0 0 0 1px #e5e7eb inset;
+}
+:deep(.el-input__wrapper.is-focus) {
+    box-shadow: 0 0 0 1px #4f46e5 inset !important;
+}
+:deep(.el-select__wrapper) {
+    border-radius: 0.5rem;
+}
+</style>

@@ -134,6 +134,8 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::put('payroll-users/set-incidence', [PayrollUserController::class, 'setIncidence'])->name('payroll-users.set-incidence');
     Route::put('payroll-users/remove-late', [PayrollUserController::class, 'removeLate'])->name('payroll-users.remove-late');
 
+    Route::get('payroll-users/recalculate-extra-time', [PayrollUserController::class, 'recalculateExtraTime'])->name('payroll-users.recalculate-extra-time');
+
     Route::resource('holidays', HolidayController::class);
     Route::post('holidays/massive-delete', [HolidayController::class, 'massiveDelete'])->name('holidays.massive-delete');
     Route::resource('kiosks', KioskController::class);

@@ -12,7 +12,11 @@ import { ElNotification } from 'element-plus';
 
 const props = defineProps({
     payrollUser: Object,
-    payroll: Object
+    payroll: Object,
+    canEdit: {
+        type: Boolean,
+        default: true
+    }
 });
 
 const emit = defineEmits(['edit-comment']);
@@ -38,11 +42,6 @@ const stats = computed(() => {
     let lateMinutes = 0;
 
     props.payrollUser.incidences.forEach(day => {
-        // Calcular tiempo trabajado simple (estimado) si hay entrada y salida
-        if (day.check_in && day.check_out) {
-            // Lógica simple de visualización, el cálculo real está en backend
-        }
-        
         // Sumar extras
         if (day.extra_hours || day.extra_minutes) {
             extraMinutes += (day.extra_hours || 0) * 60 + (day.extra_minutes || 0);
@@ -63,7 +62,6 @@ const stats = computed(() => {
     return {
         extra: formatMins(extraMinutes),
         late: formatMins(lateMinutes),
-        // Puedes agregar más stats aquí si el backend los provee
     };
 });
 
@@ -107,7 +105,6 @@ const handleCommand = (command) => {
         removeLate();
     } else if (action === 'edit_comment') {
         const register = props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(date)));
-        // Recuperar el comentario del objeto inyectado por el controlador (si existe)
         const currentComment = register?.comment?.comments || '';
         
         emit('edit-comment', {
@@ -207,7 +204,7 @@ const removeLate = () => {
                         class="flex flex-col w-28 border rounded-lg bg-white overflow-hidden shadow-sm transition-all hover:shadow-md relative"
                         :class="getIncidenceColor(day)"
                     >
-                        <!-- Indicador de Comentario (Nuevo) -->
+                        <!-- Indicador de Comentario -->
                         <div v-if="day.comment" class="absolute top-1 left-1 z-10">
                             <el-tooltip :content="day.comment.comments" placement="top" effect="dark">
                                 <i class="fa-solid fa-comment-dots text-indigo-500 text-xs drop-shadow-sm"></i>
@@ -222,8 +219,8 @@ const removeLate = () => {
                         <!-- Contenido Día -->
                         <div class="flex-1 p-2 flex flex-col justify-center items-center text-xs gap-1 min-h-[80px] relative group">
                             
-                            <!-- Dropdown de Acciones (Esquina) -->
-                            <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10" v-if="payroll.is_active">
+                            <!-- Dropdown de Acciones (Ya NO depende de is_active, depende de canEdit) -->
+                            <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10" v-if="canEdit">
                                 <el-dropdown trigger="click" @command="handleCommand" size="small">
                                     <button class="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600">
                                         <i class="fa-solid fa-ellipsis-vertical"></i>
