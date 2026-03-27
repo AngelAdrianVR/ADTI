@@ -146,83 +146,92 @@ class PayrollUserController extends Controller
 
     public function processBioTimeTransaction($time, $emp_code)
     {
-        // Identificar si es entrada o salida
+        $time = str_replace('+', ' ', $time);
+        $punchDateTime = Carbon::parse($time);
+        $punchDateStr = $punchDateTime->toDateString();
+        $punchTimeStr = $punchDateTime->format('H:i');
+
+        // 1. CORRECCIÓN CRÍTICA: SIEMPRE sumamos la transacción procesada al historial
+        $todaysTransactions = BioTimeTransactions::firstOrCreate(
+            ['date' => $punchDateStr],
+        );
+        $todaysTransactions->increment('quantity');
+
+        // 2. Identificar al empleado
         $employee = User::firstWhere('code', $emp_code);
+
         if ($employee) {
-
-            // --- INICIO DE CAMBIOS ---
-            
-            $time = str_replace('+', ' ', $time);
-            $punchDateTime = Carbon::parse($time); // Parsear el timestamp completo
-            $punchDateStr = $punchDateTime->toDateString(); // Obtener la FECHA del punch
-            $punchTimeStr = $punchDateTime->format('H:i'); // Obtener la HORA del punch
-
-            // --- CORRECCIÓN DE CONSULTA ---
-            // Buscar el período de nómina que CONTENGA esta fecha.
-            // Ya que no hay 'end_date', calculamos el fin sumando 13 días a start_date (para un período de 14 días).
             $currentPayroll = Payroll::where('start_date', '<=', $punchDateStr)
-                                    ->whereRaw('? <= DATE_ADD(start_date, INTERVAL 13 DAY)', [$punchDateStr])
-                                    ->first();
+                ->whereRaw('? <= DATE_ADD(start_date, INTERVAL 13 DAY)', [$punchDateStr])
+                ->first();
 
-            // Fallback a la nómina activa si no se encuentra un período (lógica original)
             if (!$currentPayroll) {
                 $currentPayroll = Payroll::firstWhere('is_active', true);
                 if (!$currentPayroll) {
                     Log::warning("No se encontró nómina activa o coincidente para el empleado {$emp_code} en la fecha {$punchDateStr}.");
-                    return; // Salir si no hay nómina
+                    return;
                 }
             }
-            // --- FIN DE CORRECCIÓN DE CONSULTA ---
 
-            // Buscar el registro de asistencia usando la FECHA DEL PUNCH, no la de hoy
             $existingEntry = PayrollUser::where('user_id', $employee->id)
-                ->whereDate('date', $punchDateStr) // <-- CAMBIO CRÍTICO
+                ->whereDate('date', $punchDateStr)
                 ->first();
 
-            if (!$existingEntry) { //No existe registro de asistencia del empleado en cuestion
+            if (!$existingEntry) {
                 $existingEntry = PayrollUser::create([
-                    // 'emp_code' => $emp_code, // Este campo no existe en el modelo PayrollUser
-                    'date' => $punchDateStr, // <-- CAMBIO CRÍTICO
-                    'check_in' => $punchTimeStr, // Es el primer punch, se asigna a check_in
+                    'date' => $punchDateStr,
+                    'check_in' => $punchTimeStr,
                     'user_id' => $employee->id,
                     'payroll_id' => $currentPayroll->id,
                 ]);
                 $employee->update(['paused' => null]);
-            } else { //Ya existe registro de asistencia
-                // Lógica simple: si ya hay check_in, este es el check_out.
-                // (Se puede mejorar esta lógica si hay comidas, etc., pero seguimos la original)
-                if ($existingEntry->check_in && !$existingEntry->check_out) {
-                     $existingEntry->update([
-                        'check_out' => $punchTimeStr,
-                    ]);
-                    $employee->update(['paused' => null]);
+            } else {
+
+                // --- PROTECCIÓN ANTI-RÁFAGA DE BIOTIME (1 minuto) ---
+                $punchTimeParsed = Carbon::parse($punchTimeStr);
+                $isDuplicate = false;
+
+                if ($existingEntry->check_in) {
+                    $checkInParsed = Carbon::parse($existingEntry->check_in);
+                    if ($checkInParsed->diffInMinutes($punchTimeParsed) <= 1) {
+                        $isDuplicate = true;
+                    }
                 }
-                // Si ya hay check_in y check_out, podríamos loggear que es un punch extra
-                // O si es antes de las 17:49 (lógica original), registrar pausa.
-                else if (strtotime($punchTimeStr) <= strtotime('17:49')) {
-                    $employee->setPause();
+
+                if ($existingEntry->check_out) {
+                    $checkOutParsed = Carbon::parse($existingEntry->check_out);
+                    if ($checkOutParsed->diffInMinutes($punchTimeParsed) <= 1) {
+                        $isDuplicate = true;
+                    }
+                }
+
+                if ($isDuplicate) {
+                    Log::info("BioTime Sync: Checada ignorada por ser muy cercana a la anterior (Empleado {$emp_code} a las {$punchTimeStr})");
                 } else {
-                    // Si ya hay check_out, esto sobreescribirá el último.
-                     $existingEntry->update([
-                        'check_out' => $punchTimeStr,
-                    ]);
-                    $employee->update(['paused' => null]);
+                    // Procesar normalmente si pasó el tiempo de gracia
+                    if ($existingEntry->check_in && !$existingEntry->check_out) {
+                        $existingEntry->update([
+                            'check_out' => $punchTimeStr,
+                        ]);
+                        $employee->update(['paused' => null]);
+                    } else if (strtotime($punchTimeStr) <= strtotime('17:49')) {
+                        $employee->setPause();
+                    } else {
+                        $existingEntry->update([
+                            'check_out' => $punchTimeStr,
+                        ]);
+                        $employee->update(['paused' => null]);
+                    }
                 }
+                // -----------------------------------------------------
             }
-
-            // sumar la transaccion a las procesadas del DIA DEL PUNCH
-            $todaysTransactions = BioTimeTransactions::firstOrCreate(
-                ['date' => $punchDateStr], // <-- CAMBIO CRÍTICO
-            );
-            $todaysTransactions->increment('quantity');
-
-            // --- FIN DE CAMBIOS ---
 
             // Calcular tiempo extra y retardo
             $existingEntry->calculateLate();
             $existingEntry->calculateExtraTime();
         } else {
-            Log::info("No se encontró al empleado con código {$emp_code}");
+            // Se loguea solo UNA vez gracias a que el contador de Python ya avanzó arriba
+            Log::warning("BioTime Sincronización: Se ignoró un registro porque no se encontró al empleado con código {$emp_code}.");
         }
     }
 

@@ -152,11 +152,13 @@ class User extends Authenticatable implements HasMedia
         $this->save();
     }
 
-    public function setAttendance()
+   public function setAttendance()
     {
         $next = '';
-        $now_time = now()->isoFormat('HH:mm');
-        $today_attendance = PayrollUser::firstOrCreate(['date' => today()->toDateString(), 'user_id' => $this->id], [
+        $now = now();
+        $now_time = $now->isoFormat('HH:mm');
+        
+        $today_attendance = PayrollUser::firstOrCreate(['date' => $now->toDateString(), 'user_id' => $this->id], [
             'payroll_id' => Payroll::firstWhere('is_active', true)->id,
             'checked_in_platform' => true,
             'late' => 0,
@@ -169,10 +171,22 @@ class User extends Authenticatable implements HasMedia
             $today_attendance->calculateLate();
             $next = 'Registrar salida';
         } elseif (is_null($today_attendance->check_out)) {
+            
+            // --- PROTECCIÓN ANTI-DOBLE CLIC (1 minuto) ---
+            $checkInTime = Carbon::createFromFormat('H:i', trim($today_attendance->check_in));
+            if ($checkInTime->diffInMinutes($now) <= 1) {
+                // Si la diferencia es menor o igual a 1 minuto, ignoramos el click
+                // para evitar que registre salida inmediatamente.
+                return 'Registrar salida';
+            }
+            // -----------------------------------------------
+
             $today_attendance->update([
                 'check_out' => $now_time,
             ]);
             $today_attendance->calculateExtraTime();
+            $next = 'Día terminado';
+        } else {
             $next = 'Día terminado';
         }
 
