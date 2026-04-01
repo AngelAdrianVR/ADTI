@@ -134,6 +134,10 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::put('payroll-users/set-incidence', [PayrollUserController::class, 'setIncidence'])->name('payroll-users.set-incidence');
     Route::put('payroll-users/remove-late', [PayrollUserController::class, 'removeLate'])->name('payroll-users.remove-late');
 
+     // --- NUEVAS RUTAS DE TIEMPO EXTRA ---
+    Route::put('payroll-users/approve-extra-time', [PayrollUserController::class, 'approveExtraTime'])->name('payroll-users.approve-extra-time');
+    Route::put('payroll-users/revert-extra-time', [PayrollUserController::class, 'revertExtraTime'])->name('payroll-users.revert-extra-time');
+
     Route::get('payroll-users/recalculate-extra-time', [PayrollUserController::class, 'recalculateExtraTime'])->name('payroll-users.recalculate-extra-time');
 
     Route::resource('holidays', HolidayController::class);

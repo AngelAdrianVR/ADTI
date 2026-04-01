@@ -36,6 +36,11 @@ class Payroll extends Model
                 'incidence',
                 'additionals',
                 'checked_in_platform',
+                // Nuevos campos
+                'approved_extra_hours',
+                'approved_extra_minutes',
+                'approved_by',
+                'approved_at'
             ])
             ->withTimestamps();
     }

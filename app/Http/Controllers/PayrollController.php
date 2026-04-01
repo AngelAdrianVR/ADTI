@@ -84,7 +84,8 @@ class PayrollController extends Controller
         $finalUserIds = $usersCollection->pluck('id');
 
         // 2. Cargar datos SOLO para los usuarios filtrados (Optimización)
-        $allAttendances = PayrollUser::where('payroll_id', $payroll->id)
+        $allAttendances = PayrollUser::with('approver') // <-- AGREGAR ESTA LÍNEA
+            ->where('payroll_id', $payroll->id)
             ->whereIn('user_id', $finalUserIds)
             ->get()
             ->groupBy('user_id');

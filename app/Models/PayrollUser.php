@@ -25,12 +25,18 @@ class PayrollUser extends Pivot
         'payroll_id',
         'incidence',
         'additionals',
-        'checked_in_platform'
+        'checked_in_platform',
+        // Nuevos campos
+        'approved_extra_hours',
+        'approved_extra_minutes',
+        'approved_by',
+        'approved_at'
     ];
 
     protected $casts = [
         'date' => 'date',
         'additionals' => 'array',
+        'approved_at' => 'datetime',
     ];
 
     // relationships
@@ -42,6 +48,12 @@ class PayrollUser extends Pivot
     public function payroll(): BelongsTo
     {
         return $this->belongsTo(Payroll::class);
+    }
+
+    // Relación para saber quién aprobó el tiempo
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
     }
 
     public function calculateExtraTime()

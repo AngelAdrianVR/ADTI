@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\BioTimeTransactions;
 use App\Models\Payroll;
 use App\Models\PayrollUser;
+use App\Models\PayrollComment; // <--- AGREGAR ESTA IMPORTACIÓN
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -19,7 +20,6 @@ class PayrollUserController extends Controller
 
     public function store(Request $request)
     {
-        // Método para crear asistencia manual (desde NoAttendanceCard)
         $payrollUser = PayrollUser::firstOrCreate(
             [
                 'date' => $request->date,
@@ -30,11 +30,10 @@ class PayrollUserController extends Controller
                 'check_in' => $request->check_in,
                 'check_out' => $request->check_out,
                 'incidence' => 'Día normal',
-                'checked_in_platform' => true, // Marca que fue manual/plataforma
+                'checked_in_platform' => true, 
             ]
         );
 
-        // Si ya existía pero estaba vacío (ej. día futuro), actualizamos
         if (!$payrollUser->wasRecentlyCreated) {
             $payrollUser->update([
                 'check_in' => $request->check_in,
@@ -43,12 +42,10 @@ class PayrollUserController extends Controller
             ]);
         }
 
-        // Calcular tiempos
         $payrollUser->calculateLate();
         $payrollUser->calculateExtraTime();
     }
 
-    // --- NUEVO MÉTODO PARA ACTUALIZAR HORAS ---
     public function update(Request $request)
     {
         $payrollUser = PayrollUser::where('user_id', $request->user_id)
@@ -59,10 +56,9 @@ class PayrollUserController extends Controller
             $payrollUser->update([
                 'check_in' => $request->check_in,
                 'check_out' => $request->check_out,
-                'incidence' => 'Día normal', // Al poner horas, deja de ser falta/descanso
+                'incidence' => 'Día normal', 
             ]);
 
-            // Recalcular lógica de negocio
             $payrollUser->calculateLate();
             $payrollUser->calculateExtraTime();
         }
@@ -70,7 +66,6 @@ class PayrollUserController extends Controller
 
     public function setIncidence(Request $request)
     {
-        // Busca o crea un registro en la tabla PayrollUser basado en el 'date' y el 'user_id'
         $payrollUser = PayrollUser::firstOrCreate(
             [
                 'date' => $request->date,
@@ -79,11 +74,9 @@ class PayrollUserController extends Controller
             [
                 'payroll_id' => $request->payroll_id,
                 'incidence' => $request->incidence,
-                // 'additionals' => ,
             ]
         );
 
-        // descontar vacaciones en caso de ser la incidencia
         if ($request->incidence == 'Vacaciones') {
             $user = User::find($request->user_id);
             $props = $user->org_props;
@@ -92,12 +85,10 @@ class PayrollUserController extends Controller
             $user->save();
         }
 
-        // Solo actualiza si el registro ya existía
         if (!$payrollUser->wasRecentlyCreated) {
-            if ($payrollUser->incidence == 'Vacaciones') { //si originalmente eran vacaciones
+            if ($payrollUser->incidence == 'Vacaciones') { 
                 $user = User::find($request->user_id);
                 $props = $user->org_props;
-                // volver a sumar el dia
                 $props['vacations'] = $props['vacations'] + 1;
                 $user->org_props = $props;
                 $user->save();
@@ -109,7 +100,6 @@ class PayrollUserController extends Controller
 
     public function setAttendance(Request $request)
     {
-        // Busca o crea un registro en la tabla PayrollUser basado en el 'date' y el 'user_id'
         $payrollUser = PayrollUser::firstOrCreate(
             [
                 'date' => $request->date,
@@ -119,18 +109,15 @@ class PayrollUserController extends Controller
                 'check_in' => $request->check_in,
                 'check_out' => $request->check_out,
                 'payroll_id' => $request->payroll_id,
-                // 'additionals' => ,
             ]
         );
 
-        // Solo actualiza si el registro ya existía
         if (!$payrollUser->wasRecentlyCreated) {
             $payrollUser->check_in = $request->check_in;
             $payrollUser->check_out = $request->check_out;
-            if ($payrollUser->incidence == 'Vacaciones') { //si originalmente eran vacaciones
+            if ($payrollUser->incidence == 'Vacaciones') { 
                 $user = User::find($request->user_id);
                 $props = $user->org_props;
-                // volver a sumar el dia
                 $props['vacations'] = $props['vacations'] + 1;
                 $user->org_props = $props;
                 $user->save();
@@ -139,7 +126,6 @@ class PayrollUserController extends Controller
             $payrollUser->save();
         }
 
-        // calcular y actualizar retardo y horas extras
         $payrollUser->calculateLate();
         $payrollUser->calculateExtraTime();
     }
@@ -147,60 +133,60 @@ class PayrollUserController extends Controller
     public function processBioTimeTransaction($time, $emp_code)
     {
         $time = str_replace('+', ' ', $time);
-        $punchDateTime = Carbon::parse($time);
-        $punchDateStr = $punchDateTime->toDateString();
-        $punchTimeStr = $punchDateTime->format('H:i');
+        $punchDateTime = Carbon::parse($time); 
+        $punchDateStr = $punchDateTime->toDateString(); 
+        $punchTimeStr = $punchDateTime->format('H:i'); 
 
         // 1. CORRECCIÓN CRÍTICA: SIEMPRE sumamos la transacción procesada al historial
         $todaysTransactions = BioTimeTransactions::firstOrCreate(
-            ['date' => $punchDateStr],
+            ['date' => $punchDateStr], 
         );
         $todaysTransactions->increment('quantity');
 
         // 2. Identificar al empleado
         $employee = User::firstWhere('code', $emp_code);
-
+        
         if ($employee) {
             $currentPayroll = Payroll::where('start_date', '<=', $punchDateStr)
-                ->whereRaw('? <= DATE_ADD(start_date, INTERVAL 13 DAY)', [$punchDateStr])
-                ->first();
+                                    ->whereRaw('? <= DATE_ADD(start_date, INTERVAL 13 DAY)', [$punchDateStr])
+                                    ->first();
 
             if (!$currentPayroll) {
                 $currentPayroll = Payroll::firstWhere('is_active', true);
                 if (!$currentPayroll) {
                     Log::warning("No se encontró nómina activa o coincidente para el empleado {$emp_code} en la fecha {$punchDateStr}.");
-                    return;
+                    return; 
                 }
             }
 
             $existingEntry = PayrollUser::where('user_id', $employee->id)
-                ->whereDate('date', $punchDateStr)
+                ->whereDate('date', $punchDateStr) 
                 ->first();
 
-            if (!$existingEntry) {
+            if (!$existingEntry) { 
                 $existingEntry = PayrollUser::create([
-                    'date' => $punchDateStr,
-                    'check_in' => $punchTimeStr,
+                    'date' => $punchDateStr, 
+                    'check_in' => $punchTimeStr, 
                     'user_id' => $employee->id,
                     'payroll_id' => $currentPayroll->id,
                 ]);
                 $employee->update(['paused' => null]);
-            } else {
-
-                // --- PROTECCIÓN ANTI-RÁFAGA DE BIOTIME (1 minuto) ---
+            } else { 
+                
+                // --- PROTECCIÓN ANTI-RÁFAGA DE BIOTIME (3 minutos) ---
                 $punchTimeParsed = Carbon::parse($punchTimeStr);
                 $isDuplicate = false;
 
                 if ($existingEntry->check_in) {
                     $checkInParsed = Carbon::parse($existingEntry->check_in);
-                    if ($checkInParsed->diffInMinutes($punchTimeParsed) <= 1) {
+                    if ($punchTimeParsed->diffInMinutes($checkInParsed) <= 3) {
                         $isDuplicate = true;
                     }
                 }
-
+                
                 if ($existingEntry->check_out) {
                     $checkOutParsed = Carbon::parse($existingEntry->check_out);
-                    if ($checkOutParsed->diffInMinutes($punchTimeParsed) <= 1) {
+                    if ($punchTimeParsed->diffInMinutes($checkOutParsed) <= 3) {
                         $isDuplicate = true;
                     }
                 }
@@ -210,14 +196,15 @@ class PayrollUserController extends Controller
                 } else {
                     // Procesar normalmente si pasó el tiempo de gracia
                     if ($existingEntry->check_in && !$existingEntry->check_out) {
-                        $existingEntry->update([
+                         $existingEntry->update([
                             'check_out' => $punchTimeStr,
                         ]);
                         $employee->update(['paused' => null]);
-                    } else if (strtotime($punchTimeStr) <= strtotime('17:49')) {
+                    }
+                    else if (strtotime($punchTimeStr) <= strtotime('17:49')) {
                         $employee->setPause();
                     } else {
-                        $existingEntry->update([
+                         $existingEntry->update([
                             'check_out' => $punchTimeStr,
                         ]);
                         $employee->update(['paused' => null]);
@@ -229,6 +216,7 @@ class PayrollUserController extends Controller
             // Calcular tiempo extra y retardo
             $existingEntry->calculateLate();
             $existingEntry->calculateExtraTime();
+            
         } else {
             // Se loguea solo UNA vez gracias a que el contador de Python ya avanzó arriba
             Log::warning("BioTime Sincronización: Se ignoró un registro porque no se encontró al empleado con código {$emp_code}.");
@@ -247,25 +235,91 @@ class PayrollUserController extends Controller
         $payrollUser->update(['late' => 0]);
     }
 
-    // --- NUEVO MÉTODO PARA RECALCULAR TIEMPO EXTRA ---
+    // --- NUEVOS MÉTODOS PARA APROBACIÓN DE TIEMPO EXTRA ---
+
+    public function approveExtraTime(Request $request)
+    {
+        $request->validate([
+            'date' => 'required|date',
+            'user_id' => 'required|exists:users,id',
+            'payroll_id' => 'required|exists:payrolls,id',
+            'approved_extra_hours' => 'required|integer|min:0',
+            'approved_extra_minutes' => 'required|integer|min:0|max:59',
+            'comments' => 'nullable|string|max:1200'
+        ]);
+
+        $payrollUser = PayrollUser::firstWhere([
+            'date' => $request->date,
+            'user_id' => $request->user_id
+        ]);
+
+        if ($payrollUser) {
+            // Actualizamos la información de aprobación
+            $payrollUser->update([
+                'approved_extra_hours' => $request->approved_extra_hours,
+                'approved_extra_minutes' => $request->approved_extra_minutes,
+                'approved_by' => auth()->id(),
+                'approved_at' => now(),
+            ]);
+
+            // Si se escribió un comentario, lo guardamos o actualizamos
+            if ($request->filled('comments')) {
+                PayrollComment::updateOrCreate(
+                    [
+                        'payroll_id' => $request->payroll_id,
+                        'user_id' => $request->user_id,
+                        'date' => $request->date,
+                    ],
+                    [
+                        'comments' => $request->comments
+                    ]
+                );
+            }
+        }
+        
+        return back();
+    }
+
+    public function revertExtraTime(Request $request)
+    {
+        $request->validate([
+            'date' => 'required|date',
+            'user_id' => 'required|exists:users,id',
+        ]);
+
+        $payrollUser = PayrollUser::firstWhere([
+            'date' => $request->date,
+            'user_id' => $request->user_id
+        ]);
+
+        if ($payrollUser) {
+            // Limpiamos los campos de aprobación
+            $payrollUser->update([
+                'approved_extra_hours' => null,
+                'approved_extra_minutes' => null,
+                'approved_by' => null,
+                'approved_at' => null,
+            ]);
+        }
+        
+        return back();
+    }
+
+    // --- FIN NUEVOS MÉTODOS ---
+
     public function recalculateExtraTime()
     {
-        // 1. Obtener la nómina activa actual
         $currentPayroll = Payroll::firstWhere('is_active', true);
 
         if (!$currentPayroll) {
             return response()->json(['message' => 'No hay una nómina activa actualmente para recalcular.'], 404);
         }
 
-        // 2. Obtener todos los registros de asistencia de esta nómina
         $attendances = PayrollUser::where('payroll_id', $currentPayroll->id)->get();
         $processedCount = 0;
 
-        // 3. Iterar y recalcular
         foreach ($attendances as $attendance) {
-            // Solo recalculamos si tiene hora de entrada y salida registradas
             if ($attendance->check_in && $attendance->check_out) {
-                // El método ya hace el $this->update() por dentro
                 $attendance->calculateExtraTime();
                 $processedCount++;
             }

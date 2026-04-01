@@ -50,6 +50,16 @@ const formatDateToYear = (dateString) => {
     }
 };
 
+const formatDateTime = (dateString) => {
+    if (!dateString) return '-';
+    try {
+        const date = parseISO(dateString);
+        return isValid(date) ? format(date, "dd MMM yyyy, HH:mm 'hrs'", { locale: es }) : '-';
+    } catch (e) {
+        return '-';
+    }
+};
+
 const getEndPeriod = (start) => {
     if (!start) return '-';
     try {
@@ -65,28 +75,19 @@ const getEndPeriod = (start) => {
 // --- Lógica de Negocio ---
 
 const getDaysToPay = (payrollUser) => {
-    // Cuenta días que NO tienen una incidencia que descuente pago (Faltas, Permisos sin goce, Incapacidad sin goce)
-    // Asume que si 'incidence' es null o string vacío, es un día pagable.
-    // También Vacaciones, Festivos y Domingos suelen pagarse.
-    
-    // Lista de incidencias que NO pagan
     const unpaidIncidences = [
         'Falta injustificada', 
         'Permiso sin goce', 
-        'Incapacidad' // Depende de la regla de negocio, a veces la paga el seguro
+        'Incapacidad'
     ];
 
     return payrollUser.incidences.filter(day => {
-        // Si no hay incidencia registrada, es día normal/pagable
         if (!day.incidence) return true;
-        
-        // Si hay incidencia, verificar si está en la lista de NO pagadas
         return !unpaidIncidences.includes(day.incidence);
     }).length;
 };
 
 const getDaysWithIncidence = (payrollUser) => {
-    // Filtra incidencias relevantes para mostrar en el reporte
     const ignored = ['Descanso', 'Domingo', 'Día normal']; 
     
     return payrollUser.incidences.filter(i => 
@@ -95,8 +96,11 @@ const getDaysWithIncidence = (payrollUser) => {
     );
 };
 
-const getDaysWithExtraTime = (payrollUser) => {
-    return payrollUser.incidences.filter(i => i.extra_hours > 0 || i.extra_minutes > 0);
+// MODIFICADO: Ahora solo trae el tiempo extra que haya sido aprobado
+const getDaysWithApprovedExtraTime = (payrollUser) => {
+    return payrollUser.incidences.filter(i => 
+        i.approved_at && (i.approved_extra_hours > 0 || i.approved_extra_minutes > 0)
+    );
 };
 
 const formatExtraTime = (hours, minutes) => {
@@ -104,7 +108,43 @@ const formatExtraTime = (hours, minutes) => {
     return `${hours || 0}h ${minutes || 0}m`;
 };
 
-// Ocultar botón después de imprimir (opcional, manejado por CSS @media print mejor)
+// NUEVO: Función para agrupar todos los comentarios (Generales y por día)
+const getAllComments = (payrollUser) => {
+    const comments = [];
+    
+    // 1. Comentario General de la nómina
+    if (payrollUser.comments && payrollUser.comments.comments) {
+        comments.push({
+            dateLabel: 'General',
+            text: payrollUser.comments.comments
+        });
+    }
+
+    // 2. Comentarios específicos por día
+    if (payrollUser.incidences) {
+        payrollUser.incidences.forEach(inc => {
+            if (inc.comment && inc.comment.comments) {
+                let label = formatDate(inc.date).split(',')[0]; // ej. "14 oct"
+                
+                // Agregar contexto de Tiempo Extra o Incidencia para que quede claro
+                if (inc.approved_at) {
+                    label += ' (T. Extra)';
+                } else if (inc.incidence && inc.incidence !== 'Día normal') {
+                    label += ` (${inc.incidence})`;
+                }
+
+                comments.push({
+                    dateLabel: label,
+                    text: inc.comment.comments
+                });
+            }
+        });
+    }
+
+    return comments;
+};
+
+// Ocultar botón después de imprimir
 const handleAfterPrint = () => {
     // Lógica post-impresión si fuera necesaria
 };
@@ -133,7 +173,7 @@ onMounted(() => {
                     </div>
                 </div>
                 
-                <!-- Botón de impresión (Oculto al imprimir) -->
+                <!-- Botón de impresión -->
                 <div class="print:hidden">
                     <PrimaryButton @click="printScreen" class="!bg-[#0B3B51] hover:!bg-[#082a3a]">
                         <i class="fa-solid fa-print mr-2"></i> Imprimir / Guardar PDF
@@ -143,71 +183,98 @@ onMounted(() => {
         </header>
 
         <!-- Contenido Principal -->
-        <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 print:p-0 print:w-full">
+        <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 print:p-0 print:w-full print:max-w-none">
             
             <!-- Tabla -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-none">
                 <table class="w-full text-sm text-left">
-                    <thead class="bg-[#0B3B51] text-white uppercase text-xs">
+                    <thead class="bg-[#0B3B51] text-white uppercase text-[10px] tracking-wider">
                         <tr>
-                            <th class="px-4 py-3 font-semibold w-[5%] text-center">ID</th>
-                            <th class="px-4 py-3 font-semibold w-[25%]">Colaborador</th>
-                            <th class="px-4 py-3 font-semibold w-[10%] text-center">Días a Pagar</th>
-                            <th class="px-4 py-3 font-semibold w-[40%]">Detalle de Incidencias</th>
-                            <th class="px-4 py-3 font-semibold w-[20%]">Tiempo Extra</th>
+                            <th class="px-3 py-3 font-semibold w-[5%] text-center">ID</th>
+                            <th class="px-3 py-3 font-semibold w-[20%]">Colaborador</th>
+                            <th class="px-3 py-3 font-semibold w-[8%] text-center">Días a Pagar</th>
+                            <th class="px-3 py-3 font-semibold w-[22%]">Detalle de Incidencias</th>
+                            <th class="px-3 py-3 font-semibold w-[20%]">Tiempo Extra (Aprobado)</th>
+                            <th class="px-3 py-3 font-semibold w-[25%]">Observaciones</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-100 border-t border-gray-100">
+                    <tbody class="divide-y divide-gray-100 border-t border-gray-100 text-xs">
                         <tr v-for="(item, index) in payrollUsers" :key="item.user.id" 
                             class="hover:bg-gray-50 transition-colors print:break-inside-avoid">
                             
                             <!-- ID -->
-                            <td class="px-4 py-3 text-center text-gray-500 font-mono">
+                            <td class="px-3 py-3 text-center text-gray-500 font-mono align-top">
                                 {{ item.user.id }}
                             </td>
 
                             <!-- Nombre -->
-                            <td class="px-4 py-3">
-                                <div class="font-bold text-gray-800">{{ item.user.name }}</div>
-                                <div class="text-xs text-gray-500">{{ item.user.org_props?.department || 'General' }}</div>
+                            <td class="px-3 py-3 align-top">
+                                <div class="font-bold text-gray-800 text-sm">{{ item.user.name }}</div>
+                                <div class="text-[10px] text-gray-500 uppercase tracking-wide">{{ item.user.org_props?.department || 'General' }}</div>
                             </td>
 
                             <!-- Días -->
-                            <td class="px-4 py-3 text-center">
-                                <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                            <td class="px-3 py-3 text-center align-top">
+                                <span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 border border-blue-100">
                                     {{ getDaysToPay(item) }}
                                 </span>
                             </td>
 
                             <!-- Incidencias -->
-                            <td class="px-4 py-3">
+                            <td class="px-3 py-3 align-top">
                                 <div class="flex flex-wrap gap-1">
                                     <template v-if="getDaysWithIncidence(item).length > 0">
                                         <div v-for="(inc, idx) in getDaysWithIncidence(item)" :key="idx"
-                                             class="text-xs px-2 py-1 rounded bg-amber-50 text-amber-700 border border-amber-100 flex items-center gap-1">
-                                            <span class="font-semibold">{{ formatDate(inc.date).split(',')[0] }}:</span>
+                                             class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100 flex items-center gap-1 mb-1">
+                                            <span class="font-bold">{{ formatDate(inc.date).split(',')[0] }}:</span>
                                             <span>{{ inc.incidence }}</span>
                                         </div>
                                     </template>
-                                    <span v-else class="text-gray-400 text-xs italic">Sin incidencias registradas</span>
+                                    <span v-else class="text-gray-300 italic">-</span>
                                 </div>
                             </td>
 
-                            <!-- Tiempo Extra -->
-                            <td class="px-4 py-3">
+                            <!-- Tiempo Extra (Solo Aprobado) -->
+                            <td class="px-3 py-3 align-top">
                                 <div class="space-y-1">
-                                    <template v-if="getDaysWithExtraTime(item).length > 0">
-                                        <div v-for="(extra, idx) in getDaysWithExtraTime(item)" :key="idx"
-                                             class="text-xs flex justify-between items-center text-green-700">
-                                            <span>{{ formatDate(extra.date).split(',')[0] }}:</span>
-                                            <span class="font-mono font-bold bg-green-50 px-1 rounded">
-                                                {{ formatExtraTime(extra.extra_hours, extra.extra_minutes) }}
-                                            </span>
+                                    <template v-if="getDaysWithApprovedExtraTime(item).length > 0">
+                                        <div v-for="(extra, idx) in getDaysWithApprovedExtraTime(item)" :key="idx"
+                                             class="flex flex-col text-green-700 bg-green-50/50 px-1.5 py-1 rounded border border-green-100 mb-1">
+                                            <div class="flex justify-between items-center">
+                                                <span class="font-bold text-[10px]">{{ formatDate(extra.date).split(',')[0] }}:</span>
+                                                <span class="font-mono font-bold text-[11px]">
+                                                    {{ formatExtraTime(extra.approved_extra_hours, extra.approved_extra_minutes) }}
+                                                </span>
+                                            </div>
+                                            <!-- Nuevo: Datos de aprobación -->
+                                            <div class="text-[9px] text-gray-500 mt-1 border-t border-green-100 pt-1 leading-tight" v-if="extra.approved_at">
+                                                <span class="font-semibold text-gray-600">{{ extra.approver?.name || 'ID: ' + extra.approved_by }}</span><br>
+                                                {{ formatDateTime(extra.approved_at) }}
+                                                
+                                                <!-- Comentario de Aprobación -->
+                                                <div v-if="extra.comment" class="mt-1 italic text-gray-600 border-t border-green-100/50 pt-1">
+                                                    "{{ extra.comment.comments }}"
+                                                </div>
+                                            </div>
                                         </div>
                                     </template>
-                                    <span v-else class="text-gray-400 text-xs italic">-</span>
+                                    <span v-else class="text-gray-300 italic">-</span>
                                 </div>
                             </td>
+
+                            <!-- Observaciones / Comentarios -->
+                            <td class="px-3 py-3 text-gray-600 align-top">
+                                <div class="space-y-1.5">
+                                    <template v-if="getAllComments(item).length > 0">
+                                        <div v-for="(comment, idx) in getAllComments(item)" :key="idx" class="leading-tight text-[11px] bg-gray-50 p-1.5 rounded border border-gray-100">
+                                            <span class="font-bold text-gray-800 block mb-0.5">{{ comment.dateLabel }}:</span>
+                                            <span class="italic">"{{ comment.text }}"</span>
+                                        </div>
+                                    </template>
+                                    <span v-else class="text-gray-300 italic">-</span>
+                                </div>
+                            </td>
+                            
                         </tr>
                     </tbody>
                 </table>
@@ -241,6 +308,9 @@ onMounted(() => {
     }
     .print\:border-none {
         border: none !important;
+    }
+    .print\:max-w-none {
+        max-width: none !important;
     }
 }
 </style>
