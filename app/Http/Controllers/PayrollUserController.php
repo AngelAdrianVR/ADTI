@@ -48,24 +48,28 @@ class PayrollUserController extends Controller
         $payrollUser->calculateExtraTime();
     }
 
-    // --- NUEVO MÉTODO PARA ACTUALIZAR HORAS ---
+    // --- MÉTODO ACTUALIZADO PARA CREAR EL REGISTRO SI NO EXISTÍA ---
     public function update(Request $request)
     {
-        $payrollUser = PayrollUser::where('user_id', $request->user_id)
-            ->where('date', $request->date)
-            ->first();
-
-        if ($payrollUser) {
-            $payrollUser->update([
+        // Usamos updateOrCreate en lugar de where()->first()
+        // Si el registro de ese día no existe físicamente (era una "falta" virtual), lo crea.
+        // Si ya existe, simplemente lo actualiza con los nuevos datos.
+        $payrollUser = PayrollUser::updateOrCreate(
+            [
+                'user_id' => $request->user_id,
+                'date' => $request->date,
+            ],
+            [
+                'payroll_id' => $request->payroll_id,
                 'check_in' => $request->check_in,
                 'check_out' => $request->check_out,
                 'incidence' => 'Día normal', // Al poner horas, deja de ser falta/descanso
-            ]);
+            ]
+        );
 
-            // Recalcular lógica de negocio
-            $payrollUser->calculateLate();
-            $payrollUser->calculateExtraTime();
-        }
+        // Recalcular lógica de negocio (retardos y extras)
+        $payrollUser->calculateLate();
+        $payrollUser->calculateExtraTime();
     }
 
     public function setIncidence(Request $request)
