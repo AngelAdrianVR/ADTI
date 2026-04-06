@@ -54,37 +54,41 @@ class PayrollController extends Controller
         $currentUser = auth()->user();
         
         // 1. Determinar qué usuarios mostrar basado en permisos y jerarquía
-        if ($currentUser->can('Ver incidencias')) {
-            // Cargar todos los usuarios de la nómina
-            $payroll->load('users');
-            $usersCollection = $payroll->users;
-        } elseif (!empty($currentUser->employees_in_charge)) {
-            // Cargar los usuarios a su cargo + A SÍ MISMO
-            $employeesIds = $currentUser->employees_in_charge;
-            
-            // Asegurarse de que el ID del supervisor esté en el array
-            if (!in_array($currentUser->id, $employeesIds)) {
-                $employeesIds[] = $currentUser->id;
+        $query = User::whereNotIn('org_props->position', ['Dirección', 'Soporte DTW'])
+            ->where(function ($q) use ($payroll) {
+                $q->where('is_active', true)
+                  ->orWhereHas('payrolls', function ($sub) use ($payroll) {
+                      $sub->where('payroll_id', $payroll->id);
+                  });
+            });
+
+        // Aplicamos la jerarquía y permisos
+        if (!$currentUser->can('Ver incidencias')) {
+            if (!empty($currentUser->employees_in_charge)) {
+                // Solo cargar los usuarios a su cargo + a sí mismo
+                $employeesIds = $currentUser->employees_in_charge;
+                if (!in_array($currentUser->id, $employeesIds)) {
+                    $employeesIds[] = $currentUser->id;
+                }
+                $query->whereIn('id', $employeesIds);
+            } else {
+                // No tiene permisos ni empleados a cargo -> no ve a nadie
+                $query->whereRaw('1 = 0');
             }
-            
-            $usersCollection = $payroll->users()
-                ->whereIn('users.id', $employeesIds)
-                ->get();
-        } else {
-            // No tiene permisos ni empleados a cargo -> colección vacía
-            $usersCollection = collect([]);
         }
 
-        // Si se pasaron IDs específicos para filtrar, aplicarlo sobre la colección permitida
+        // Si se pasaron IDs específicos para filtrar (ej. desde el buscador o para imprimir), aplicarlo
         if (!empty($userIds)) {
-            $usersCollection = $usersCollection->whereIn('id', $userIds);
+            $query->whereIn('id', $userIds);
         }
 
         // Obtener los IDs finales a procesar
+        $usersCollection = $query->get();
         $finalUserIds = $usersCollection->pluck('id');
 
         // 2. Cargar datos SOLO para los usuarios filtrados (Optimización)
-        $allAttendances = PayrollUser::where('payroll_id', $payroll->id)
+        $allAttendances = PayrollUser::with('approver')
+            ->where('payroll_id', $payroll->id)
             ->whereIn('user_id', $finalUserIds)
             ->get()
             ->groupBy('user_id');
@@ -99,7 +103,12 @@ class PayrollController extends Controller
 
         $formattedUsers = $usersCollection->groupBy('id')->map(function ($userGroup) use ($payroll, $allAttendances, $allComments, $holidays) {
             $user = $userGroup->first();
-            $userAttendances = $allAttendances->get($user->id);
+            
+            // Pasamos collect([]) si está nulo para evitar llamadas extras a BD
+            $userAttendances = $allAttendances->get($user->id) ?? collect([]);
+            
+            // MARCA: Determinar si el usuario tiene al menos un registro real en la BD para esta catorcena
+            $hasAttendances = $userAttendances->isNotEmpty();
             
             // Obtener todos los comentarios del usuario
             $userComments = $allComments->get($user->id) ?? collect([]);
@@ -131,6 +140,7 @@ class PayrollController extends Controller
                     'org_props' => $user->org_props,
                     'paused' => $user->paused,
                     'profile_photo_url' => $user->profile_photo_url,
+                    'has_attendances' => $hasAttendances, // Pasamos la nueva marca a la vista
                 ],
                 'incidences' => $incidences,
                 'comments' => $generalComment,
@@ -147,33 +157,7 @@ class PayrollController extends Controller
         return [
             'payroll' => $payrollData,
             'payrollUsers' => $formattedUsers,
-            'noAttendances' => $this->getUsersWithNoAttendance($payroll->id, $currentUser),
+            'noAttendances' => [], 
         ];
-    }
-
-    private function getUsersWithNoAttendance($payroll_id, $currentUser)
-    {
-        $query = User::whereDoesntHave('payrolls', function ($query) use ($payroll_id) {
-            $query->where('payroll_id', $payroll_id);
-        })
-        ->where('is_active', true)
-        ->whereNotIn('org_props->position', ['Dirección', 'Soporte DTW']);
-
-        // Aplicar el mismo filtro de permisos para la lista de "Sin Asistencia"
-        if (!$currentUser->can('Ver incidencias')) {
-            if (!empty($currentUser->employees_in_charge)) {
-                // Solo ver empleados a su cargo + A SÍ MISMO
-                $employeesIds = $currentUser->employees_in_charge;
-                if (!in_array($currentUser->id, $employeesIds)) {
-                    $employeesIds[] = $currentUser->id;
-                }
-                $query->whereIn('id', $employeesIds);
-            } else {
-                // Si no tiene permisos ni empleados, no ve a nadie (retorna vacío)
-                $query->whereRaw('1 = 0');
-            }
-        }
-
-        return $query->get();
     }
 }

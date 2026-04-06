@@ -5,7 +5,6 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import Back from '@/Components/MyComponents/Back.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import IncidencesTable from '@/Components/MyComponents/Payroll/IncidencesTable.vue';
-import NoAttendanceCard from '@/Components/MyComponents/Payroll/NoAttendanceCard.vue';
 import { ElMessage } from 'element-plus';
 
 const props = defineProps({
@@ -116,7 +115,7 @@ const visiblePayrollUsers = computed(() => {
 // --- Lógica de Scroll Infinito ---
 const loadMore = () => {
     if (limit.value < filteredPayrollUsers.value.length) {
-        limit.value += 5; // Cargar 5 más
+        limit.value += 10; // Cargar 5 más
     }
 };
 
@@ -317,16 +316,6 @@ const saveComment = () => {
                         </div>
                         <p class="text-gray-500 font-medium">No se encontraron colaboradores</p>
                         <button @click="search = ''; selectedDepartment = ''" class="mt-4 text-indigo-600 hover:text-indigo-700 text-sm font-semibold underline">Limpiar filtros</button>
-                    </div>
-                </section>
-
-                <section v-if="noAttendances.length" class="space-y-4 mt-8">
-                    <div class="flex items-center gap-2 px-2 text-amber-600">
-                        <i class="fa-solid fa-triangle-exclamation"></i>
-                        <h2 class="text-sm font-bold uppercase tracking-wider">Sin registros de asistencia ({{ noAttendances.length }})</h2>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <NoAttendanceCard v-for="(item, index) in noAttendances" :user="item" :payroll="payroll" :key="item.id" />
                     </div>
                 </section>
             </div>
