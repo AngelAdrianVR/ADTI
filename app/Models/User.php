@@ -98,6 +98,11 @@ class User extends Authenticatable implements HasMedia
                 'incidence',
                 'additionals',
                 'checked_in_platform',
+                // Nuevos campos
+                'approved_extra_hours',
+                'approved_extra_minutes',
+                'approved_by',
+                'approved_at'
             ])
             ->withTimestamps();
     }
@@ -152,7 +157,7 @@ class User extends Authenticatable implements HasMedia
         $this->save();
     }
 
-   public function setAttendance()
+    public function setAttendance()
     {
         $next = '';
         $now = now();
@@ -172,10 +177,10 @@ class User extends Authenticatable implements HasMedia
             $next = 'Registrar salida';
         } elseif (is_null($today_attendance->check_out)) {
             
-            // --- PROTECCIÓN ANTI-DOBLE CLIC (1 minuto) ---
+            // --- PROTECCIÓN ANTI-DOBLE CLIC (3 minutos) ---
             $checkInTime = Carbon::createFromFormat('H:i', trim($today_attendance->check_in));
-            if ($checkInTime->diffInMinutes($now) <= 1) {
-                // Si la diferencia es menor o igual a 1 minuto, ignoramos el click
+            if ($now->diffInMinutes($checkInTime) <= 3) {
+                // Si la diferencia es menor o igual a 3 minutos, ignoramos el click
                 // para evitar que registre salida inmediatamente.
                 return 'Registrar salida';
             }
