@@ -115,7 +115,7 @@ const visiblePayrollUsers = computed(() => {
 // --- Lógica de Scroll Infinito ---
 const loadMore = () => {
     if (limit.value < filteredPayrollUsers.value.length) {
-        limit.value += 5; // Cargar 5 más
+        limit.value += 10; // Cargar 5 más
     }
 };
 

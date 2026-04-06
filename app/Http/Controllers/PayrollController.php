@@ -53,8 +53,7 @@ class PayrollController extends Controller
     {
         $currentUser = auth()->user();
         
-        // 1. Determinar qué usuarios mostrar:
-        // Traemos a todos los usuarios ACTIVOS, más los inactivos que SÍ tengan registros en esta nómina.
+        // 1. Determinar qué usuarios mostrar basado en permisos y jerarquía
         $query = User::whereNotIn('org_props->position', ['Dirección', 'Soporte DTW'])
             ->where(function ($q) use ($payroll) {
                 $q->where('is_active', true)
@@ -105,8 +104,11 @@ class PayrollController extends Controller
         $formattedUsers = $usersCollection->groupBy('id')->map(function ($userGroup) use ($payroll, $allAttendances, $allComments, $holidays) {
             $user = $userGroup->first();
             
-            // Pasamos collect([]) si está nulo para evitar llamadas extras a BD de empleados sin asistencia
+            // Pasamos collect([]) si está nulo para evitar llamadas extras a BD
             $userAttendances = $allAttendances->get($user->id) ?? collect([]);
+            
+            // MARCA: Determinar si el usuario tiene al menos un registro real en la BD para esta catorcena
+            $hasAttendances = $userAttendances->isNotEmpty();
             
             // Obtener todos los comentarios del usuario
             $userComments = $allComments->get($user->id) ?? collect([]);
@@ -119,7 +121,7 @@ class PayrollController extends Controller
                 return $item->date->toDateString();
             });
 
-            // Procesar incidencias rellenando los huecos vacíos con "Faltas" o "Descansos"
+            // Procesar incidencias
             $incidences = $payroll->getProcessedAttendances($user->id, $userAttendances, $holidays);
 
             // Inyectar comentarios dentro de las incidencias correspondientes
@@ -138,6 +140,7 @@ class PayrollController extends Controller
                     'org_props' => $user->org_props,
                     'paused' => $user->paused,
                     'profile_photo_url' => $user->profile_photo_url,
+                    'has_attendances' => $hasAttendances, // Pasamos la nueva marca a la vista
                 ],
                 'incidences' => $incidences,
                 'comments' => $generalComment,
@@ -154,7 +157,7 @@ class PayrollController extends Controller
         return [
             'payroll' => $payrollData,
             'payrollUsers' => $formattedUsers,
-            'noAttendances' => [], // Retornamos vacío porque ahora TODOS se muestran en payrollUsers
+            'noAttendances' => [], 
         ];
     }
 }

@@ -3,16 +3,17 @@ import { ref, computed } from 'vue';
 import { useForm, router } from '@inertiajs/vue3';
 import { format, isSameDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import DialogModal from '@/Components/DialogModal.vue';
-import InputLabel from '@/Components/InputLabel.vue';
-import TextInput from '@/Components/TextInput.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import SecondaryButton from '@/Components/SecondaryButton.vue';
 import { ElNotification } from 'element-plus';
 
 const props = defineProps({
-    payrollUser: Object,
-    payroll: Object,
+    payrollUser: {
+        type: Object,
+        required: true
+    },
+    payroll: {
+        type: Object,
+        required: true
+    },
     canEdit: {
         type: Boolean,
         default: true
@@ -24,7 +25,7 @@ const emit = defineEmits(['edit-comment']);
 // State
 const isOpen = ref(false); 
 const showAttendanceModal = ref(false);
-const showApproveModal = ref(false); // Modal de aprobación
+const showApproveModal = ref(false); 
 const incidences = ref(['Falta injustificada', 'Falta justificada', 'Incapacidad', 'Permiso sin goce', 'Permiso con goce', 'Vacaciones', 'Descanso', 'Día festivo']);
 
 const form = useForm({
@@ -209,7 +210,15 @@ const submitApproveExtraTime = () => {
                     </span>
                 </div>
                 <div>
-                    <h3 class="text-sm font-bold text-gray-800 leading-tight">{{ payrollUser.user.name }}</h3>
+                    <!-- Nombre y Etiqueta de "Sin Asistencia" -->
+                    <h3 class="text-sm font-bold text-gray-800 leading-tight flex items-center flex-wrap gap-2">
+                        {{ payrollUser.user.name }}
+                        <span v-if="!payrollUser.user.has_attendances" 
+                              class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-50 text-red-600 border border-red-100 uppercase tracking-wider" 
+                              title="Sin registros de asistencia en esta catorcena">
+                            <i class="fa-solid fa-triangle-exclamation mr-1"></i> Sin Asistencia
+                        </span>
+                    </h3>
                     <p class="text-xs text-gray-500">{{ payrollUser.user.org_props.department }}</p>
                 </div>
             </div>
@@ -303,8 +312,8 @@ const submitApproveExtraTime = () => {
                             </div>
 
                             <!-- Estado / Horas -->
-                            <template v-if="day.check_in">
-                                <div class="text-gray-800 font-mono font-bold text-[11px]">{{ day.check_in.substring(0, 5) }} - {{ day.check_out?.substring(0, 5) || '??' }}</div>
+                            <template v-if="day.check_in || day.check_out">
+                                <div class="text-gray-800 font-mono font-bold text-[11px]">{{ day.check_in?.substring(0, 5) || '??' }} - {{ day.check_out?.substring(0, 5) || '??' }}</div>
                                 <div v-if="day.late" class="text-[10px] text-red-500 bg-red-50 px-1.5 rounded border border-red-100">
                                     Retardo: {{ day.late }}m
                                 </div>
@@ -337,61 +346,127 @@ const submitApproveExtraTime = () => {
 
         </div>
 
-        <!-- Modal Editar Asistencia -->
-        <DialogModal :show="showAttendanceModal" @close="showAttendanceModal = false">
-            <template #title>
-                Modificar Asistencia
-            </template>
-            <template #content>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <InputLabel value="Entrada" />
-                        <TextInput type="time" v-model="form.check_in" class="w-full mt-1" />
-                    </div>
-                    <div>
-                        <InputLabel value="Salida" />
-                        <TextInput type="time" v-model="form.check_out" class="w-full mt-1" />
-                    </div>
-                </div>
-            </template>
-            <template #footer>
-                <SecondaryButton @click="showAttendanceModal = false" class="mr-2">Cancelar</SecondaryButton>
-                <PrimaryButton @click="updateAttendance" :disabled="form.processing">Guardar</PrimaryButton>
-            </template>
-        </DialogModal>
-
-        <!-- Modal Aprobar Tiempo Extra -->
-        <DialogModal :show="showApproveModal" @close="showApproveModal = false">
-            <template #title>
-                Aprobar Tiempo Extra
-            </template>
-            <template #content>
-                <div class="mb-4 text-sm text-gray-600">
-                    Modifica el tiempo a aprobar si es necesario y opcionalmente agrega un comentario.
-                </div>
-                <div class="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <InputLabel value="Horas aprobadas" />
-                        <el-input-number v-model="approveForm.approved_extra_hours" :min="0" class="w-full mt-1" />
-                        <InputError :message="approveForm.errors.approved_extra_hours" />
-                    </div>
-                    <div>
-                        <InputLabel value="Minutos aprobados" />
-                        <el-input-number v-model="approveForm.approved_extra_minutes" :min="0" :max="59" class="w-full mt-1" />
-                        <InputError :message="approveForm.errors.approved_extra_minutes" />
-                    </div>
+        <!-- MODAL 1: Modificar Asistencia (Element Plus) -->
+        <el-dialog
+            v-model="showAttendanceModal"
+            title="Modificar Asistencia"
+            width="400px"
+            class="!rounded-xl"
+            destroy-on-close
+        >
+            <div class="grid grid-cols-2 gap-6 py-2">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Hora de Entrada</label>
+                    <el-time-picker
+                        v-model="form.check_in"
+                        format="HH:mm"
+                        value-format="HH:mm"
+                        placeholder="00:00"
+                        class="!w-full"
+                        clearable
+                    />
                 </div>
                 <div>
-                    <InputLabel value="Comentarios o Justificación (Opcional)" />
-                    <el-input v-model="approveForm.comments" type="textarea" :rows="3" class="w-full mt-1" placeholder="Ej. Se quedó terminando el inventario." />
-                    <InputError :message="approveForm.errors.comments" />
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Hora de Salida</label>
+                    <el-time-picker
+                        v-model="form.check_out"
+                        format="HH:mm"
+                        value-format="HH:mm"
+                        placeholder="00:00"
+                        class="!w-full"
+                        clearable
+                    />
+                </div>
+            </div>
+            
+            <template #footer>
+                <div class="flex justify-end gap-2 pt-2">
+                    <el-button @click="showAttendanceModal = false">Cancelar</el-button>
+                    <el-button 
+                        type="primary" 
+                        @click="updateAttendance" 
+                        :loading="form.processing"
+                        class="!bg-indigo-600 !border-indigo-600"
+                    >
+                        Guardar Cambios
+                    </el-button>
                 </div>
             </template>
+        </el-dialog>
+
+        <!-- MODAL 2: Aprobar Tiempo Extra (Element Plus) -->
+        <el-dialog
+            v-model="showApproveModal"
+            title="Aprobar Tiempo Extra"
+            width="450px"
+            class="!rounded-xl"
+            destroy-on-close
+        >
+            <div class="mb-5 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-100 flex gap-2 items-start">
+                <i class="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
+                <p>Modifica el tiempo a aprobar si es necesario y opcionalmente agrega un comentario o justificación.</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-6 mb-5">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Horas aprobadas</label>
+                    <el-input-number 
+                        v-model="approveForm.approved_extra_hours" 
+                        :min="0" 
+                        class="!w-full" 
+                        controls-position="right"
+                    />
+                    <span v-if="approveForm.errors.approved_extra_hours" class="text-xs text-red-500 mt-1 block">{{ approveForm.errors.approved_extra_hours }}</span>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Minutos aprobados</label>
+                    <el-input-number 
+                        v-model="approveForm.approved_extra_minutes" 
+                        :min="0" 
+                        :max="59" 
+                        class="!w-full" 
+                        controls-position="right"
+                    />
+                    <span v-if="approveForm.errors.approved_extra_minutes" class="text-xs text-red-500 mt-1 block">{{ approveForm.errors.approved_extra_minutes }}</span>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Comentarios o Justificación (Opcional)</label>
+                <el-input 
+                    v-model="approveForm.comments" 
+                    type="textarea" 
+                    :rows="3" 
+                    placeholder="Ej. Se autoriza por cierre de inventario de almacén." 
+                />
+                <span v-if="approveForm.errors.comments" class="text-xs text-red-500 mt-1 block">{{ approveForm.errors.comments }}</span>
+            </div>
+
             <template #footer>
-                <SecondaryButton @click="showApproveModal = false" class="mr-2">Cancelar</SecondaryButton>
-                <PrimaryButton @click="submitApproveExtraTime" :disabled="approveForm.processing">Aprobar</PrimaryButton>
+                <div class="flex justify-end gap-2 pt-2">
+                    <el-button @click="showApproveModal = false">Cancelar</el-button>
+                    <el-button 
+                        type="primary" 
+                        @click="submitApproveExtraTime" 
+                        :loading="approveForm.processing"
+                        class="!bg-indigo-600 !border-indigo-600"
+                    >
+                        Aprobar Tiempo
+                    </el-button>
+                </div>
             </template>
-        </DialogModal>
+        </el-dialog>
 
     </div>
 </template>
+
+<style scoped>
+/* Asegura que los modales de Element Plus tengan un aspecto más limpio con los forms */
+:deep(.el-input__wrapper) {
+    border-radius: 0.5rem;
+    box-shadow: 0 0 0 1px #e5e7eb inset;
+}
+:deep(.el-input__wrapper.is-focus) {
+    box-shadow: 0 0 0 1px #4f46e5 inset !important;
+}
+</style>
