@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 class UpdateUserVacations extends Command
 {
@@ -24,6 +25,7 @@ class UpdateUserVacations extends Command
             }
         }
 
+        Log::info('Vacaciones actualizadas para usuarios según las condiciones.');
         $this->info('Vacaciones actualizadas para usuarios según las condiciones.');
     }
 }

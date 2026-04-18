@@ -219,16 +219,17 @@ class PayrollUserController extends Controller
                 $punchTimeParsed = Carbon::parse($punchTimeStr);
                 $isDuplicate = false;
 
+                // --- PROTECCIÓN ANTI-RÁFAGA DE BIOTIME MEJORADA (Uso de abs para prevenir números negativos) ---
                 if ($existingEntry->check_in) {
                     $checkInParsed = Carbon::parse($existingEntry->check_in);
-                    if ($punchTimeParsed->diffInMinutes($checkInParsed) <= 3) {
+                    if (abs($punchTimeParsed->diffInMinutes($checkInParsed, false)) <= 3) {
                         $isDuplicate = true;
                     }
                 }
                 
                 if ($existingEntry->check_out) {
                     $checkOutParsed = Carbon::parse($existingEntry->check_out);
-                    if ($punchTimeParsed->diffInMinutes($checkOutParsed) <= 3) {
+                    if (abs($punchTimeParsed->diffInMinutes($checkOutParsed, false)) <= 3) {
                         $isDuplicate = true;
                     }
                 }
@@ -243,7 +244,7 @@ class PayrollUserController extends Controller
                         ]);
                         $employee->update(['paused' => null]);
                     }
-                    else if (strtotime($punchTimeStr) <= strtotime('17:49')) {
+                    else if (strtotime($punchTimeStr) <= strtotime('17:39')) {
                         $employee->setPause();
                     } else {
                          $existingEntry->update([
