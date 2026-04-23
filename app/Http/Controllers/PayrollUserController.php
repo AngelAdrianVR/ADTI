@@ -329,6 +329,46 @@ class PayrollUserController extends Controller
         return back();
     }
 
+    // NUEVO: Método para rechazar tiempo extra (Lo guarda en 0 pero registra la resolución)
+    public function rejectExtraTime(Request $request)
+    {
+        $request->validate([
+            'date' => 'required|date',
+            'user_id' => 'required|exists:users,id',
+            'payroll_id' => 'required|exists:payrolls,id',
+            'comments' => 'nullable|string|max:1200'
+        ]);
+
+        $payrollUser = PayrollUser::firstWhere([
+            'date' => $request->date,
+            'user_id' => $request->user_id
+        ]);
+
+        if ($payrollUser) {
+            $payrollUser->update([
+                'approved_extra_hours' => 0,
+                'approved_extra_minutes' => 0,
+                'approved_by' => auth()->id(),
+                'approved_at' => now(),
+            ]);
+
+            if ($request->filled('comments')) {
+                PayrollComment::updateOrCreate(
+                    [
+                        'payroll_id' => $request->payroll_id,
+                        'user_id' => $request->user_id,
+                        'date' => $request->date,
+                    ],
+                    [
+                        'comments' => $request->comments
+                    ]
+                );
+            }
+        }
+        
+        return back();
+    }
+
     public function revertExtraTime(Request $request)
     {
         $request->validate([
@@ -342,7 +382,6 @@ class PayrollUserController extends Controller
         ]);
 
         if ($payrollUser) {
-            // Limpiamos los campos de aprobación
             $payrollUser->update([
                 'approved_extra_hours' => null,
                 'approved_extra_minutes' => null,

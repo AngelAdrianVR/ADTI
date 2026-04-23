@@ -37,7 +37,7 @@ const form = useForm({
     payroll_id: props.payroll.id,
 });
 
-// Formulario para aprobar horas extras
+// Formulario para aprobar o rechazar horas extras
 const approveForm = useForm({
     date: null,
     user_id: props.payrollUser.user.id,
@@ -47,7 +47,7 @@ const approveForm = useForm({
     comments: '',
 });
 
-// Computed Stats (Separado en Aprobado y Pendiente)
+// Computed Stats
 const stats = computed(() => {
     let extraMinutesApproved = 0;
     let extraMinutesPending = 0;
@@ -56,6 +56,7 @@ const stats = computed(() => {
     props.payrollUser.incidences.forEach(day => {
         // Separar lógica de extras
         if (day.approved_at) {
+            // El tiempo rechazado suma 0, por lo tanto no afecta negativamente las estadísticas
             extraMinutesApproved += (day.approved_extra_hours || 0) * 60 + (day.approved_extra_minutes || 0);
         } else if (day.extra_hours || day.extra_minutes) {
             extraMinutesPending += (day.extra_hours || 0) * 60 + (day.extra_minutes || 0);
@@ -141,7 +142,7 @@ const handleCommand = (command) => {
             user_id: props.payrollUser.user.id,
         }, {
             preserveScroll: true,
-            onSuccess: () => ElNotification.success('Aprobación de horas revertida'),
+            onSuccess: () => ElNotification.success('Resolución de horas revertida'),
         });
     } else {
         // Es una incidencia directa
@@ -186,6 +187,18 @@ const submitApproveExtraTime = () => {
         }
     });
 };
+
+// NUEVO: Método para procesar el rechazo
+const submitRejectExtraTime = () => {
+    approveForm.put(route('payroll-users.reject-extra-time'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            ElNotification.success('Tiempo extra rechazado correctamente');
+            showApproveModal.value = false;
+            approveForm.reset();
+        }
+    });
+};
 </script>
 
 <template>
@@ -210,7 +223,6 @@ const submitApproveExtraTime = () => {
                     </span>
                 </div>
                 <div>
-                    <!-- Nombre y Etiqueta de "Sin Asistencia" -->
                     <h3 class="text-sm font-bold text-gray-800 leading-tight flex items-center flex-wrap gap-2">
                         {{ payrollUser.user.name }}
                         <span v-if="!payrollUser.user.has_attendances" 
@@ -284,23 +296,23 @@ const submitApproveExtraTime = () => {
                                             <!-- ACCIONES TIEMPO EXTRA (Requieren permiso) -->
                                             <template v-if="$page.props.auth.user.permissions.includes('Aprobar tiempo extra')">
                                                 <el-dropdown-item v-if="(day.extra_hours || day.extra_minutes) && !day.approved_at" :command="`approve_extra_time|${day.date}`">
-                                                    <i class="fa-solid fa-check-circle mr-2 text-green-600"></i> Aprobar Extra
+                                                    <i class="fa-solid fa-list-check mr-2 text-indigo-600"></i> Gestionar extra
                                                 </el-dropdown-item>
-                                                <el-dropdown-item v-if="day.approved_at" :command="`revert_extra_time|${day.date}`">
-                                                    <i class="fa-solid fa-rotate-left mr-2 text-red-600"></i> Revertir Extra
+                                                <el-dropdown-item v-if="day.approved_at && (day.extra_hours || day.extra_minutes)" :command="`revert_extra_time|${day.date}`">
+                                                    <i class="fa-solid fa-rotate-left mr-2 text-red-600"></i> Revertir resolución
                                                 </el-dropdown-item>
                                                 <el-dropdown-item divided v-if="day.extra_hours || day.extra_minutes"></el-dropdown-item>
                                             </template>
 
                                             <!-- OTRAS ACCIONES -->
                                             <el-dropdown-item :command="`edit_time|${day.date}`">
-                                                <i class="fa-regular fa-clock mr-2"></i> Editar Horas
+                                                <i class="fa-regular fa-clock mr-2"></i> Editar/eliminar horas
                                             </el-dropdown-item>
                                             <el-dropdown-item :command="`edit_comment|${day.date}`">
                                                 <i class="fa-regular fa-comment mr-2"></i> Comentario
                                             </el-dropdown-item>
                                             <el-dropdown-item v-if="day.late" :command="`remove_late|${day.date}`">
-                                                <i class="fa-solid fa-eraser mr-2"></i> Quitar Retardo
+                                                <i class="fa-solid fa-eraser mr-2"></i> Quitar retardo
                                             </el-dropdown-item>
                                             <el-dropdown-item divided disabled>Incidencias</el-dropdown-item>
                                             <el-dropdown-item v-for="inc in incidences" :key="inc" :command="`${inc}|${day.date}`">
@@ -319,13 +331,27 @@ const submitApproveExtraTime = () => {
                                 </div>
 
                                 <!-- UI de Tiempo Extra -->
-                                <div v-if="day.approved_at" class="text-[10px] text-green-700 bg-green-100 px-1.5 py-0.5 rounded border border-green-300 font-semibold text-center leading-tight" title="Aprobado">
-                                    T.E. Aprobado:<br>{{ day.approved_extra_hours }}h {{ day.approved_extra_minutes }}m <i class="fa-solid fa-check-circle ml-0.5"></i>
-                                    <div class="text-[8px] mt-0.5 font-normal text-green-700 border-t border-green-200 pt-0.5" title="Persona que aprobó">
-                                        Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}
+                                <div v-if="day.approved_at && (day.extra_hours || day.extra_minutes)">
+                                    <!-- Aprobado con 0 horas/minutos = RECHAZADO -->
+                                    <div v-if="day.approved_extra_hours === 0 && day.approved_extra_minutes === 0" class="text-[10px] text-red-700 bg-red-100 px-1.5 py-0.5 rounded border border-red-300 font-semibold text-center leading-tight w-full" title="Tiempo Extra Rechazado">
+                                        T.E. Rechazado <i class="fa-solid fa-xmark ml-0.5"></i>
+                                        <div class="text-[8px] mt-0.5 font-normal text-red-700 border-t border-red-200 pt-0.5" title="Persona que rechazó">
+                                            Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}
+                                        </div>
+                                        <div v-if="day.comment" class="text-[8px] mt-0.5 font-normal text-gray-600 border-t border-red-200 pt-0.5 italic text-left" style="white-space: normal; line-height: 1.2;">
+                                            "{{ day.comment.comments }}"
+                                        </div>
                                     </div>
-                                    <div v-if="day.comment" class="text-[8px] mt-0.5 font-normal text-gray-600 border-t border-green-200 pt-0.5 italic text-left" style="white-space: normal; line-height: 1.2;">
-                                        "{{ day.comment.comments }}"
+                                    
+                                    <!-- Aprobado con Horas/Minutos > 0 = APROBADO -->
+                                    <div v-else class="text-[10px] text-green-700 bg-green-100 px-1.5 py-0.5 rounded border border-green-300 font-semibold text-center leading-tight w-full" title="Tiempo Extra Aprobado">
+                                        T.E. Aprobado:<br>{{ day.approved_extra_hours }}h {{ day.approved_extra_minutes }}m <i class="fa-solid fa-check-circle ml-0.5"></i>
+                                        <div class="text-[8px] mt-0.5 font-normal text-green-700 border-t border-green-200 pt-0.5" title="Persona que aprobó">
+                                            Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}
+                                        </div>
+                                        <div v-if="day.comment" class="text-[8px] mt-0.5 font-normal text-gray-600 border-t border-green-200 pt-0.5 italic text-left" style="white-space: normal; line-height: 1.2;">
+                                            "{{ day.comment.comments }}"
+                                        </div>
                                     </div>
                                 </div>
                                 <div v-else-if="day.extra_hours || day.extra_minutes" class="text-[10px] text-amber-600 bg-amber-50 px-1.5 rounded border border-amber-200 text-center leading-tight" title="Pendiente de aprobación">
@@ -346,17 +372,21 @@ const submitApproveExtraTime = () => {
 
         </div>
 
-        <!-- MODAL 1: Modificar Asistencia (Element Plus) -->
+        <!-- MODAL 1: Modificar Asistencia -->
         <el-dialog
             v-model="showAttendanceModal"
-            title="Modificar Asistencia"
+            title="Modificar asistencia"
             width="400px"
             class="!rounded-xl"
             destroy-on-close
         >
+        <div class="mb-5 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-100 flex gap-2 items-start">
+                <i class="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
+                <p>Al borrar las horas registradas y guardar cambios, se marcará como falta en automático.</p>
+            </div>
             <div class="grid grid-cols-2 gap-6 py-2">
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Hora de Entrada</label>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Hora de entrada</label>
                     <el-time-picker
                         v-model="form.check_in"
                         format="HH:mm"
@@ -367,7 +397,7 @@ const submitApproveExtraTime = () => {
                     />
                 </div>
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Hora de Salida</label>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Hora de salida</label>
                     <el-time-picker
                         v-model="form.check_out"
                         format="HH:mm"
@@ -388,23 +418,23 @@ const submitApproveExtraTime = () => {
                         :loading="form.processing"
                         class="!bg-indigo-600 !border-indigo-600"
                     >
-                        Guardar Cambios
+                        Guardar cambios
                     </el-button>
                 </div>
             </template>
         </el-dialog>
 
-        <!-- MODAL 2: Aprobar Tiempo Extra (Element Plus) -->
+        <!-- MODAL 2: Gestionar Tiempo Extra -->
         <el-dialog
             v-model="showApproveModal"
-            title="Aprobar Tiempo Extra"
+            title="Gestionar Tiempo Extra"
             width="450px"
             class="!rounded-xl"
             destroy-on-close
         >
             <div class="mb-5 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-100 flex gap-2 items-start">
                 <i class="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
-                <p>Modifica el tiempo a aprobar si es necesario y opcionalmente agrega un comentario o justificación.</p>
+                <p>Ajusta el tiempo a aprobar, o rechaza el tiempo extra. Puedes agregar una justificación.</p>
             </div>
 
             <div class="grid grid-cols-2 gap-6 mb-5">
@@ -437,22 +467,33 @@ const submitApproveExtraTime = () => {
                     v-model="approveForm.comments" 
                     type="textarea" 
                     :rows="3" 
-                    placeholder="Ej. Se autoriza por cierre de inventario de almacén." 
+                    placeholder="Ej. Se autoriza por cierre de inventario." 
                 />
                 <span v-if="approveForm.errors.comments" class="text-xs text-red-500 mt-1 block">{{ approveForm.errors.comments }}</span>
             </div>
 
             <template #footer>
-                <div class="flex justify-end gap-2 pt-2">
-                    <el-button @click="showApproveModal = false">Cancelar</el-button>
+                <div class="flex justify-between items-center w-full pt-2">
                     <el-button 
-                        type="primary" 
-                        @click="submitApproveExtraTime" 
+                        type="danger" 
+                        plain
+                        @click="submitRejectExtraTime" 
                         :loading="approveForm.processing"
-                        class="!bg-indigo-600 !border-indigo-600"
                     >
-                        Aprobar Tiempo
+                        <i class="fa-solid fa-xmark mr-2"></i> Rechazar
                     </el-button>
+                    
+                    <div class="flex gap-2">
+                        <el-button @click="showApproveModal = false">Cancelar</el-button>
+                        <el-button 
+                            type="primary" 
+                            @click="submitApproveExtraTime" 
+                            :loading="approveForm.processing"
+                            class="!bg-indigo-600 !border-indigo-600"
+                        >
+                            <i class="fa-solid fa-check mr-2"></i> Aprobar
+                        </el-button>
+                    </div>
                 </div>
             </template>
         </el-dialog>
@@ -461,7 +502,6 @@ const submitApproveExtraTime = () => {
 </template>
 
 <style scoped>
-/* Asegura que los modales de Element Plus tengan un aspecto más limpio con los forms */
 :deep(.el-input__wrapper) {
     border-radius: 0.5rem;
     box-shadow: 0 0 0 1px #e5e7eb inset;
