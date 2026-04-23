@@ -17,8 +17,8 @@ return new class extends Migration
             $table->time('check_in')->nullable();
             $table->time('check_out')->nullable();
             $table->unsignedSmallInteger('late')->default(0);
-            $table->unsignedTinyInteger('extra_hours')->nullable();
-            $table->unsignedTinyInteger('extra_minutes')->nullable();
+            $table->smallInteger('extra_hours')->nullable();
+            $table->smallInteger('extra_minutes')->nullable();
             $table->string('incidence')->nullable();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('payroll_id')->constrained()->cascadeOnDelete();

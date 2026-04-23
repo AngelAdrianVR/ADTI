@@ -34,6 +34,7 @@ const filteredUsers = computed(() => {
     const lowerSearch = search.value.toLowerCase();
     
     return props.users.filter(user => 
+        user.code?.toLowerCase().includes(lowerSearch) ||
         user.name?.toLowerCase().includes(lowerSearch) ||
         user.email?.toLowerCase().includes(lowerSearch) ||
         user.org_props?.department?.toLowerCase().includes(lowerSearch) ||
@@ -127,11 +128,11 @@ const submitInactivate = () => {
     <div class="px-2">
         <!-- Toolbar -->
         <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
-            <div class="relative w-full sm:w-72">
+            <div class="relative w-full sm:w-80">
                 <input 
                     v-model="search" 
                     type="text" 
-                    placeholder="Buscar por nombre, correo o puesto..." 
+                    placeholder="Buscar por código, nombre, correo o puesto..." 
                     class="w-full pl-10 pr-4 py-2 rounded-lg border-gray-300 focus:border-[#1676A2] focus:ring-[#1676A2] text-sm shadow-sm"
                 >
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-sm"></i>
@@ -168,6 +169,12 @@ const submitInactivate = () => {
             >
                 <el-table-column v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')" type="selection" width="40" />
                 
+                <el-table-column label="Código" width="100">
+                    <template #default="scope">
+                        <span class="font-semibold text-gray-600 text-sm">{{ scope.row.code || 'N/A' }}</span>
+                    </template>
+                </el-table-column>
+
                 <el-table-column label="Usuario" min-width="200">
                     <template #default="scope">
                         <div class="flex items-center gap-3">
