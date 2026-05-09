@@ -8,7 +8,6 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\Log;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Jetstream\HasProfilePhoto;
 use Laravel\Sanctum\HasApiTokens;
@@ -107,6 +106,12 @@ class User extends Authenticatable implements HasMedia
             ->withTimestamps();
     }
 
+    // --- Relación de Solicitudes de Vacaciones ---
+    public function vacationRequests()
+    {
+        return $this->hasMany(VacationRequest::class);
+    }
+
     // methods ------------------------------------------------------------------------------------
     //metodo que recupera la siguiente insidencia
     public function getNextAttendance()
@@ -155,6 +160,14 @@ class User extends Authenticatable implements HasMedia
         $org_props['updated_date_vacations'] = now()->toDateString();
         $this->org_props = $org_props;
         $this->save();
+
+        // --- NUEVO: Registrar el devengo en el historial ---
+        UserVacationAdjustment::create([
+            'user_id' => $this->id,
+            'days' => $weeklyVacationDays,
+            'notes' => 'Devengo proporcional semanal (Automático)',
+            'date' => now()->toDateString(),
+        ]);
     }
 
     public function setAttendance()
@@ -162,7 +175,7 @@ class User extends Authenticatable implements HasMedia
         $next = '';
         $now = now();
         $now_time = $now->isoFormat('HH:mm');
-        
+
         $today_attendance = PayrollUser::firstOrCreate(['date' => $now->toDateString(), 'user_id' => $this->id], [
             'payroll_id' => Payroll::firstWhere('is_active', true)->id,
             'checked_in_platform' => true,

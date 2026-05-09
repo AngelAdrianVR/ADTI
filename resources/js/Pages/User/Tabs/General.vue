@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch } from 'vue';
-import { useForm, router } from '@inertiajs/vue3';
+import { router } from '@inertiajs/vue3';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ElNotification } from 'element-plus';
@@ -10,9 +10,6 @@ const props = defineProps({
     vacations: Array,
 });
 
-const form = useForm({
-    vacations: props.user.org_props?.vacations || 0,
-});
 
 // Variable local para el switch (convertimos a Boolean para evitar disparos falsos)
 const localHomeOffice = ref(Boolean(props.user.home_office));
@@ -22,11 +19,6 @@ watch(() => props.user.home_office, (newVal) => {
     localHomeOffice.value = Boolean(newVal);
 });
 
-const editVacations = ref(false);
-const defaultProps = {
-    children: 'children',
-    label: 'label',
-};
 
 const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -36,26 +28,6 @@ const formatDate = (dateString) => {
 const formatCurrency = (value) => {
     if (!value) return '$0.00';
     return '$' + parseFloat(value).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-};
-
-const updateVacations = () => {
-    form.put(route('users.update-vacations', props.user.id), {
-        onSuccess: () => {
-            ElNotification({
-                title: 'Correcto',
-                message: 'Vacaciones actualizadas correctamente',
-                type: 'success',
-            });
-            editVacations.value = false;
-        },
-        onError: () => {
-            ElNotification({
-                title: 'Error',
-                message: 'No se pudo actualizar',
-                type: 'error',
-            });
-        }
-    });
 };
 
 const toggleHomeOffice = () => {
@@ -133,49 +105,6 @@ const toggleHomeOffice = () => {
                             style="--el-switch-on-color: #1676A2;"
                         />
                     </div>
-                </div>
-
-                <!-- Gestión de Vacaciones -->
-                <div class="flex flex-col">
-                    <span class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2">Vacaciones</span>
-                    <el-dropdown trigger="click" placement="bottom-start">
-                        <button class="flex items-center justify-between w-full md:w-auto px-4 py-2 bg-cyan-50 hover:bg-cyan-100 text-cyan-700 rounded-lg transition-colors border border-cyan-200">
-                            <span class="font-bold mr-2">{{ Math.floor(user.org_props?.vacations || 0) }} días disponibles</span>
-                            <i class="fa-solid fa-chevron-down text-xs"></i>
-                        </button>
-                        
-                        <template #dropdown>
-                            <el-dropdown-menu class="!p-4 min-w-[300px]">
-                                <h4 class="font-bold text-gray-700 text-sm mb-3">Gestión de Vacaciones</h4>
-                                
-                                <div class="mb-4">
-                                    <div class="flex justify-between items-center mb-1">
-                                        <span class="text-xs text-gray-500">Saldo actual</span>
-                                        <button v-if="!editVacations" @click="editVacations = true" class="text-xs text-cyan-600 hover:underline">Modificar</button>
-                                    </div>
-                                    
-                                    <div v-if="editVacations" class="flex items-center gap-2">
-                                        <el-input 
-                                            v-model="form.vacations" 
-                                            size="small" 
-                                            type="number"
-                                            class="!w-24"
-                                        />
-                                        <button @click="updateVacations" class="text-green-600 hover:bg-green-50 p-1 rounded"><i class="fa-solid fa-check"></i></button>
-                                        <button @click="editVacations = false; form.reset()" class="text-red-500 hover:bg-red-50 p-1 rounded"><i class="fa-solid fa-xmark"></i></button>
-                                    </div>
-                                    <p v-else class="text-lg font-bold text-gray-800">{{ Math.floor(user.org_props?.vacations || 0) }} días</p>
-                                </div>
-
-                                <div class="border-t border-gray-100 pt-3">
-                                    <span class="text-xs font-bold text-gray-400 uppercase">Historial de uso</span>
-                                    <div class="mt-2 max-h-40 overflow-y-auto">
-                                        <el-tree :data="vacations" :props="defaultProps" empty-text="Sin registros recientes" />
-                                    </div>
-                                </div>
-                            </el-dropdown-menu>
-                        </template>
-                    </el-dropdown>
                 </div>
             </div>
         </section>
