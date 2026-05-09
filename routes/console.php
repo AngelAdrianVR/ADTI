@@ -5,12 +5,15 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
+//En el servido el cronjob debe estar a 1 hora más de lo que aqui se programe, por ejemplo 
+//si aquí se programa a las 5:00 AM, el cronjob en el servidor debe estar a las 6:00 AM para que se ejecute correctamente
+
 Schedule::command('users:update-vacations')
-    ->dailyAt('01:00');
+    ->dailyAt('05:00');
 
 Schedule::command('payrolls:close')
     ->tuesdays()
-    ->at('01:00') // Ejecutar exactamente a las 1:00 AM
+    ->at('05:00') // Ejecutar exactamente a las 5:00 AM
     // ->timezone('America/Mexico_City') // Forzar tu zona horaria local
     ->when(function () {
         $activePayroll = Payroll::firstWhere('is_active', true);

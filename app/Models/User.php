@@ -176,10 +176,9 @@ class User extends Authenticatable implements HasMedia
             $today_attendance->calculateLate();
             $next = 'Registrar salida';
         } elseif (is_null($today_attendance->check_out)) {
-            
             // --- PROTECCIÓN ANTI-DOBLE CLIC (3 minutos) ---
             $checkInTime = Carbon::createFromFormat('H:i', trim($today_attendance->check_in));
-            if ($now->diffInMinutes($checkInTime) <= 3) {
+            if ($checkInTime->diffInMinutes($now) <= 3) {
                 // Si la diferencia es menor o igual a 3 minutos, ignoramos el click
                 // para evitar que registre salida inmediatamente.
                 return 'Registrar salida';
