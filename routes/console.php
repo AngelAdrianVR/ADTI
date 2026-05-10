@@ -27,3 +27,7 @@ Schedule::command('payrolls:close')
         // Calcula si han pasado al menos 8 días desde start_date
         return Carbon::parse($activePayroll->start_date)->diffInDays(now()) > 8;
     });
+
+// Sincronizar las vacaciones aprobadas en las nóminas activas/futuras
+Schedule::command('payrolls:sync-vacations')
+    ->dailyAt('05:00');

@@ -10,6 +10,26 @@ use Illuminate\Support\Facades\Log;
 
 class VacationRequestController extends Controller
 {
+    public function index()
+    {
+        $user = auth()->user();
+        
+        $query = VacationRequest::with([
+            'user:id,name,profile_photo_path,org_props', 
+            'reviewer:id,name'
+        ]);
+
+        // Si NO tiene el permiso global, solo ve las peticiones de sus empleados a cargo
+        if (!$user->can('Gestionar cualquier solicitud de vacaciones')) {
+            $employeesInCharge = $user->employees_in_charge ?? [];
+            $query->whereIn('user_id', $employeesInCharge);
+        }
+
+        $requests = $query->orderBy('created_at', 'desc')->get();
+
+        return inertia('VacationRequest/Index', compact('requests'));
+    }
+
     // Crear una nueva solicitud (Empleado)
     public function store(Request $request)
     {
@@ -24,7 +44,7 @@ class VacationRequestController extends Controller
 
         // 1. Validar Antelación (Mínimo 15 días)
         $startDate = Carbon::parse($request->start_date);
-        if (now()->diffInDays($startDate) < 15 && $startDate->isAfter(now())) {
+        if (now()->diffInDays($startDate) < 14 && $startDate->isAfter(now())) {
             return back()->withErrors(['start_date' => 'Las solicitudes deben realizarse con al menos 15 días de anticipación.']);
         }
 
@@ -104,5 +124,26 @@ class VacationRequestController extends Controller
         ]);
 
         return back()->with('success', 'Solicitud rechazada.');
+    }
+
+    // Añadir en app/Http/Controllers/VacationRequestController.php
+    public function getPendingCount()
+    {
+        $user = auth()->user();
+        
+        $query = \App\Models\VacationRequest::where('status', 'Pendiente');
+
+        // Si NO tiene el permiso global, solo cuenta las peticiones de sus empleados a cargo
+        if (!$user->can('Gestionar cualquier solicitud de vacaciones')) {
+            $employeesInCharge = $user->employees_in_charge ?? [];
+            if (empty($employeesInCharge)) {
+                return response()->json(['count' => 0]); // No tiene gente a cargo
+            }
+            $query->whereIn('user_id', $employeesInCharge);
+        }
+
+        $count = $query->count();
+
+        return response()->json(['count' => $count]);
     }
 }

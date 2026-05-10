@@ -184,10 +184,12 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
 });
 
 // Rutas de Solicitudes de Vacaciones
+Route::get('vacation-requests', [VacationRequestController::class, 'index'])->name('vacation-requests.index');
 Route::post('vacation-requests', [VacationRequestController::class, 'store'])->name('vacation-requests.store');
 Route::put('vacation-requests/{vacationRequest}/cancel', [VacationRequestController::class, 'cancel'])->name('vacation-requests.cancel');
 Route::put('vacation-requests/{vacationRequest}/approve', [VacationRequestController::class, 'approve'])->name('vacation-requests.approve');
 Route::put('vacation-requests/{vacationRequest}/reject', [VacationRequestController::class, 'reject'])->name('vacation-requests.reject');
+Route::get('vacation-requests/pending-count', [VacationRequestController::class, 'getPendingCount'])->name('vacation-requests.pending-count');
 
 Route::get('products-search', [ProductController::class, 'searchProduct'])->name('products.search');
 Route::get('products-fetch-subcategory-products/{subcategory_id}', [ProductController::class, 'fetchSubcategoryProducts'])->name('products.fetch-subcategory-products');
