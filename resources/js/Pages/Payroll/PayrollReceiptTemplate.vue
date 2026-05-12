@@ -89,11 +89,11 @@ onMounted(() => {
         <div class="print:hidden p-4 bg-white shadow-sm flex justify-between items-center mb-6">
             <div>
                 <h1 class="font-bold text-lg text-teal-700">Recibos de Catorcena {{ payroll.biweekly }}</h1>
-                <p class="text-xs text-gray-500">Formato ultra compacto a 2 columnas (4 recibos por hoja garantizados).</p>
+                <p class="text-xs text-gray-500">Formato ultra compacto a 2 columnas.</p>
             </div>
             <!-- Uso de botón nativo HTML para garantizar renderizado visual -->
             <button @click="printScreen" class="!bg-teal-600 hover:!bg-teal-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-all flex items-center">
-                <i class="fa-solid fa-print mr-2"></i> Imprimir Recibos
+                <i class="fa-solid fa-print mr-2"></i> Imprimir recibos
             </button>
         </div>
 
@@ -123,10 +123,10 @@ onMounted(() => {
                         <thead class="bg-gray-100 text-gray-700">
                             <tr>
                                 <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%]">Día</th>
-                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%] text-center border-l border-gray-300 print:border-gray-400">Ent</th>
-                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%] text-center border-l border-gray-300 print:border-gray-400">Sal</th>
-                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[35%] border-l border-gray-300 print:border-gray-400">Incidencia</th>
-                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[20%] text-center border-l border-gray-300 print:border-gray-400">Extra</th>
+                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%] text-center border-l">Ent</th>
+                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%] text-center border-l">Sal</th>
+                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[35%] border-l">Incidencia</th>
+                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[20%] text-center border-l">Extra</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -145,10 +145,10 @@ onMounted(() => {
                         <thead class="bg-gray-100 text-gray-700">
                             <tr>
                                 <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%]">Día</th>
-                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%] text-center border-l border-gray-300 print:border-gray-400">Ent</th>
-                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%] text-center border-l border-gray-300 print:border-gray-400">Sal</th>
-                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[35%] border-l border-gray-300 print:border-gray-400">Incidencia</th>
-                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[20%] text-center border-l border-gray-300 print:border-gray-400">Extra</th>
+                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%] text-center border-l">Ent</th>
+                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%] text-center border-l">Sal</th>
+                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[35%] border-l">Incidencia</th>
+                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[20%] text-center border-l">Extra</th>
                             </tr>
                         </thead>
                         <tbody>

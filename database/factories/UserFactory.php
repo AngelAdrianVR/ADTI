@@ -36,6 +36,32 @@ class UserFactory extends Factory
             'remember_token' => Str::random(10),
             'profile_photo_path' => null,
             'current_team_id' => null,
+            
+            // --- NUEVOS CAMPOS DEL ERP ---
+            'code' => fake()->unique()->numerify('EMP-####'),
+            'phone' => fake()->numerify('##########'),
+            'birthdate' => fake()->date('Y-m-d', '-20 years'), // Al menos 20 años de edad
+            'civil_state' => fake()->randomElement(['Soltero(a)', 'Casado(a)', 'Unión libre']),
+            'address' => fake()->address(),
+            'rfc' => strtoupper(fake()->bothify('????######???')),
+            'curp' => strtoupper(fake()->bothify('????######??????##')),
+            'ssn' => fake()->numerify('###########'),
+            'is_active' => true,
+            'home_office' => false,
+            'employees_in_charge' => [],
+            'org_props' => [
+                'entry_date' => fake()->date('Y-m-d', '-2 years'),
+                'position' => fake()->jobTitle(),
+                'department' => 'Operaciones', // Un departamento estándar
+                'work_shift' => 'Diurno', // Turno por defecto
+                'email' => fake()->unique()->companyEmail(),
+                'phone' => fake()->numerify('##########'),
+                'net_salary' => fake()->randomFloat(2, 8000, 30000),
+                'biweekly_complement' => 0,
+                'month_complement' => 0,
+                'vacations' => 12, // Días por defecto
+                'updated_date_vacations' => now()->toDateString(),
+            ],
         ];
     }
 

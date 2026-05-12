@@ -46,6 +46,20 @@ const toggleHomeOffice = () => {
         }
     });
 };
+
+// Helper para diseño de turnos (Consistencia con la tabla)
+const getShiftBadgeStyle = (shift) => {
+    if (!shift || shift === 'Diurno') {
+        return {
+            class: 'bg-orange-50 text-orange-600 border border-orange-200',
+            icon: 'fa-solid fa-sun'
+        };
+    }
+    return {
+        class: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
+        icon: 'fa-solid fa-moon'
+    };
+};
 </script>
 
 <template>
@@ -77,20 +91,30 @@ const toggleHomeOffice = () => {
                     <span class="text-gray-900 font-medium">{{ user.org_props?.entry_date ? formatDate(user.org_props.entry_date) : '-' }}</span>
                 </div>
 
-                <!-- Departamento & Puesto -->
+                <!-- Departamento -->
                 <div class="flex flex-col">
                     <span class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Departamento</span>
                     <span class="text-gray-900">{{ user.org_props?.department || '-' }}</span>
                 </div>
+                
+                <!-- Puesto -->
                 <div class="flex flex-col">
                     <span class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Puesto</span>
                     <span class="text-gray-900 font-semibold">{{ user.org_props?.position || '-' }}</span>
                 </div>
 
-                <!-- Correo Empresa -->
-                <div class="flex flex-col md:col-span-2">
-                    <span class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Email Empresarial</span>
-                    <span class="text-gray-900 font-mono text-xs md:text-sm">{{ user.org_props?.email || '-' }}</span>
+                <!-- Turno de Trabajo -->
+                <div class="flex flex-col">
+                    <span class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Turno</span>
+                    <div>
+                        <span 
+                            class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold tracking-wide"
+                            :class="getShiftBadgeStyle(user.org_props?.work_shift).class"
+                        >
+                            <i :class="getShiftBadgeStyle(user.org_props?.work_shift).icon"></i>
+                            {{ user.org_props?.work_shift || 'Diurno' }}
+                        </span>
+                    </div>
                 </div>
 
                 <!-- Home Office Switch -->
@@ -105,6 +129,12 @@ const toggleHomeOffice = () => {
                             style="--el-switch-on-color: #1676A2;"
                         />
                     </div>
+                </div>
+
+                <!-- Correo Empresa -->
+                <div class="flex flex-col md:col-span-2">
+                    <span class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Email Empresarial</span>
+                    <span class="text-gray-900 font-mono text-xs md:text-sm">{{ user.org_props?.email || '-' }}</span>
                 </div>
             </div>
         </section>
