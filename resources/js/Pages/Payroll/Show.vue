@@ -162,6 +162,18 @@ const openTemplate = () => {
     window.open(url, '_blank');
 };
 
+const openReceipts = () => {
+    const params = {};
+    if (selectedUsers.value.length > 0) {
+        params.user_ids = selectedUsers.value;
+    }
+    const url = route('payrolls.receipts', { 
+        payroll: props.payroll.id,
+        ...params 
+    });
+    window.open(url, '_blank');
+};
+
 // --- Manejo de Comentarios ---
 const openCommentModal = (data) => {
     commentForm.payroll_id = props.payroll.id;
@@ -241,7 +253,15 @@ const saveComment = () => {
                         </div>
                     </div>
 
-                    <div class="w-full md:w-auto flex justify-end">
+                    <div class="w-full md:w-auto flex flex-col md:flex-row justify-end gap-2">
+                        <PrimaryButton 
+                            v-if="$page.props.auth.user.permissions.includes('Ver pre-nominas')"
+                            @click="openReceipts"
+                            class="!bg-teal-600 hover:!bg-teal-700 w-full md:w-auto justify-center"
+                        >
+                            <i class="fa-solid fa-file-signature mr-2"></i> 
+                            {{ selectedUsers.length > 0 ? `Recibos (${selectedUsers.length})` : 'Generar Recibos' }}
+                        </PrimaryButton>
                         <PrimaryButton 
                             v-if="$page.props.auth.user.permissions.includes('Ver pre-nominas')"
                             @click="openTemplate"

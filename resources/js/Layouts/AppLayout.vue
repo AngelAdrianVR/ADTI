@@ -61,15 +61,59 @@ const setPause = async () => {
     }
 };
 
-const setAttendance = async () => {
+// --- NUEVA LÓGICA DE GEOLOCALIZACIÓN ---
+const handleAttendanceRequest = () => {
+    // Verificar si el dispositivo soporta geolocalización
+    if (!("geolocation" in navigator)) {
+        setAttendance('GPS No Soportado');
+        return;
+    }
+
+    // Notificar al usuario que estamos validando ubicación
+    ElNotification.info({
+        title: "Validando Ubicación",
+        message: "Por favor, permite el acceso a tu ubicación si el navegador lo solicita. Cargando GPS...",
+        duration: 3000
+    });
+
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            // Éxito: Enviar las coordenadas
+            const locationString = `${position.coords.latitude}, ${position.coords.longitude}`;
+            setAttendance(locationString);
+        },
+        (error) => {
+            // Si el usuario deniega o falla, enviamos el motivo del fallo
+            console.warn("No se pudo obtener GPS:", error);
+            let errorMsg = 'Ubicación denegada/no disponible';
+            if (error.code === error.PERMISSION_DENIED) errorMsg = 'Permiso denegado por el usuario';
+            else if (error.code === error.POSITION_UNAVAILABLE) errorMsg = 'Ubicación no disponible';
+            else if (error.code === error.TIMEOUT) errorMsg = 'Tiempo de espera agotado';
+
+            setAttendance(errorMsg);
+        },
+        {
+            enableHighAccuracy: true, // Forzar GPS de alta precisión
+            timeout: 10000,           // 10 segundos para encontrarla
+            maximumAge: 0             // No usar caché, forzar ubicación actual
+        }
+    );
+};
+
+const setAttendance = async (locationData = null) => {
     try {
-        const response = await axios.post(route("users.set-attendance"));
+        const response = await axios.post(route("users.set-attendance"), {
+            location: locationData // Enviamos las coordenadas (o el mensaje de fallo)
+        });
+        
         if (response.status === 200) {
             nextAttendance.value = response.data.next;
             isPaused.value = null;
             ElNotification.success({
                 title: "Registro correcto",
-                message: "",
+                message: locationData && !locationData.includes('denegada') && !locationData.includes('Soportado') 
+                    ? "Ubicación validada y guardada exitosamente." 
+                    : "Asistencia registrada sin ubicación GPS.",
             });
         }
     } catch (error) {
@@ -107,7 +151,7 @@ onMounted(() => {
             :pending-requests="$page.props.auth.user?.pendingVacationRequests || 0"
             @close="showingNavigationDropdown = false"
             @set-pause="setPause"
-            @set-attendance="setAttendance"
+            @set-attendance="handleAttendanceRequest"
         />
 
         <div class="overflow-hidden h-screen md:flex bg-white relative">
@@ -124,7 +168,7 @@ onMounted(() => {
                     :pending-requests="$page.props.auth.user?.pendingVacationRequests || 0"
                     @toggle-menu="showingNavigationDropdown = !showingNavigationDropdown"
                     @set-pause="setPause"
-                    @set-attendance="setAttendance"
+                    @set-attendance="handleAttendanceRequest"
                 />
 
                 <div class="overflow-y-auto flex-1 bg-white relative">

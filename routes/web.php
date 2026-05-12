@@ -129,6 +129,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     // --- NÓMINAS (PAYROLLS) ---
     Route::resource('payrolls', PayrollController::class);
     Route::get('payrolls/{payroll}/pre-payroll', [PayrollController::class, 'prePayrollTemplate'])->name('payrolls.pre-payroll');
+    Route::get('payrolls/{payroll}/receipts', [PayrollController::class, 'receiptsTemplate'])->name('payrolls.receipts');
 
     Route::resource('payroll-comments', PayrollCommentController::class)->middleware('auth');
 

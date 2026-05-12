@@ -18,7 +18,7 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
-   public function index()
+    public function index()
     {
         // Rango de la semana actual
         $startOfWeek = now()->startOfWeek();
@@ -36,10 +36,10 @@ class UserController extends Controller
                 $seconds = $user->current_week_seconds ?? 0;
                 $h = floor($seconds / 3600);
                 $m = floor(($seconds % 3600) / 60);
-                
+
                 // Agregamos el atributo formateado
                 $user->weekly_time_formatted = "{$h}h {$m}m";
-                
+
                 return $user;
             });
 
@@ -53,8 +53,8 @@ class UserController extends Controller
         $payrolls = Payroll::whereHas('users', function ($q) use ($user) {
             $q->where('user_id', $user->id);
         })
-        ->orderBy('start_date', 'desc')
-        ->get();
+            ->orderBy('start_date', 'desc')
+            ->get();
 
         // --- NUEVO: Cargar Solicitudes de Vacaciones del Usuario ---
         $vacationRequests = \App\Models\VacationRequest::where('user_id', $user->id)
@@ -68,7 +68,7 @@ class UserController extends Controller
             ->whereIn('status', ['Pendiente', 'Aprobada'])
             ->where('start_date', '>=', now()->toDateString())
             ->sum('days_requested');
-        
+
         $vacationDetails = [
             'total_balance' => round($currentBalance, 2),
             'locked_days' => $lockedDays,
@@ -95,9 +95,9 @@ class UserController extends Controller
 
         $processedPayrolls = $payrolls->map(function ($payroll) use ($user, $allAttendances, $allHolidays) {
             $rawAttendances = $allAttendances->get($payroll->id);
-            
+
             $endDate = $payroll->start_date->copy()->addDays(14);
-            $payrollHolidays = $allHolidays->filter(function($holiday) use ($payroll, $endDate) {
+            $payrollHolidays = $allHolidays->filter(function ($holiday) use ($payroll, $endDate) {
                 return $holiday->date >= $payroll->start_date && $holiday->date <= $endDate;
             });
 
@@ -116,7 +116,7 @@ class UserController extends Controller
             'vacationDetails' => $vacationDetails    // Pasamos a la vista
         ]);
     }
-    
+
     public function create()
     {
         $roles = Role::all();
@@ -124,7 +124,7 @@ class UserController extends Controller
         $job_positions = JobPosition::latest()->get();
         $users = User::where('is_active', true)->orderBy('name')->get(['id', 'name']);
 
-        return inertia('User/Create', compact('roles' ,'departments', 'job_positions', 'users'));
+        return inertia('User/Create', compact('roles', 'departments', 'job_positions', 'users'));
     }
 
     public function edit(User $user)
@@ -138,7 +138,7 @@ class UserController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        return inertia('User/Edit', compact('user', 'roles', 'user_roles','departments', 'job_positions', 'users'));
+        return inertia('User/Edit', compact('user', 'roles', 'user_roles', 'departments', 'job_positions', 'users'));
     }
 
     public function reactivation(User $user)
@@ -165,6 +165,7 @@ class UserController extends Controller
             'org_props.entry_date' => 'required|date',
             'org_props.position' => 'required|string|max:255',
             'org_props.department' => 'required|string|max:255',
+            'org_props.work_shift' => 'required|string|max:255',
             'org_props.phone' => 'nullable|string|max:255',
             'org_props.biweekly_complement' => 'nullable|numeric|min:1',
             'org_props.month_complement' => 'nullable|numeric|min:1',
@@ -206,7 +207,7 @@ class UserController extends Controller
         $vacations = PayrollUser::where(['user_id' => $user->id, 'incidence' => 'Vacaciones'])
             ->get()
             ->groupBy(function ($vacation) {
-                return $vacation->date->format('Y'); 
+                return $vacation->date->format('Y');
             })
             ->map(function ($vacations, $year) {
                 return [
@@ -218,7 +219,7 @@ class UserController extends Controller
                     })->values()->all()
                 ];
             })->values()->all();
-        
+
         $employeesInCharge = [];
         if (!empty($user->employees_in_charge)) {
             $employeesInCharge = User::whereIn('id', $user->employees_in_charge)->get(['id', 'name', 'profile_photo_path', 'org_props']);
@@ -230,11 +231,11 @@ class UserController extends Controller
         $entryDate = Carbon::parse($user->org_props['entry_date'] ?? now());
         $currentDate = now();
         $history = [];
-        
+
         // Determinar cuántos ciclos anuales ha completado o iniciado
         $yearsElapsed = (int) $entryDate->diffInYears($currentDate);
         $anniversaryThisYear = $entryDate->copy()->year($currentDate->year);
-        
+
         // El total de ciclos que vamos a generar (Años completados + el año en curso)
         $totalCycles = $currentDate->lt($anniversaryThisYear) ? $yearsElapsed : $yearsElapsed + 1;
 
@@ -266,7 +267,7 @@ class UserController extends Controller
                 ->whereBetween('date', [$periodStart, $periodEnd])
                 ->orderBy('date', 'desc')
                 ->get();
-                
+
             // Ajustes manuales en este periodo
             $adjustments = UserVacationAdjustment::where('user_id', $user->id)
                 ->whereBetween('date', [$periodStart, $periodEnd])
@@ -344,6 +345,7 @@ class UserController extends Controller
             'org_props.entry_date' => 'required|date',
             'org_props.position' => 'required|string|max:255',
             'org_props.department' => 'required|string|max:255',
+            'org_props.work_shift' => 'required|string|max:255',
             'org_props.phone' => 'nullable|string|max:255',
             'org_props.email' => 'nullable|string|max:255',
             'org_props.vacations' => 'nullable',
@@ -386,6 +388,7 @@ class UserController extends Controller
             'org_props.entry_date' => 'nullable|date',
             'org_props.position' => 'nullable|string|max:255',
             'org_props.department' => 'nullable|string|max:255',
+            'org_props.work_shift' => 'required|string|max:255',
             'org_props.phone' => 'nullable|string|max:255',
             'org_props.email' => 'nullable|string|max:255',
             'org_props.vacations' => 'nullable',
@@ -509,10 +512,15 @@ class UserController extends Controller
         return response()->json(compact('next'));
     }
 
-    public function setAttendance()
+    public function setAttendance(Request $request)
     {
         $user = auth()->user();
-        $next = $user->setAttendance();
+
+        // Obtenemos la ubicación, puede venir nula si el usuario denegó permisos de GPS
+        $location = $request->input('location');
+
+        $next = $user->setAttendance($location);
+
         return response()->json(compact('next'));
     }
 
@@ -555,7 +563,7 @@ class UserController extends Controller
                 break;
             case 'month':
                 $query->whereMonth('start_time', Carbon::now()->month)
-                      ->whereYear('start_time', Carbon::now()->year);
+                    ->whereYear('start_time', Carbon::now()->year);
                 break;
             case 'custom':
                 if ($startDate && $endDate) {
