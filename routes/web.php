@@ -17,6 +17,7 @@ use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SubcategoryController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\VacationRequestController;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Subcategory;
@@ -117,6 +118,10 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::get('users/reactivatation/{user}', [UserController::class, 'reactivation'])->name('users.reactivation');
     Route::get('users/{user}/performance', [UserController::class, 'getPerformance'])->name('users.get-performance');
 
+    // Rutas de Ajustes Manuales de Vacaciones
+    Route::post('users/{user}/vacation-adjustments', [UserController::class, 'storeVacationAdjustment'])->name('users.vacation-adjustments.store');
+    Route::delete('users/{user}/vacation-adjustments/{adjustment}', [UserController::class, 'destroyVacationAdjustment'])->name('users.vacation-adjustments.destroy');
+
     Route::resource('departments', DepartmentController::class);
     Route::resource('features', FeatureController::class);
     Route::resource('job-positions', JobPositionController::class);
@@ -124,6 +129,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     // --- NÓMINAS (PAYROLLS) ---
     Route::resource('payrolls', PayrollController::class);
     Route::get('payrolls/{payroll}/pre-payroll', [PayrollController::class, 'prePayrollTemplate'])->name('payrolls.pre-payroll');
+    Route::get('payrolls/{payroll}/receipts', [PayrollController::class, 'receiptsTemplate'])->name('payrolls.receipts');
 
     Route::resource('payroll-comments', PayrollCommentController::class)->middleware('auth');
 
@@ -134,7 +140,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::put('payroll-users/set-incidence', [PayrollUserController::class, 'setIncidence'])->name('payroll-users.set-incidence');
     Route::put('payroll-users/remove-late', [PayrollUserController::class, 'removeLate'])->name('payroll-users.remove-late');
 
-     // --- RUTAS DE TIEMPO EXTRA ---
+    // --- RUTAS DE TIEMPO EXTRA ---
     Route::put('payroll-users/approve-extra-time', [PayrollUserController::class, 'approveExtraTime'])->name('payroll-users.approve-extra-time');
     Route::put('payroll-users/revert-extra-time', [PayrollUserController::class, 'revertExtraTime'])->name('payroll-users.revert-extra-time');
     Route::put('payroll-users/reject-extra-time', [PayrollUserController::class, 'rejectExtraTime'])->name('payroll-users.reject-extra-time');
@@ -177,6 +183,14 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::post('default-tasks', [ProjectController::class, 'storeDefaultTask'])->name('default-tasks.store');
     Route::delete('default-tasks/{default_task}', [ProjectController::class, 'destroyDefaultTask'])->name('default-tasks.destroy');
 });
+
+// Rutas de Solicitudes de Vacaciones
+Route::get('vacation-requests', [VacationRequestController::class, 'index'])->name('vacation-requests.index');
+Route::post('vacation-requests', [VacationRequestController::class, 'store'])->name('vacation-requests.store');
+Route::put('vacation-requests/{vacationRequest}/cancel', [VacationRequestController::class, 'cancel'])->name('vacation-requests.cancel');
+Route::put('vacation-requests/{vacationRequest}/approve', [VacationRequestController::class, 'approve'])->name('vacation-requests.approve');
+Route::put('vacation-requests/{vacationRequest}/reject', [VacationRequestController::class, 'reject'])->name('vacation-requests.reject');
+Route::get('vacation-requests/pending-count', [VacationRequestController::class, 'getPendingCount'])->name('vacation-requests.pending-count');
 
 Route::get('products-search', [ProductController::class, 'searchProduct'])->name('products.search');
 Route::get('products-fetch-subcategory-products/{subcategory_id}', [ProductController::class, 'fetchSubcategoryProducts'])->name('products.fetch-subcategory-products');

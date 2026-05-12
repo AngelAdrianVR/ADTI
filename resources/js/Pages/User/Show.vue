@@ -3,26 +3,28 @@ import { ref, onMounted } from 'vue';
 import { router, Head, Link } from '@inertiajs/vue3';
 import AppLayout from "@/Layouts/AppLayout.vue";
 import PrimaryButton from "@/Components/PrimaryButton.vue";
-import SecondaryButton from "@/Components/SecondaryButton.vue";
 import Back from "@/Components/MyComponents/Back.vue";
 import General from "./Tabs/General.vue";
 import DigitalDocuments from "./Tabs/DigitalDocuments.vue";
 import Performance from "./Tabs/Performance.vue";
-import EmployeesInCharge from "./Tabs/EmployeesInCharge.vue"; // Importar componente nuevo
+import EmployeesInCharge from "./Tabs/EmployeesInCharge.vue"; 
+import Vacations from "./Tabs/Vacations.vue"; // Componente nuevo
 import axios from "axios";
 import { ElNotification } from "element-plus";
 import { 
     User,
     Folder,
     DataLine,
-    Avatar // Icono para la nueva pestaña
+    Avatar,
+    Calendar // Icono para la nueva pestaña
 } from '@element-plus/icons-vue';
 
 const props = defineProps({
     user: Object,
     users: Array,
-    vacations: Array,
-    employeesInCharge: Array, // Nueva prop recibida del controlador
+    vacations: Array, // Mantiene la compatibilidad si la usas en otro lado
+    employeesInCharge: Array, 
+    vacationDetails: Object, // NUEVA prop recibida del controlador
 });
 
 // State
@@ -249,6 +251,18 @@ onMounted(() => {
                                     </template>
                                     <div class="py-6 animate-fade-in">
                                         <EmployeesInCharge :employees="employeesInCharge" />
+                                    </div>
+                                </el-tab-pane>
+
+                                <!-- NUEVA PESTAÑA: VACACIONES Y AUSENCIAS -->
+                                <el-tab-pane name="5">
+                                    <template #label>
+                                        <span class="flex items-center gap-2">
+                                            <el-icon><Calendar /></el-icon> Vacaciones
+                                        </span>
+                                    </template>
+                                    <div class="py-6 animate-fade-in">
+                                        <Vacations :user="user" :vacationDetails="vacationDetails" />
                                     </div>
                                 </el-tab-pane>
 

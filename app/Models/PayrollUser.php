@@ -17,7 +17,9 @@ class PayrollUser extends Pivot
     protected $fillable = [
         'date',
         'check_in',
+        'check_in_location',
         'check_out',
+        'check_out_location',
         'late',
         'extra_hours',
         'extra_minutes',
@@ -71,24 +73,40 @@ class PayrollUser extends Pivot
                 return;
             }
 
+            // --- LÓGICA NOCTURNA: Si la salida es numéricamente menor a la entrada, cruzó la medianoche
+            if ($check_out->lessThan($check_in)) {
+                $check_out->addDay();
+            }
+
             $total_extra_minutes = 0;
+
+            // Determinar los límites del turno basados en el usuario
+            $shift = $this->user->org_props['work_shift'] ?? 'Diurno';
+            
+            if ($shift === 'Nocturno (19:00 - 07:00)') {
+                $start_of_shift = Carbon::createFromTime(19, 0);
+                $end_of_shift = Carbon::createFromTime(7, 0)->addDay();
+            } elseif ($shift === 'Nocturno (20:00 - 08:00)') {
+                $start_of_shift = Carbon::createFromTime(20, 0);
+                $end_of_shift = Carbon::createFromTime(8, 0)->addDay();
+            } else {
+                // Diurno por defecto
+                $start_of_shift = Carbon::createFromTime(9, 0);
+                $end_of_shift = Carbon::createFromTime(18, 0);
+            }
 
             // Si es fin de semana, todo el tiempo trabajado es extra
             if (Carbon::parse($this->date)->isWeekend()) {
                 $total_extra_minutes = $check_in->diffInMinutes($check_out);
             } else {
-                // De lunes a viernes
-                $start_of_day = Carbon::createFromTime(9, 0); // 09:00 hrs
-                $end_of_day = Carbon::createFromTime(18, 0); // 18:00 hrs
-
-                // 1. Calcula el tiempo extra si llega ANTES de las 09:00 hrs
-                if ($check_in->lessThan($start_of_day)) {
-                    $total_extra_minutes += $check_in->diffInMinutes($start_of_day);
+                // 1. Calcula el tiempo extra si llega ANTES de su hora de entrada oficial
+                if ($check_in->lessThan($start_of_shift)) {
+                    $total_extra_minutes += $check_in->diffInMinutes($start_of_shift);
                 }
 
-                // 2. Calcula el tiempo trabajado DESPUÉS de las 18:00 hrs
-                if ($check_out->greaterThan($end_of_day)) {
-                    $total_extra_minutes += $end_of_day->diffInMinutes($check_out);
+                // 2. Calcula el tiempo extra trabajado DESPUÉS de su hora de salida oficial
+                if ($check_out->greaterThan($end_of_shift)) {
+                    $total_extra_minutes += $end_of_shift->diffInMinutes($check_out);
                 }
             }
 
@@ -107,19 +125,40 @@ class PayrollUser extends Pivot
     public function calculateLate()
     {
         $toleranceMinutes = 15;
-        $baseTime = Carbon::createFromTime(9, 0); // 09:00 AM
+        
+        // Determinar la base del turno
+        $shift = $this->user->org_props['work_shift'] ?? 'Diurno';
+        if ($shift === 'Nocturno (19:00 - 07:00)') {
+            $baseTime = Carbon::createFromTime(19, 0);
+        } elseif ($shift === 'Nocturno (20:00 - 08:00)') {
+            $baseTime = Carbon::createFromTime(20, 0);
+        } else {
+            $baseTime = Carbon::createFromTime(9, 0); // 09:00 AM
+        }
 
         // Verifica si existe una hora de entrada (check_in) y limpia el valor
         if (!empty($this->check_in)) {
             try {
                 $checkInTime = Carbon::createFromFormat('H:i', trim($this->check_in));
+                
+                // CORRECCIÓN AQUÍ: Extracción segura de la fecha para evitar "Double time specification"
+                $safeDate = Carbon::parse($this->date)->toDateString();
+                
+                // Normalizamos con la fecha segura
+                $baseDateTime = Carbon::parse($safeDate . ' ' . $baseTime->format('H:i'));
+                $checkInDateTime = Carbon::parse($safeDate . ' ' . $checkInTime->format('H:i'));
+                
+                // Si el turno empieza de noche (ej. 18:00+) y la llegada es de mañana (ej. < 12:00), cruzó medianoche
+                if ($baseTime->hour >= 18 && $checkInTime->hour < 12) {
+                    $checkInDateTime->addDay();
+                }
 
                 // Calcula el límite de tiempo permitido incluyendo la tolerancia
-                $allowedTime = $baseTime->copy()->addMinutes($toleranceMinutes);
+                $allowedDateTime = $baseDateTime->copy()->addMinutes($toleranceMinutes);
 
                 // Calcula minutos tarde si check_in es después de la hora permitida
-                if ($checkInTime->greaterThan($allowedTime)) {
-                    $lateMinutes = $allowedTime->diffInMinutes($checkInTime);
+                if ($checkInDateTime->greaterThan($allowedDateTime)) {
+                    $lateMinutes = $allowedDateTime->diffInMinutes($checkInDateTime);
 
                     // Actualiza el campo 'late' en el modelo
                     $this->update([

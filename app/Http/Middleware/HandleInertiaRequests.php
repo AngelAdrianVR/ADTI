@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Spatie\Permission\Models\Permission;
+use App\Models\VacationRequest; // <-- Importación necesaria
 
 class HandleInertiaRequests extends Middleware
 {
@@ -50,7 +51,7 @@ class HandleInertiaRequests extends Middleware
 
                 return null;
             },
-            // NUEVO: Compartir la entrada de tiempo activa (si existe)
+            // Compartir la entrada de tiempo activa (si existe)
             'auth.user.active_entry' => function () use ($request) {
                 if ($request->user()) {
                     return $request->user()->activeTimeEntry()
@@ -58,6 +59,27 @@ class HandleInertiaRequests extends Middleware
                         ->first();
                 }
                 return null;
+            },
+            // NUEVO: Contador de solicitudes de vacaciones pendientes
+            'auth.user.pendingVacationRequests' => function () use ($request) {
+                $user = $request->user();
+                if (!$user) return 0;
+
+                // 1. Si tiene el permiso global, cuenta absolutamente todas las pendientes
+                if ($user->can('Gestionar cualquier solicitud de vacaciones')) {
+                    return VacationRequest::where('status', 'Pendiente')->count();
+                }
+
+                // 2. Si no tiene el permiso global, verificamos si tiene empleados a cargo
+                $employeesInCharge = $user->employees_in_charge ?? [];
+                if (!empty($employeesInCharge)) {
+                    return VacationRequest::where('status', 'Pendiente')
+                        ->whereIn('user_id', $employeesInCharge)
+                        ->count();
+                }
+
+                // 3. Si no cumple ninguna de las dos, devuelve 0
+                return 0;
             },
         ]);
     }
