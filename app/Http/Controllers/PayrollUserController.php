@@ -199,37 +199,61 @@ class PayrollUserController extends Controller
             }
             // --- FIN DE CORRECCIÓN DE CONSULTA ---
 
-            // Buscar el registro de asistencia usando la FECHA DEL PUNCH, no la de hoy
-            $existingEntry = PayrollUser::where('user_id', $employee->id)
-                ->whereDate('date', $punchDateStr) // <-- CAMBIO CRÍTICO
+            // --- LÓGICA DE TURNOS ABIERTOS (SOPORTE NOCTURNO) ---
+            $existingEntry = null;
+
+            // 1. Buscar turno abierto reciente (menos de 18 horas desde el check-in)
+            $openEntry = PayrollUser::where('user_id', $employee->id)
+                ->whereNotNull('check_in')
+                ->whereNull('check_out')
+                ->orderBy('date', 'desc')
                 ->first();
 
-            if (!$existingEntry) { //No existe registro de asistencia del empleado en cuestion
+            if ($openEntry) {
+                $safeDate = Carbon::parse($openEntry->date)->toDateString();
+                $checkInDateTime = Carbon::parse($safeDate . ' ' . trim($openEntry->check_in));
+                // Si la checada pertenece a un turno abierto válido (e.g., salida de la mañana tras entrada nocturna)
+                if ($checkInDateTime->diffInHours($punchDateTime, false) >= 0 && $checkInDateTime->diffInHours($punchDateTime) < 18) {
+                    $existingEntry = $openEntry;
+                }
+            }
+
+            // 2. Si no es un cierre de un turno previo, buscamos/creamos la entrada para hoy
+            if (!$existingEntry) {
+                $existingEntry = PayrollUser::where('user_id', $employee->id)
+                    ->whereDate('date', $punchDateStr)
+                    ->first();
+            }
+
+            if (!$existingEntry) { // No existe registro válido o abierto
                 $existingEntry = PayrollUser::create([
-                    // 'emp_code' => $emp_code, // Este campo no existe en el modelo PayrollUser
-                    'date' => $punchDateStr, // <-- CAMBIO CRÍTICO
-                    'check_in' => $punchTimeStr, // Es el primer punch, se asigna a check_in
+                    'date' => $punchDateStr,
+                    'check_in' => $punchTimeStr, // Es el primer punch
                     'user_id' => $employee->id,
                     'payroll_id' => $currentPayroll->id,
                 ]);
                 $employee->update(['paused' => null]);
-            } else { //Ya existe registro de asistencia
+            } else { // Ya existe registro (posible cierre de turno)
                 
-                // --- PROTECCIÓN ANTI-RÁFAGA DE BIOTIME (3 minutos) ---
-                $punchTimeParsed = Carbon::parse($punchTimeStr);
+                // --- PROTECCIÓN ANTI-RÁFAGA DE BIOTIME (CON SOPORTE NOCTURNO) ---
                 $isDuplicate = false;
 
-                // --- PROTECCIÓN ANTI-RÁFAGA DE BIOTIME MEJORADA (Uso de abs para prevenir números negativos) ---
                 if ($existingEntry->check_in) {
-                    $checkInParsed = Carbon::parse($existingEntry->check_in);
-                    if (abs($punchTimeParsed->diffInMinutes($checkInParsed, false)) <= 3) {
+                    $safeDate = Carbon::parse($existingEntry->date)->toDateString();
+                    $ciDateTime = Carbon::parse($safeDate . ' ' . trim($existingEntry->check_in));
+                    if (abs($punchDateTime->diffInMinutes($ciDateTime, false)) <= 3) {
                         $isDuplicate = true;
                     }
                 }
                 
-                if ($existingEntry->check_out) {
-                    $checkOutParsed = Carbon::parse($existingEntry->check_out);
-                    if (abs($punchTimeParsed->diffInMinutes($checkOutParsed, false)) <= 3) {
+                if ($existingEntry->check_out && !$isDuplicate) {
+                    $safeDate = Carbon::parse($existingEntry->date)->toDateString();
+                    $coDateTime = Carbon::parse($safeDate . ' ' . trim($existingEntry->check_out));
+                    // Si cruzó la medianoche, reajustamos el día del check_out para la comparación
+                    if ($existingEntry->check_in && $coDateTime->lessThan(Carbon::parse($safeDate . ' ' . trim($existingEntry->check_in)))) {
+                        $coDateTime->addDay();
+                    }
+                    if (abs($punchDateTime->diffInMinutes($coDateTime, false)) <= 3) {
                         $isDuplicate = true;
                     }
                 }
@@ -244,13 +268,17 @@ class PayrollUserController extends Controller
                         ]);
                         $employee->update(['paused' => null]);
                     }
-                    else if (strtotime($punchTimeStr) <= strtotime('17:39')) {
-                        $employee->setPause();
-                    } else {
-                         $existingEntry->update([
-                            'check_out' => $punchTimeStr,
-                        ]);
-                        $employee->update(['paused' => null]);
+                    else {
+                        // Lógica especial de pausa (protegida para que no afecte a turnos nocturnos)
+                        $shift = $employee->org_props['work_shift'] ?? 'Diurno';
+                        if ($shift === 'Diurno' && strtotime($punchTimeStr) <= strtotime('17:39')) {
+                            $employee->setPause();
+                        } else {
+                             $existingEntry->update([
+                                'check_out' => $punchTimeStr,
+                            ]);
+                            $employee->update(['paused' => null]);
+                        }
                     }
                 }
                 // -----------------------------------------------------

@@ -26,7 +26,7 @@ const emit = defineEmits(['edit-comment']);
 const isOpen = ref(false); 
 const showAttendanceModal = ref(false);
 const showApproveModal = ref(false); 
-const incidences = ref(['Falta injustificada', 'Falta justificada', 'Incapacidad', 'Permiso sin goce', 'Permiso con goce', 'Vacaciones', 'Descanso', 'Día festivo']);
+const incidences = ref(['Falta injustificada', 'Falta justificada', 'Incapacidad', 'Permiso sin goce', 'Permiso con goce', 'Vacaciones', 'Descanso', 'Día festivo', 'Salió de Viaje']);
 
 const form = useForm({
     date: null,
@@ -56,7 +56,6 @@ const stats = computed(() => {
     props.payrollUser.incidences.forEach(day => {
         // Separar lógica de extras
         if (day.approved_at) {
-            // El tiempo rechazado suma 0, por lo tanto no afecta negativamente las estadísticas
             extraMinutesApproved += (day.approved_extra_hours || 0) * 60 + (day.approved_extra_minutes || 0);
         } else if (day.extra_hours || day.extra_minutes) {
             extraMinutesPending += (day.extra_hours || 0) * 60 + (day.extra_minutes || 0);
@@ -100,8 +99,24 @@ const getIncidenceColor = (incidence) => {
     if (incidence.incidence === 'Falta injustificada') return 'bg-red-50 border-red-200';
     if (incidence.incidence === 'Vacaciones') return 'bg-blue-50 border-blue-200';
     if (incidence.incidence === 'Descanso') return 'bg-gray-50 border-gray-200';
+    if (incidence.incidence === 'Salió de Viaje') return 'bg-purple-50 border-purple-200';
     return 'bg-amber-50 border-amber-200';
 };
+
+// --- Helpers para validación GPS ---
+const isValidLocation = (loc) => {
+    if (!loc) return false;
+    // Asumimos válido si tiene coordenadas (contiene coma) y no es un mensaje de error del navegador
+    return loc.includes(',') && !loc.includes('denegada') && !loc.includes('Soportado') && !loc.includes('disponible') && !loc.includes('agotado');
+};
+
+const getLocationError = (loc) => {
+    if (!loc) return null;
+    // Si no es válido según la lógica anterior, asumimos que es el string de error
+    if (!isValidLocation(loc)) return loc;
+    return null;
+};
+// -----------------------------------
 
 const handleCommand = (command) => {
     const [action, date] = command.split('|');
@@ -188,7 +203,6 @@ const submitApproveExtraTime = () => {
     });
 };
 
-// NUEVO: Método para procesar el rechazo
 const submitRejectExtraTime = () => {
     approveForm.put(route('payroll-users.reject-extra-time'), {
         preserveScroll: true,
@@ -231,7 +245,7 @@ const submitRejectExtraTime = () => {
                             <i class="fa-solid fa-triangle-exclamation mr-1"></i> Sin Asistencia
                         </span>
                     </h3>
-                    <p class="text-xs text-gray-500">{{ payrollUser.user.org_props.department }}</p>
+                    <p class="text-xs text-gray-500">{{ payrollUser.user.org_props?.department || 'General' }}</p>
                 </div>
             </div>
 
@@ -325,42 +339,77 @@ const submitRejectExtraTime = () => {
 
                             <!-- Estado / Horas -->
                             <template v-if="day.check_in || day.check_out">
-                                <div class="text-gray-800 font-mono font-bold text-[11px]">{{ day.check_in?.substring(0, 5) || '??' }} - {{ day.check_out?.substring(0, 5) || '??' }}</div>
-                                <div v-if="day.late" class="text-[10px] text-red-500 bg-red-50 px-1.5 rounded border border-red-100">
+                                
+                                <!-- Desglose de Horas y Marcadores GPS -->
+                                <div class="flex items-center gap-1.5 justify-center mt-0.5">
+                                    
+                                    <!-- Check-in -->
+                                    <div class="flex items-center gap-0.5">
+                                        <span class="text-gray-800 font-mono font-bold text-[11px]">{{ day.check_in?.substring(0, 5) || '??' }}</span>
+                                        
+                                        <!-- Validadores GPS Entrada -->
+                                        <el-tooltip v-if="isValidLocation(day.check_in_location)" content="Ver ubicación de entrada" placement="top">
+                                            <a :href="`https://www.google.com/maps/search/?api=1&query=${day.check_in_location}`" target="_blank" class="text-blue-500 hover:text-blue-700 transition-colors" @click.stop>
+                                                <i class="fa-solid fa-location-dot text-[9px]"></i>
+                                            </a>
+                                        </el-tooltip>
+                                        <el-tooltip v-else-if="getLocationError(day.check_in_location)" :content="`Error GPS: ${getLocationError(day.check_in_location)}`" placement="top">
+                                            <i class="fa-solid fa-location-crosshairs text-red-400 text-[9px] cursor-help"></i>
+                                        </el-tooltip>
+                                    </div>
+                                    
+                                    <span class="text-gray-400 text-[10px]">-</span>
+                                    
+                                    <!-- Check-out -->
+                                    <div class="flex items-center gap-0.5">
+                                        <span class="text-gray-800 font-mono font-bold text-[11px]">{{ day.check_out?.substring(0, 5) || '??' }}</span>
+                                        
+                                        <!-- Validadores GPS Salida -->
+                                        <el-tooltip v-if="isValidLocation(day.check_out_location)" content="Ver ubicación de salida" placement="top">
+                                            <a :href="`https://www.google.com/maps/search/?api=1&query=${day.check_out_location}`" target="_blank" class="text-blue-500 hover:text-blue-700 transition-colors" @click.stop>
+                                                <i class="fa-solid fa-location-dot text-[9px]"></i>
+                                            </a>
+                                        </el-tooltip>
+                                        <el-tooltip v-else-if="getLocationError(day.check_out_location)" :content="`Error GPS: ${getLocationError(day.check_out_location)}`" placement="top">
+                                            <i class="fa-solid fa-location-crosshairs text-red-400 text-[9px] cursor-help"></i>
+                                        </el-tooltip>
+                                    </div>
+
+                                </div>
+
+                                <div v-if="day.late" class="text-[10px] text-red-500 bg-red-50 px-1.5 rounded border border-red-100 mt-1">
                                     Retardo: {{ day.late }}m
                                 </div>
 
                                 <!-- UI de Tiempo Extra -->
                                 <div v-if="day.approved_at && (day.extra_hours || day.extra_minutes)">
                                     <!-- Aprobado con 0 horas/minutos = RECHAZADO -->
-                                    <div v-if="day.approved_extra_hours === 0 && day.approved_extra_minutes === 0" class="text-[10px] text-red-700 bg-red-100 px-1.5 py-0.5 rounded border border-red-300 font-semibold text-center leading-tight w-full" title="Tiempo Extra Rechazado">
+                                    <div v-if="day.approved_extra_hours === 0 && day.approved_extra_minutes === 0" class="text-[10px] text-red-700 bg-red-100 px-1.5 py-0.5 rounded border border-red-300 font-semibold text-center leading-tight w-full mt-1" title="Tiempo Extra Rechazado">
                                         T.E. Rechazado <i class="fa-solid fa-xmark ml-0.5"></i>
                                         <div class="text-[8px] mt-0.5 font-normal text-red-700 border-t border-red-200 pt-0.5" title="Persona que rechazó">
                                             Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}
                                         </div>
-                                        <div v-if="day.comment" class="text-[8px] mt-0.5 font-normal text-gray-600 border-t border-red-200 pt-0.5 italic text-left" style="white-space: normal; line-height: 1.2;">
-                                            "{{ day.comment.comments }}"
-                                        </div>
                                     </div>
                                     
                                     <!-- Aprobado con Horas/Minutos > 0 = APROBADO -->
-                                    <div v-else class="text-[10px] text-green-700 bg-green-100 px-1.5 py-0.5 rounded border border-green-300 font-semibold text-center leading-tight w-full" title="Tiempo Extra Aprobado">
+                                    <div v-else class="text-[10px] text-green-700 bg-green-100 px-1.5 py-0.5 rounded border border-green-300 font-semibold text-center leading-tight w-full mt-1" title="Tiempo Extra Aprobado">
                                         T.E. Aprobado:<br>{{ day.approved_extra_hours }}h {{ day.approved_extra_minutes }}m <i class="fa-solid fa-check-circle ml-0.5"></i>
                                         <div class="text-[8px] mt-0.5 font-normal text-green-700 border-t border-green-200 pt-0.5" title="Persona que aprobó">
                                             Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}
                                         </div>
-                                        <div v-if="day.comment" class="text-[8px] mt-0.5 font-normal text-gray-600 border-t border-green-200 pt-0.5 italic text-left" style="white-space: normal; line-height: 1.2;">
-                                            "{{ day.comment.comments }}"
-                                        </div>
                                     </div>
                                 </div>
-                                <div v-else-if="day.extra_hours || day.extra_minutes" class="text-[10px] text-amber-600 bg-amber-50 px-1.5 rounded border border-amber-200 text-center leading-tight" title="Pendiente de aprobación">
+                                <div v-else-if="day.extra_hours || day.extra_minutes" class="text-[10px] text-amber-600 bg-amber-50 px-1.5 rounded border border-amber-200 text-center leading-tight mt-1" title="Pendiente de aprobación">
                                     Extra (Pend.):<br>{{ day.extra_hours }}h {{ day.extra_minutes }}m
                                 </div>
 
                             </template>
-                            <template v-else>
-                                <span class="text-center font-medium" :class="day.incidence === 'Falta injustificada' ? 'text-red-500' : 'text-gray-400'">
+                           <template v-else>
+                                <span class="text-center font-medium" :class="{
+                                    'text-red-500': day.incidence === 'Falta injustificada',
+                                    'text-purple-600': day.incidence === 'Salió de Viaje',
+                                    'text-gray-400': !['Falta injustificada', 'Salió de Viaje'].includes(day.incidence)
+                                }">
                                     {{ day.incidence || '-' }}
                                 </span>
                             </template>
@@ -467,7 +516,7 @@ const submitRejectExtraTime = () => {
                     v-model="approveForm.comments" 
                     type="textarea" 
                     :rows="3" 
-                    placeholder="Ej. Se autoriza por cierre de inventario." 
+                    placeholder="Ej. Se autoriza por cierre de inventario de almacén." 
                 />
                 <span v-if="approveForm.errors.comments" class="text-xs text-red-500 mt-1 block">{{ approveForm.errors.comments }}</span>
             </div>

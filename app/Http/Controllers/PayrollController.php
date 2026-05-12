@@ -49,6 +49,19 @@ class PayrollController extends Controller
         return inertia('Payroll/PrePayrollTemplate',  $processedData);
     }
 
+    public function receiptsTemplate(Request $request, Payroll $payroll)
+    {
+        $userIds = $request->query('user_ids');
+        
+        if (is_string($userIds)) {
+            $userIds = explode(',', $userIds);
+        }
+
+        $processedData = $this->getUserProcessedInfo($payroll, $userIds);
+
+        return inertia('Payroll/PayrollReceiptTemplate',  $processedData);
+    }
+
      private function getUserProcessedInfo(Payroll $payroll, $userIds = null)
     {
         $currentUser = auth()->user();

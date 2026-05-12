@@ -38,7 +38,8 @@ const filteredUsers = computed(() => {
         user.name?.toLowerCase().includes(lowerSearch) ||
         user.email?.toLowerCase().includes(lowerSearch) ||
         user.org_props?.department?.toLowerCase().includes(lowerSearch) ||
-        user.org_props?.position?.toLowerCase().includes(lowerSearch)
+        user.org_props?.position?.toLowerCase().includes(lowerSearch) ||
+        user.org_props?.work_shift?.toLowerCase().includes(lowerSearch) // Permite buscar por turno
     );
 });
 
@@ -122,6 +123,20 @@ const submitInactivate = () => {
         }
     });
 };
+
+// Helper para diseño de turnos
+const getShiftBadgeStyle = (shift) => {
+    if (!shift || shift === 'Diurno') {
+        return {
+            class: 'bg-orange-50 text-orange-600 border border-orange-200',
+            icon: 'fa-solid fa-sun'
+        };
+    }
+    return {
+        class: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
+        icon: 'fa-solid fa-moon'
+    };
+};
 </script>
 
 <template>
@@ -132,7 +147,7 @@ const submitInactivate = () => {
                 <input 
                     v-model="search" 
                     type="text" 
-                    placeholder="Buscar por código, nombre, correo o puesto..." 
+                    placeholder="Buscar por código, nombre, turno o puesto..." 
                     class="w-full pl-10 pr-4 py-2 rounded-lg border-gray-300 focus:border-[#1676A2] focus:ring-[#1676A2] text-sm shadow-sm"
                 >
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-sm"></i>
@@ -169,13 +184,13 @@ const submitInactivate = () => {
             >
                 <el-table-column v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')" type="selection" width="40" />
                 
-                <el-table-column label="Código" width="100">
+                <el-table-column label="Código" width="90">
                     <template #default="scope">
                         <span class="font-semibold text-gray-600 text-sm">{{ scope.row.code || 'N/A' }}</span>
                     </template>
                 </el-table-column>
 
-                <el-table-column label="Usuario" min-width="200">
+                <el-table-column label="Usuario" min-width="180">
                     <template #default="scope">
                         <div class="flex items-center gap-3">
                             <img :src="scope.row.profile_photo_url" class="h-9 w-9 rounded-full object-cover border border-gray-200" alt="">
@@ -187,7 +202,7 @@ const submitInactivate = () => {
                     </template>
                 </el-table-column>
 
-                <el-table-column label="Puesto / Departamento" min-width="180">
+                <el-table-column label="Puesto / Departamento" min-width="170">
                     <template #default="scope">
                         <div>
                             <p class="text-sm text-gray-700 font-medium">{{ scope.row.org_props?.position || 'N/A' }}</p>
@@ -196,10 +211,22 @@ const submitInactivate = () => {
                     </template>
                 </el-table-column>
 
-                <!-- NUEVA COLUMNA: TIEMPO SEMANA -->
-                <el-table-column label="Tiempo (Semana)" width="150" align="center">
+                <!-- NUEVA COLUMNA: TURNO -->
+                <el-table-column label="Turno" min-width="140">
                     <template #default="scope">
-                        <div class="flex items-center justify-center gap-1.5 text-xs font-bold text-[#1676A2] bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
+                        <span 
+                            class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold tracking-wide"
+                            :class="getShiftBadgeStyle(scope.row.org_props?.work_shift).class"
+                        >
+                            <i :class="getShiftBadgeStyle(scope.row.org_props?.work_shift).icon"></i>
+                            {{ scope.row.org_props?.work_shift || 'Diurno' }}
+                        </span>
+                    </template>
+                </el-table-column>
+
+                <el-table-column label="Tiempo (Semana)" width="130" align="center">
+                    <template #default="scope">
+                        <div class="flex items-center justify-center gap-1.5 text-xs font-bold text-[#1676A2] bg-blue-50 px-2 py-1 rounded-full border border-blue-100">
                             <el-icon><Clock /></el-icon>
                             {{ scope.row.weekly_time_formatted }}
                         </div>
@@ -223,7 +250,7 @@ const submitInactivate = () => {
                     </template>
                 </el-table-column>
 
-                <el-table-column align="right" width="120">
+                <el-table-column align="right" width="100">
                     <template #default="scope">
                         <div class="flex items-center justify-end gap-1">
                             <!-- Botón Editar -->
