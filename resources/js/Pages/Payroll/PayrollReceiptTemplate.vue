@@ -13,6 +13,18 @@ const printScreen = () => {
     window.print();
 };
 
+// --- Estado reactivo para visibilidad de comentarios ---
+const visibleComments = ref({});
+
+const toggleComment = (userId, dateStr) => {
+    const key = `${userId}_${dateStr}`;
+    visibleComments.value[key] = !visibleComments.value[key];
+};
+
+const isCommentVisible = (userId, dateStr) => {
+    return !!visibleComments.value[`${userId}_${dateStr}`];
+};
+
 // --- Helpers de Fecha ---
 const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -65,12 +77,14 @@ const get14DaysRecord = (userItem) => {
 
         days.push({
             dateObj: currentDate,
+            dateKey: dateStr, // Clave única para el toggle de comentarios
             label: formatShortDate(currentDate),
             checkIn: incidence?.check_in?.substring(0, 5) || '-',
             checkOut: incidence?.check_out?.substring(0, 5) || '-',
             incidenceText: incidence?.incidence && incidence.incidence !== 'Día normal' ? incidence.incidence : '',
             extraTime: hasExtraTime ? `${incidence.approved_extra_hours || 0}h ${incidence.approved_extra_minutes || 0}m` : '',
             isAbsent: incidence?.incidence === 'Falta injustificada',
+            commentText: incidence?.comment?.comments || null, // Recuperamos el comentario
         });
     }
 
@@ -89,7 +103,7 @@ onMounted(() => {
         <div class="print:hidden p-4 bg-white shadow-sm flex justify-between items-center mb-6">
             <div>
                 <h1 class="font-bold text-lg text-teal-700">Recibos de Catorcena {{ payroll.biweekly }}</h1>
-                <p class="text-xs text-gray-500">Formato ultra compacto a 2 columnas.</p>
+                <p class="text-xs text-gray-500">Formato ultra compacto a 2 columnas. Haz clic en el ícono de <i class="fa-solid fa-comment-dots text-indigo-400 mx-1"></i> para mostrar el comentario en la impresión.</p>
             </div>
             <!-- Uso de botón nativo HTML para garantizar renderizado visual -->
             <button @click="printScreen" class="!bg-teal-600 hover:!bg-teal-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-all flex items-center">
@@ -116,10 +130,11 @@ onMounted(() => {
                 </div>
 
                 <!-- División a Dos Columnas (Semana 1 y Semana 2) -->
+                <!-- Se agregó table-fixed para evitar que la columna se expanda de más al mostrar el comentario largo -->
                 <div class="grid grid-cols-2 gap-4 print:gap-2">
                     
                     <!-- SEMANA 1 -->
-                    <table class="w-full text-left text-[9px] print:text-[7.5px] border border-gray-300 print:border-gray-400">
+                    <table class="w-full text-left text-[9px] print:text-[7.5px] border border-gray-300 print:border-gray-400 table-fixed">
                         <thead class="bg-gray-100 text-gray-700">
                             <tr>
                                 <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%]">Día</th>
@@ -131,17 +146,36 @@ onMounted(() => {
                         </thead>
                         <tbody>
                             <tr v-for="day in get14DaysRecord(item).slice(0, 7)" :key="day.dateObj" class="border-b border-gray-200 print:border-gray-300 last:border-0 hover:bg-gray-50">
-                                <td class="px-1 py-0.5 print:py-[1px] uppercase tracking-wide" :class="{'text-red-600 font-bold': day.isAbsent}">{{ day.label }}</td>
-                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono border-l border-gray-200 print:border-gray-300" :class="{'text-red-600': day.isAbsent}">{{ day.checkIn }}</td>
-                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono border-l border-gray-200 print:border-gray-300" :class="{'text-red-600': day.isAbsent}">{{ day.checkOut }}</td>
-                                <td class="px-1 py-0.5 print:py-[1px] text-gray-700 truncate max-w-[80px] border-l border-gray-200 print:border-gray-300" :class="{'text-red-600 font-bold': day.isAbsent}">{{ day.incidenceText }}</td>
-                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono text-gray-800 border-l border-gray-200 print:border-gray-300">{{ day.extraTime }}</td>
+                                <td class="px-1 py-0.5 print:py-[1px] uppercase tracking-wide align-top" :class="{'text-red-600 font-bold': day.isAbsent}">{{ day.label }}</td>
+                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono border-l border-gray-200 print:border-gray-300 align-top" :class="{'text-red-600': day.isAbsent}">{{ day.checkIn }}</td>
+                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono border-l border-gray-200 print:border-gray-300 align-top" :class="{'text-red-600': day.isAbsent}">{{ day.checkOut }}</td>
+                                
+                                <!-- COLUMNA INCIDENCIA + COMENTARIOS -->
+                                <td class="px-1 py-0.5 print:py-[1px] text-gray-700 border-l border-gray-200 print:border-gray-300 align-top" :class="{'text-red-600 font-bold': day.isAbsent}">
+                                    <div class="flex justify-between items-start gap-1">
+                                        <span class="truncate leading-tight mt-[1px]">{{ day.incidenceText }}</span>
+                                        <button 
+                                            v-if="day.commentText"
+                                            @click="toggleComment(item.user.id, day.dateKey)"
+                                            class="print:hidden flex-shrink-0 text-indigo-400 hover:text-indigo-600 transition-colors focus:outline-none"
+                                            :title="isCommentVisible(item.user.id, day.dateKey) ? 'Ocultar comentario' : 'Mostrar comentario en la impresión'"
+                                        >
+                                            <i class="fa-solid" :class="isCommentVisible(item.user.id, day.dateKey) ? 'fa-comment-slash text-red-400' : 'fa-comment-dots'"></i>
+                                        </button>
+                                    </div>
+                                    <!-- Comentario expandido -->
+                                    <div v-if="isCommentVisible(item.user.id, day.dateKey)" class="text-[7.5px] print:text-[6.5px] leading-tight italic text-gray-500 mt-1 whitespace-normal break-words border-t border-gray-100 print:border-gray-200 pt-0.5">
+                                        "{{ day.commentText }}"
+                                    </div>
+                                </td>
+
+                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono text-gray-800 border-l border-gray-200 print:border-gray-300 align-top">{{ day.extraTime }}</td>
                             </tr>
                         </tbody>
                     </table>
 
                     <!-- SEMANA 2 -->
-                    <table class="w-full text-left text-[9px] print:text-[7.5px] border border-gray-300 print:border-gray-400">
+                    <table class="w-full text-left text-[9px] print:text-[7.5px] border border-gray-300 print:border-gray-400 table-fixed">
                         <thead class="bg-gray-100 text-gray-700">
                             <tr>
                                 <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%]">Día</th>
@@ -153,11 +187,30 @@ onMounted(() => {
                         </thead>
                         <tbody>
                             <tr v-for="day in get14DaysRecord(item).slice(7, 14)" :key="day.dateObj" class="border-b border-gray-200 print:border-gray-300 last:border-0 hover:bg-gray-50">
-                                <td class="px-1 py-0.5 print:py-[1px] uppercase tracking-wide" :class="{'text-red-600 font-bold': day.isAbsent}">{{ day.label }}</td>
-                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono border-l border-gray-200 print:border-gray-300" :class="{'text-red-600': day.isAbsent}">{{ day.checkIn }}</td>
-                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono border-l border-gray-200 print:border-gray-300" :class="{'text-red-600': day.isAbsent}">{{ day.checkOut }}</td>
-                                <td class="px-1 py-0.5 print:py-[1px] text-gray-700 truncate max-w-[80px] border-l border-gray-200 print:border-gray-300" :class="{'text-red-600 font-bold': day.isAbsent}">{{ day.incidenceText }}</td>
-                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono text-gray-800 border-l border-gray-200 print:border-gray-300">{{ day.extraTime }}</td>
+                                <td class="px-1 py-0.5 print:py-[1px] uppercase tracking-wide align-top" :class="{'text-red-600 font-bold': day.isAbsent}">{{ day.label }}</td>
+                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono border-l border-gray-200 print:border-gray-300 align-top" :class="{'text-red-600': day.isAbsent}">{{ day.checkIn }}</td>
+                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono border-l border-gray-200 print:border-gray-300 align-top" :class="{'text-red-600': day.isAbsent}">{{ day.checkOut }}</td>
+                                
+                                <!-- COLUMNA INCIDENCIA + COMENTARIOS -->
+                                <td class="px-1 py-0.5 print:py-[1px] text-gray-700 border-l border-gray-200 print:border-gray-300 align-top" :class="{'text-red-600 font-bold': day.isAbsent}">
+                                    <div class="flex justify-between items-start gap-1">
+                                        <span class="truncate leading-tight mt-[1px]">{{ day.incidenceText }}</span>
+                                        <button 
+                                            v-if="day.commentText"
+                                            @click="toggleComment(item.user.id, day.dateKey)"
+                                            class="print:hidden flex-shrink-0 text-indigo-400 hover:text-indigo-600 transition-colors focus:outline-none"
+                                            :title="isCommentVisible(item.user.id, day.dateKey) ? 'Ocultar comentario' : 'Mostrar comentario en la impresión'"
+                                        >
+                                            <i class="fa-solid" :class="isCommentVisible(item.user.id, day.dateKey) ? 'fa-comment-slash text-red-400' : 'fa-comment-dots'"></i>
+                                        </button>
+                                    </div>
+                                    <!-- Comentario expandido -->
+                                    <div v-if="isCommentVisible(item.user.id, day.dateKey)" class="text-[7.5px] print:text-[6.5px] leading-tight italic text-gray-500 mt-1 whitespace-normal break-words border-t border-gray-100 print:border-gray-200 pt-0.5">
+                                        "{{ day.commentText }}"
+                                    </div>
+                                </td>
+
+                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono text-gray-800 border-l border-gray-200 print:border-gray-300 align-top">{{ day.extraTime }}</td>
                             </tr>
                         </tbody>
                     </table>
