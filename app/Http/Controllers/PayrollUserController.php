@@ -56,7 +56,7 @@ class PayrollUserController extends Controller
             $existing = PayrollUser::where('user_id', $request->user_id)
                 ->where('date', $request->date)
                 ->first();
-                
+
             if ($existing) {
                 // Borramos el registro completo si era un día normal (para que vuelva a ser Falta).
                 // Protegemos si tenía otra incidencia (ej. Vacaciones) para no borrarla por accidente.
@@ -176,7 +176,7 @@ class PayrollUserController extends Controller
         if ($employee) {
 
             // --- INICIO DE CAMBIOS ---
-            
+
             $time = str_replace('+', ' ', $time);
             $punchDateTime = Carbon::parse($time); // Parsear el timestamp completo
             $punchDateStr = $punchDateTime->toDateString(); // Obtener la FECHA del punch
@@ -186,8 +186,8 @@ class PayrollUserController extends Controller
             // Buscar el período de nómina que CONTENGA esta fecha.
             // Ya que no hay 'end_date', calculamos el fin sumando 13 días a start_date (para un período de 14 días).
             $currentPayroll = Payroll::where('start_date', '<=', $punchDateStr)
-                                    ->whereRaw('? <= DATE_ADD(start_date, INTERVAL 13 DAY)', [$punchDateStr])
-                                    ->first();
+                ->whereRaw('? <= DATE_ADD(start_date, INTERVAL 13 DAY)', [$punchDateStr])
+                ->first();
 
             // Fallback a la nómina activa si no se encuentra un período (lógica original)
             if (!$currentPayroll) {
@@ -234,7 +234,7 @@ class PayrollUserController extends Controller
                 ]);
                 $employee->update(['paused' => null]);
             } else { // Ya existe registro (posible cierre de turno)
-                
+
                 // --- PROTECCIÓN ANTI-RÁFAGA DE BIOTIME (CON SOPORTE NOCTURNO) ---
                 $isDuplicate = false;
 
@@ -245,7 +245,7 @@ class PayrollUserController extends Controller
                         $isDuplicate = true;
                     }
                 }
-                
+
                 if ($existingEntry->check_out && !$isDuplicate) {
                     $safeDate = Carbon::parse($existingEntry->date)->toDateString();
                     $coDateTime = Carbon::parse($safeDate . ' ' . trim($existingEntry->check_out));
@@ -263,18 +263,17 @@ class PayrollUserController extends Controller
                 } else {
                     // Procesar normalmente si pasó el tiempo de gracia
                     if ($existingEntry->check_in && !$existingEntry->check_out) {
-                         $existingEntry->update([
+                        $existingEntry->update([
                             'check_out' => $punchTimeStr,
                         ]);
                         $employee->update(['paused' => null]);
-                    }
-                    else {
+                    } else {
                         // Lógica especial de pausa (protegida para que no afecte a turnos nocturnos)
                         $shift = $employee->org_props['work_shift'] ?? 'Diurno';
                         if ($shift === 'Diurno' && strtotime($punchTimeStr) <= strtotime('17:39')) {
                             $employee->setPause();
                         } else {
-                             $existingEntry->update([
+                            $existingEntry->update([
                                 'check_out' => $punchTimeStr,
                             ]);
                             $employee->update(['paused' => null]);
@@ -314,24 +313,25 @@ class PayrollUserController extends Controller
 
     // --- MÉTODOS PARA APROBACIÓN DE TIEMPO EXTRA ---
 
+    /**
+     * Aprobar tiempo extra con opción de ajuste de horas y guardar comentarios del proyecto.
+     */
     public function approveExtraTime(Request $request)
     {
         $request->validate([
             'date' => 'required|date',
             'user_id' => 'required|exists:users,id',
             'payroll_id' => 'required|exists:payrolls,id',
-            'approved_extra_hours' => 'required|integer|min:0',
-            'approved_extra_minutes' => 'required|integer|min:0|max:59',
-            'comments' => 'nullable|string|max:1200'
+            'approved_extra_hours' => 'required|numeric|min:0',
+            'approved_extra_minutes' => 'required|numeric|min:0|max:59',
+            'comments' => 'nullable|string'
         ]);
 
-        $payrollUser = PayrollUser::firstWhere([
-            'date' => $request->date,
-            'user_id' => $request->user_id
-        ]);
+        $payrollUser = PayrollUser::where('user_id', $request->user_id)
+            ->whereDate('date', clone \Carbon\Carbon::parse($request->date))
+            ->first();
 
         if ($payrollUser) {
-            // Actualizamos la información de aprobación
             $payrollUser->update([
                 'approved_extra_hours' => $request->approved_extra_hours,
                 'approved_extra_minutes' => $request->approved_extra_minutes,
@@ -339,38 +339,42 @@ class PayrollUserController extends Controller
                 'approved_at' => now(),
             ]);
 
-            // Si se escribió un comentario, lo guardamos o actualizamos
+            // Guardar o actualizar el comentario (Nombre del proyecto o justificación)
             if ($request->filled('comments')) {
-                PayrollComment::updateOrCreate(
+                \App\Models\PayrollComment::updateOrCreate(
                     [
-                        'payroll_id' => $request->payroll_id,
                         'user_id' => $request->user_id,
-                        'date' => $request->date,
+                        'payroll_id' => $request->payroll_id,
+                        'date' => clone \Carbon\Carbon::parse($request->date),
                     ],
-                    [
-                        'comments' => $request->comments
-                    ]
+                    ['comments' => $request->comments]
                 );
             }
         }
-        
-        return back();
+
+        // Detectar si la petición viene de Inertia o de Axios
+        if ($request->header('X-Inertia')) {
+            return back();
+        }
+
+        return response()->json(['success' => true]);
     }
 
-    // NUEVO: Método para rechazar tiempo extra (Lo guarda en 0 pero registra la resolución)
+    /**
+     * Rechazar tiempo extra (marcarlo como 0 horas aprobadas)
+     */
     public function rejectExtraTime(Request $request)
     {
         $request->validate([
             'date' => 'required|date',
             'user_id' => 'required|exists:users,id',
             'payroll_id' => 'required|exists:payrolls,id',
-            'comments' => 'nullable|string|max:1200'
+            'comments' => 'nullable|string'
         ]);
 
-        $payrollUser = PayrollUser::firstWhere([
-            'date' => $request->date,
-            'user_id' => $request->user_id
-        ]);
+        $payrollUser = PayrollUser::where('user_id', $request->user_id)
+            ->whereDate('date', clone \Carbon\Carbon::parse($request->date))
+            ->first();
 
         if ($payrollUser) {
             $payrollUser->update([
@@ -381,22 +385,28 @@ class PayrollUserController extends Controller
             ]);
 
             if ($request->filled('comments')) {
-                PayrollComment::updateOrCreate(
+                \App\Models\PayrollComment::updateOrCreate(
                     [
-                        'payroll_id' => $request->payroll_id,
                         'user_id' => $request->user_id,
-                        'date' => $request->date,
+                        'payroll_id' => $request->payroll_id,
+                        'date' => clone \Carbon\Carbon::parse($request->date),
                     ],
-                    [
-                        'comments' => $request->comments
-                    ]
+                    ['comments' => $request->comments]
                 );
             }
         }
-        
-        return back();
+
+        // Detectar si la petición viene de Inertia o de Axios
+        if ($request->header('X-Inertia')) {
+            return back();
+        }
+
+        return response()->json(['success' => true]);
     }
 
+    /**
+     * Revertir una resolución para que vuelva a la lista de pendientes
+     */
     public function revertExtraTime(Request $request)
     {
         $request->validate([
@@ -404,10 +414,9 @@ class PayrollUserController extends Controller
             'user_id' => 'required|exists:users,id',
         ]);
 
-        $payrollUser = PayrollUser::firstWhere([
-            'date' => $request->date,
-            'user_id' => $request->user_id
-        ]);
+        $payrollUser = PayrollUser::where('user_id', $request->user_id)
+            ->whereDate('date', clone \Carbon\Carbon::parse($request->date))
+            ->first();
 
         if ($payrollUser) {
             $payrollUser->update([
@@ -416,9 +425,17 @@ class PayrollUserController extends Controller
                 'approved_by' => null,
                 'approved_at' => null,
             ]);
+
+            // Opcional: También podrías eliminar el PayrollComment aquí si lo deseas, 
+            // pero mantenerlo suele ser útil para que el texto siga ahí al volver a evaluar.
         }
-        
-        return back();
+
+        // Detectar si la petición viene de Inertia o de Axios
+        if ($request->header('X-Inertia')) {
+            return back();
+        }
+
+        return response()->json(['success' => true]);
     }
 
     public function recalculateExtraTime()
