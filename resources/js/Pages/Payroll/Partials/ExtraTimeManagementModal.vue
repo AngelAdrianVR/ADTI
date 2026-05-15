@@ -17,6 +17,7 @@ const emit = defineEmits(['update:modelValue', 'updated']);
 const activeTab = ref('pending');
 const isProcessing = ref(false);
 const processingRow = ref(null); // Qué fila específica está cargando
+const processingGroup = ref(null); // Qué empleado específico está cargando en bloque
 const processingType = ref(null); // 'approve', 'reject' o 'revert'
 
 // NUEVO: Filtro por Departamento
@@ -261,6 +262,75 @@ const revertSingle = async (record) => {
     }
 };
 
+// --- Acciones Por Empleado ---
+const approveEmployee = async (group) => {
+    try {
+        await ElMessageBox.confirm(
+            `Se aprobarán los ${group.records.length} registros pendientes de ${group.user.name}. ¿Deseas continuar?`,
+            'Aprobar Empleado',
+            { confirmButtonText: 'Sí, aprobar', cancelButtonText: 'Cancelar', type: 'warning' }
+        );
+
+        isProcessing.value = true;
+        processingGroup.value = group.user.id;
+        bulkActionType.value = 'approve';
+
+        await Promise.all(group.records.map(record => {
+            const data = editableRecords.value[`${record.user.id}_${record.date}`];
+            return axios.put(route('payroll-users.approve-extra-time'), {
+                date: record.date,
+                user_id: record.user.id,
+                payroll_id: props.payrollId,
+                approved_extra_hours: data.hours,
+                approved_extra_minutes: data.minutes,
+                comments: data.comments
+            });
+        }));
+
+        ElNotification.success(`Tiempo extra aprobado para ${group.user.name.split(' ')[0]}`);
+        emit('updated');
+    } catch (e) {
+        if (e !== 'cancel') ElNotification.error('Error al procesar al empleado');
+    } finally {
+        isProcessing.value = false;
+        processingGroup.value = null;
+        bulkActionType.value = null;
+    }
+};
+
+const rejectEmployee = async (group) => {
+    try {
+        await ElMessageBox.confirm(
+            `Se rechazará el tiempo de los ${group.records.length} registros pendientes de ${group.user.name}. ¿Deseas continuar?`,
+            'Rechazar Empleado',
+            { confirmButtonText: 'Sí, rechazar', cancelButtonText: 'Cancelar', type: 'error' }
+        );
+
+        isProcessing.value = true;
+        processingGroup.value = group.user.id;
+        bulkActionType.value = 'reject';
+
+        await Promise.all(group.records.map(record => {
+            const data = editableRecords.value[`${record.user.id}_${record.date}`];
+            return axios.put(route('payroll-users.reject-extra-time'), {
+                date: record.date,
+                user_id: record.user.id,
+                payroll_id: props.payrollId,
+                comments: data.comments
+            });
+        }));
+
+        ElNotification.success(`Tiempo extra rechazado para ${group.user.name.split(' ')[0]}`);
+        emit('updated');
+    } catch (e) {
+        if (e !== 'cancel') ElNotification.error('Error al procesar al empleado');
+    } finally {
+        isProcessing.value = false;
+        processingGroup.value = null;
+        bulkActionType.value = null;
+    }
+};
+
 // --- Acciones en Lote (Masivas con Chunks) ---
 const approveAll = async () => {
     if (pendingRecords.value.length === 0) return;
@@ -422,13 +492,13 @@ const rejectAll = async () => {
                             </div>
                             <div class="flex gap-2">
                                 <button @click="rejectAll" :disabled="isProcessing" class="bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300 px-4 py-1.5 rounded shadow-sm text-sm font-bold transition-colors disabled:opacity-50 flex items-center justify-center min-w-[130px]">
-                                    <template v-if="isProcessing && bulkActionType === 'reject'">
+                                    <template v-if="isProcessing && bulkActionType === 'reject' && !processingGroup">
                                         <i class="fa-solid fa-spinner animate-spin mr-2"></i> {{ bulkProgress }}%
                                     </template>
                                     <span v-else>Rechazar {{ selectedDepartment ? 'visibles' : 'todo' }}</span>
                                 </button>
                                 <button @click="approveAll" :disabled="isProcessing" class="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-1.5 rounded shadow-sm text-sm font-bold transition-colors disabled:opacity-50 flex items-center justify-center min-w-[130px]">
-                                    <template v-if="isProcessing && bulkActionType === 'approve'">
+                                    <template v-if="isProcessing && bulkActionType === 'approve' && !processingGroup">
                                         <i class="fa-solid fa-spinner animate-spin mr-2"></i> {{ bulkProgress }}%
                                     </template>
                                     <span v-else>Aprobar {{ selectedDepartment ? 'visibles' : 'todo' }}</span>
@@ -436,13 +506,13 @@ const rejectAll = async () => {
                             </div>
                         </div>
 
-                        <!-- Barra de Progreso Superior (visible solo en acción masiva) -->
-                        <div v-if="isProcessing" class="w-full bg-gray-200 h-1">
+                        <!-- Barra de Progreso Superior (visible solo en acción masiva total) -->
+                        <div v-if="isProcessing && !processingGroup" class="w-full bg-gray-200 h-1">
                             <div class="bg-indigo-500 h-1 transition-all duration-300 ease-out" :style="{ width: `${bulkProgress}%` }"></div>
                         </div>
 
                         <!-- Tabla Agrupada Estilo Excel -->
-                        <div class="border border-gray-200 rounded-b-lg overflow-x-auto" :class="{'opacity-75 pointer-events-none': isProcessing}">
+                        <div class="border border-gray-200 rounded-b-lg overflow-x-auto" :class="{'opacity-75 pointer-events-none': isProcessing && !processingGroup}">
                             <table class="w-full text-left text-sm whitespace-nowrap">
                                 <thead class="bg-gray-100 text-gray-600 uppercase text-[10px] tracking-wider border-b border-gray-200">
                                     <tr>
@@ -455,7 +525,7 @@ const rejectAll = async () => {
                                 </thead>
                                 
                                 <template v-for="group in groupedPendingRecords" :key="group.user.id">
-                                    <tbody class="divide-y divide-gray-200 border-t-[3px] border-gray-300">
+                                    <tbody class="divide-y divide-gray-200 border-t-[3px] border-gray-300" :class="{'opacity-50': isProcessing && processingGroup === group.user.id}">
                                         <!-- Header del Colaborador -->
                                         <tr class="bg-indigo-50/80 border-b border-indigo-100">
                                             <td colspan="5" class="px-4 py-2">
@@ -467,11 +537,32 @@ const rejectAll = async () => {
                                                             <p class="text-[10px] text-gray-500 font-mono mt-0.5">ID: {{ group.user.id }} | {{ group.user.org_props?.department || 'General' }}</p>
                                                         </div>
                                                     </div>
-                                                    <!-- KPI Total del Empleado -->
-                                                    <div>
+                                                    <!-- KPI Total del Empleado y Botones de Empleado -->
+                                                    <div class="flex items-center gap-3">
                                                         <span class="inline-flex items-center px-2 py-1 rounded font-bold bg-amber-100 text-amber-800 border border-amber-200 text-xs shadow-sm" title="Total pendiente de este empleado">
-                                                            <i class="fa-solid fa-clock mr-1"></i> Total Pendiente: {{ formatTotalTime(group.totalPendingMinutes) }}
+                                                            <i class="fa-solid fa-clock mr-1"></i> Total: {{ formatTotalTime(group.totalPendingMinutes) }}
                                                         </span>
+
+                                                        <div class="flex items-center gap-1 border-l border-indigo-200 pl-3">
+                                                            <button 
+                                                                @click="rejectEmployee(group)"
+                                                                :disabled="isProcessing"
+                                                                class="w-7 h-7 rounded bg-white text-red-500 border border-red-200 hover:bg-red-50 transition-colors shadow-sm focus:outline-none disabled:opacity-50 flex justify-center items-center"
+                                                                title="Rechazar todo a este empleado"
+                                                            >
+                                                                <i v-if="processingGroup === group.user.id && bulkActionType === 'reject'" class="fa-solid fa-spinner animate-spin"></i>
+                                                                <i v-else class="fa-solid fa-xmark"></i>
+                                                            </button>
+                                                            <button 
+                                                                @click="approveEmployee(group)"
+                                                                :disabled="isProcessing"
+                                                                class="w-7 h-7 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-sm focus:outline-none disabled:opacity-50 flex justify-center items-center"
+                                                                title="Aprobar todo a este empleado"
+                                                            >
+                                                                <i v-if="processingGroup === group.user.id && bulkActionType === 'approve'" class="fa-solid fa-spinner animate-spin"></i>
+                                                                <i v-else class="fa-solid fa-check-double"></i>
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </td>
