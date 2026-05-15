@@ -19,6 +19,9 @@ const isProcessing = ref(false);
 const processingRow = ref(null); // Qué fila específica está cargando
 const processingType = ref(null); // 'approve', 'reject' o 'revert'
 
+// NUEVO: Filtro por Departamento
+const selectedDepartment = ref('');
+
 // Variables para Procesamiento Masivo
 const bulkProgress = ref(0);
 const bulkActionType = ref(null);
@@ -30,6 +33,17 @@ const isLoadingData = ref(true);
 const isVisible = computed({
     get: () => props.modelValue,
     set: (val) => emit('update:modelValue', val)
+});
+
+// Extraer departamentos disponibles dinámicamente
+const availableDepartments = computed(() => {
+    const depts = new Set();
+    props.payrollUsers.forEach(item => {
+        if (item.user.org_props?.department) {
+            depts.add(item.user.org_props.department);
+        }
+    });
+    return Array.from(depts).sort();
 });
 
 // --- Estado Reactivo para Edición Rápida (Estilo Excel) ---
@@ -46,6 +60,7 @@ watch(isVisible, (newVal) => {
     } else {
         isLoadingData.value = true;
         activeTab.value = 'pending';
+        selectedDepartment.value = ''; // Resetear filtro al cerrar
     }
 });
 
@@ -75,10 +90,15 @@ function initializeEditableRecords() {
     });
 }
 
-// --- Listas Computadas (Planas para procesamiento lógico) ---
+// --- Listas Computadas (Planas para procesamiento lógico, respetando el filtro) ---
 const pendingRecords = computed(() => {
     const records = [];
     props.payrollUsers.forEach(item => {
+        // Filtrar por departamento si hay uno seleccionado
+        if (selectedDepartment.value && item.user.org_props?.department !== selectedDepartment.value) {
+            return;
+        }
+
         item.incidences.forEach(inc => {
             if (!inc.approved_at && (inc.extra_hours > 0 || inc.extra_minutes > 0)) {
                 records.push({
@@ -96,6 +116,11 @@ const pendingRecords = computed(() => {
 const resolvedRecords = computed(() => {
     const records = [];
     props.payrollUsers.forEach(item => {
+        // Filtrar por departamento si hay uno seleccionado
+        if (selectedDepartment.value && item.user.org_props?.department !== selectedDepartment.value) {
+            return;
+        }
+
         item.incidences.forEach(inc => {
             if (inc.approved_at && (inc.extra_hours > 0 || inc.extra_minutes > 0 || inc.approved_extra_hours > 0)) {
                 records.push({
@@ -113,17 +138,20 @@ const resolvedRecords = computed(() => {
     return records.sort((a, b) => new Date(b.date) - new Date(a.date));
 });
 
-// --- AGRUPACIÓN PARA VISTA EN TABLAS ---
+// --- AGRUPACIÓN PARA VISTA EN TABLAS CON TOTALES ---
 const groupedPendingRecords = computed(() => {
     const groups = {};
     pendingRecords.value.forEach(record => {
         if (!groups[record.user.id]) {
             groups[record.user.id] = {
                 user: record.user,
-                records: []
+                records: [],
+                totalPendingMinutes: 0 // Acumulador
             };
         }
         groups[record.user.id].records.push(record);
+        // Sumar minutos de esta incidencia pendiente
+        groups[record.user.id].totalPendingMinutes += (record.incidence.extra_hours || 0) * 60 + (record.incidence.extra_minutes || 0);
     });
     // Convertimos a array y ordenamos a los empleados alfabéticamente
     return Object.values(groups).sort((a, b) => a.user.name.localeCompare(b.user.name));
@@ -135,15 +163,17 @@ const groupedResolvedRecords = computed(() => {
         if (!groups[record.user.id]) {
             groups[record.user.id] = {
                 user: record.user,
-                records: []
+                records: [],
+                totalApprovedMinutes: 0 // Acumulador
             };
         }
         groups[record.user.id].records.push(record);
+        // Sumar minutos aprobados (Rechazados sumarán 0, lo cual es correcto)
+        groups[record.user.id].totalApprovedMinutes += (record.incidence.approved_extra_hours || 0) * 60 + (record.incidence.approved_extra_minutes || 0);
     });
     // Convertimos a array y ordenamos a los empleados alfabéticamente
     return Object.values(groups).sort((a, b) => a.user.name.localeCompare(b.user.name));
 });
-
 
 // --- Helpers Visuales ---
 const formatDate = (dateStr) => {
@@ -153,6 +183,14 @@ const formatDate = (dateStr) => {
 const formatTime = (timeStr) => {
     if (!timeStr) return '--:--';
     return timeStr.substring(0, 5); 
+};
+
+// Formatea el total de minutos en Xh Ym
+const formatTotalTime = (totalMinutes) => {
+    if (!totalMinutes) return '0h 0m';
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    return `${h}h ${m}m`;
 };
 
 // --- Acciones Individuales ---
@@ -225,9 +263,10 @@ const revertSingle = async (record) => {
 
 // --- Acciones en Lote (Masivas con Chunks) ---
 const approveAll = async () => {
+    if (pendingRecords.value.length === 0) return;
     try {
         await ElMessageBox.confirm(
-            'Se aprobará todo el tiempo extra de la tabla. ¿Deseas continuar?',
+            `Se aprobarán los ${pendingRecords.value.length} registros que se muestran actualmente en la tabla. ¿Deseas continuar?`,
             'Aprobar Todo',
             { confirmButtonText: 'Sí, aprobar todo', cancelButtonText: 'Cancelar', type: 'warning' }
         );
@@ -238,7 +277,7 @@ const approveAll = async () => {
 
         const total = pendingRecords.value.length;
         let completed = 0;
-        const chunkSize = 5; // Envía 5 peticiones simultáneas como máximo para no saturar el servidor
+        const chunkSize = 5; 
 
         for (let i = 0; i < total; i += chunkSize) {
             const chunk = pendingRecords.value.slice(i, i + chunkSize);
@@ -258,7 +297,7 @@ const approveAll = async () => {
             }));
         }
 
-        ElNotification.success('Todo el tiempo extra fue aprobado correctamente');
+        ElNotification.success('Todo el tiempo extra mostrado fue aprobado correctamente');
         emit('updated');
     } catch (e) {
         if (e !== 'cancel') ElNotification.error('Error al procesar el lote');
@@ -270,9 +309,10 @@ const approveAll = async () => {
 };
 
 const rejectAll = async () => {
+    if (pendingRecords.value.length === 0) return;
     try {
         await ElMessageBox.confirm(
-            'Se rechazará por completo todo el tiempo pendiente en esta lista. ¿Deseas continuar?',
+            `Se rechazará por completo el tiempo de los ${pendingRecords.value.length} registros que se muestran actualmente en la tabla. ¿Deseas continuar?`,
             'Rechazar Todo',
             { confirmButtonText: 'Sí, rechazar todo', cancelButtonText: 'Cancelar', type: 'error' }
         );
@@ -283,7 +323,7 @@ const rejectAll = async () => {
 
         const total = pendingRecords.value.length;
         let completed = 0;
-        const chunkSize = 5; // Envía 5 peticiones simultáneas como máximo
+        const chunkSize = 5; 
 
         for (let i = 0; i < total; i += chunkSize) {
             const chunk = pendingRecords.value.slice(i, i + chunkSize);
@@ -301,7 +341,7 @@ const rejectAll = async () => {
             }));
         }
 
-        ElNotification.success('Todo el tiempo extra pendiente fue rechazado');
+        ElNotification.success('Todo el tiempo extra mostrado fue rechazado');
         emit('updated');
     } catch (e) {
         if (e !== 'cancel') ElNotification.error('Error al procesar el lote');
@@ -324,6 +364,23 @@ const rejectAll = async () => {
         :close-on-press-escape="!isProcessing"
         :show-close="!isProcessing"
     >
+        <!-- CABECERA: Filtros Rápidos -->
+        <div class="mb-4 flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200">
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-filter text-gray-400"></i>
+                <span class="text-sm font-semibold text-gray-700 w-full">Filtrar tabla por:</span>
+                <el-select 
+                    v-model="selectedDepartment" 
+                    placeholder="Todos los departamentos" 
+                    clearable 
+                    class="!w-64 flex-shrink-0"
+                    :disabled="isProcessing"
+                >
+                    <el-option v-for="dept in availableDepartments" :key="dept" :label="dept" :value="dept" />
+                </el-select>
+            </div>
+        </div>
+
         <!-- ESTADO DE CARGA DIFERIDO -->
         <div v-if="isLoadingData" class="py-20 flex flex-col items-center justify-center min-h-[300px]">
             <i class="fa-solid fa-circle-notch animate-spin text-5xl text-indigo-500 mb-4"></i>
@@ -346,7 +403,9 @@ const rejectAll = async () => {
 
                     <div v-if="pendingRecords.length === 0" class="py-12 text-center text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-300 mt-2">
                         <i class="fa-solid fa-check-circle text-4xl text-green-300 mb-3 block"></i>
-                        <p class="font-medium">Todo al día. No hay tiempo extra pendiente de revisar.</p>
+                        <p class="font-medium">
+                            {{ selectedDepartment ? 'No hay pendientes para el departamento seleccionado.' : 'Todo al día. No hay tiempo extra pendiente de revisar.' }}
+                        </p>
                     </div>
 
                     <div v-else class="mt-2">
@@ -354,7 +413,7 @@ const rejectAll = async () => {
                         <div class="flex flex-col md:flex-row justify-between md:items-center bg-blue-50/50 p-3 rounded-t-lg border border-blue-100 border-b-0 gap-3">
                             <div class="flex-1">
                                 <p v-if="!isProcessing" class="text-xs text-blue-700 font-medium">
-                                    <i class="fa-solid fa-circle-info mr-1"></i> Puedes ajustar las horas y observaciones individualmente antes de aprobar.
+                                    <i class="fa-solid fa-circle-info mr-1"></i> Mostrando <strong>{{ pendingRecords.length }}</strong> registros pendientes {{ selectedDepartment ? `de ${selectedDepartment}` : 'en total' }}.
                                 </p>
                                 <p v-else class="text-xs text-amber-600 font-bold animate-pulse flex items-center gap-1.5">
                                     <i class="fa-solid fa-triangle-exclamation"></i>
@@ -366,13 +425,13 @@ const rejectAll = async () => {
                                     <template v-if="isProcessing && bulkActionType === 'reject'">
                                         <i class="fa-solid fa-spinner animate-spin mr-2"></i> {{ bulkProgress }}%
                                     </template>
-                                    <span v-else>Rechazar todo</span>
+                                    <span v-else>Rechazar {{ selectedDepartment ? 'visibles' : 'todo' }}</span>
                                 </button>
                                 <button @click="approveAll" :disabled="isProcessing" class="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-1.5 rounded shadow-sm text-sm font-bold transition-colors disabled:opacity-50 flex items-center justify-center min-w-[130px]">
                                     <template v-if="isProcessing && bulkActionType === 'approve'">
                                         <i class="fa-solid fa-spinner animate-spin mr-2"></i> {{ bulkProgress }}%
                                     </template>
-                                    <span v-else>Aprobar todo</span>
+                                    <span v-else>Aprobar {{ selectedDepartment ? 'visibles' : 'todo' }}</span>
                                 </button>
                             </div>
                         </div>
@@ -400,11 +459,19 @@ const rejectAll = async () => {
                                         <!-- Header del Colaborador -->
                                         <tr class="bg-indigo-50/80 border-b border-indigo-100">
                                             <td colspan="5" class="px-4 py-2">
-                                                <div class="flex items-center gap-3">
-                                                    <img :src="group.user.profile_photo_url" class="h-8 w-8 rounded-full border border-gray-300 object-cover shadow-sm">
+                                                <div class="flex items-center justify-between">
+                                                    <div class="flex items-center gap-3">
+                                                        <img :src="group.user.profile_photo_url" class="h-8 w-8 rounded-full border border-gray-300 object-cover shadow-sm">
+                                                        <div>
+                                                            <p class="font-bold text-[#0B3B51] text-sm uppercase leading-tight">{{ group.user.name }}</p>
+                                                            <p class="text-[10px] text-gray-500 font-mono mt-0.5">ID: {{ group.user.id }} | {{ group.user.org_props?.department || 'General' }}</p>
+                                                        </div>
+                                                    </div>
+                                                    <!-- KPI Total del Empleado -->
                                                     <div>
-                                                        <p class="font-bold text-[#0B3B51] text-sm uppercase leading-tight">{{ group.user.name }}</p>
-                                                        <p class="text-[10px] text-gray-500 font-mono mt-0.5">ID: {{ group.user.id }} | {{ group.user.org_props?.department || 'General' }}</p>
+                                                        <span class="inline-flex items-center px-2 py-1 rounded font-bold bg-amber-100 text-amber-800 border border-amber-200 text-xs shadow-sm" title="Total pendiente de este empleado">
+                                                            <i class="fa-solid fa-clock mr-1"></i> Total Pendiente: {{ formatTotalTime(group.totalPendingMinutes) }}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </td>
@@ -509,7 +576,9 @@ const rejectAll = async () => {
 
                     <div v-if="resolvedRecords.length === 0" class="py-12 text-center text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-300 mt-2">
                         <i class="fa-regular fa-folder-open text-4xl text-gray-300 mb-3 block"></i>
-                        <p class="font-medium">No hay historial de resoluciones en esta nómina.</p>
+                        <p class="font-medium">
+                             {{ selectedDepartment ? 'No hay historial para el departamento seleccionado.' : 'No hay historial de resoluciones en esta nómina.' }}
+                        </p>
                     </div>
 
                     <div v-else class="mt-2 border border-gray-200 rounded-lg overflow-x-auto">
@@ -529,11 +598,19 @@ const rejectAll = async () => {
                                     <!-- Header del Colaborador -->
                                     <tr class="bg-gray-100 border-b border-gray-200">
                                         <td colspan="5" class="px-4 py-2">
-                                            <div class="flex items-center gap-3">
-                                                <img :src="group.user.profile_photo_url" class="h-8 w-8 rounded-full border border-gray-300 object-cover shadow-sm">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center gap-3">
+                                                    <img :src="group.user.profile_photo_url" class="h-8 w-8 rounded-full border border-gray-300 object-cover shadow-sm">
+                                                    <div>
+                                                        <p class="font-bold text-gray-700 text-sm uppercase leading-tight">{{ group.user.name }}</p>
+                                                        <p class="text-[10px] text-gray-500 font-mono mt-0.5">ID: {{ group.user.id }} | {{ group.user.org_props?.department || 'General' }}</p>
+                                                    </div>
+                                                </div>
+                                                <!-- KPI Total del Empleado -->
                                                 <div>
-                                                    <p class="font-bold text-gray-700 text-sm uppercase leading-tight">{{ group.user.name }}</p>
-                                                    <p class="text-[10px] text-gray-500 font-mono mt-0.5">ID: {{ group.user.id }} | {{ group.user.org_props?.department || 'General' }}</p>
+                                                    <span class="inline-flex items-center px-2 py-1 rounded font-bold bg-green-100 text-green-800 border border-green-200 text-xs shadow-sm" title="Total aprobado de este empleado">
+                                                        <i class="fa-solid fa-check-double mr-1"></i> Total Aprobado: {{ formatTotalTime(group.totalApprovedMinutes) }}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </td>
