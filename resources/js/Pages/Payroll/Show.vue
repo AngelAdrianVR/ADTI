@@ -5,6 +5,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import Back from '@/Components/MyComponents/Back.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import IncidencesTable from '@/Components/MyComponents/Payroll/IncidencesTable.vue';
+import ExtraTimeManagementModal from './Partials/ExtraTimeManagementModal.vue'; // NUEVO IMPORT
 import { ElMessage } from 'element-plus';
 
 const props = defineProps({
@@ -72,6 +73,9 @@ const selectedDepartment = ref('');
 const selectedUsers = ref([]);
 const selectAll = ref(false);
 
+// --- Estado Modal Tiempo Extra (NUEVO) ---
+const showExtraTimeModal = ref(false);
+
 // --- Estado Modal Comentarios ---
 const showCommentModal = ref(false);
 const commentForm = useForm({
@@ -110,6 +114,29 @@ const filteredPayrollUsers = computed(() => {
 // --- Computed: Usuarios Visibles (Paginados) ---
 const visiblePayrollUsers = computed(() => {
     return filteredPayrollUsers.value.slice(0, limit.value);
+});
+
+// --- NUEVO COMPUTED: KPIs DE TIEMPO EXTRA ---
+const totalExtraTimeStats = computed(() => {
+    let pendingMins = 0;
+    let approvedMins = 0;
+
+    props.payrollUsers.forEach(item => {
+        item.incidences.forEach(inc => {
+            if (!inc.approved_at && (inc.extra_hours > 0 || inc.extra_minutes > 0)) {
+                pendingMins += (inc.extra_hours || 0) * 60 + (inc.extra_minutes || 0);
+            } else if (inc.approved_at && (inc.approved_extra_hours > 0 || inc.approved_extra_minutes > 0)) {
+                approvedMins += (inc.approved_extra_hours || 0) * 60 + (inc.approved_extra_minutes || 0);
+            }
+        });
+    });
+
+    const formatTime = (mins) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
+
+    return {
+        pending: formatTime(pendingMins),
+        approved: formatTime(approvedMins)
+    };
 });
 
 // --- Lógica de Scroll Infinito ---
@@ -172,6 +199,11 @@ const openReceipts = () => {
         ...params 
     });
     window.open(url, '_blank');
+};
+
+// Actualizar vista cuando el Modal Masivo apruebe/rechace algo
+const reloadPayrollData = () => {
+    router.reload({ only: ['payrollUsers'] });
 };
 
 // --- Manejo de Comentarios ---
@@ -273,6 +305,43 @@ const saveComment = () => {
                     </div>
                 </div>
 
+                <!-- NUEVO: KPIs DE TIEMPO EXTRA -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" v-if="$page.props.auth.user.permissions.includes('Aprobar tiempo extra')">
+                    
+                    <!-- KPI Tiempo Pendiente -->
+                    <div @click="showExtraTimeModal = true" class="bg-white p-4 rounded-xl shadow-sm border border-amber-100 flex items-center justify-between cursor-pointer hover:shadow-md hover:border-amber-300 transition-all group">
+                        <div>
+                            <p class="text-xs text-amber-600 font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                                <i class="fa-solid fa-clock-rotate-left"></i> Tiempo Pendiente
+                            </p>
+                            <div class="flex items-baseline gap-2">
+                                <p class="text-3xl font-black text-gray-800 group-hover:text-amber-600 transition-colors font-mono">{{ totalExtraTimeStats.pending }}</p>
+                                <span class="text-[10px] text-gray-500 font-bold uppercase bg-gray-100 px-2 py-0.5 rounded-full">Por revisar</span>
+                            </div>
+                        </div>
+                        <div class="w-14 h-14 bg-amber-50 rounded-full flex items-center justify-center text-amber-500 text-xl group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-stopwatch"></i>
+                        </div>
+                    </div>
+
+                    <!-- KPI Tiempo Resuelto (Aprobado) -->
+                    <div @click="showExtraTimeModal = true" class="bg-white p-4 rounded-xl shadow-sm border border-green-100 flex items-center justify-between cursor-pointer hover:shadow-md hover:border-green-300 transition-all group lg:col-start-2">
+                        <div>
+                            <p class="text-xs text-green-600 font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                                <i class="fa-solid fa-check-double"></i> Tiempo Aprobado
+                            </p>
+                            <div class="flex items-baseline gap-2">
+                                <p class="text-3xl font-black text-gray-800 group-hover:text-green-600 transition-colors font-mono">{{ totalExtraTimeStats.approved }}</p>
+                                <span class="text-[10px] text-gray-500 font-bold uppercase bg-gray-100 px-2 py-0.5 rounded-full">En nómina</span>
+                            </div>
+                        </div>
+                        <div class="w-14 h-14 bg-green-50 rounded-full flex items-center justify-center text-green-500 text-xl group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-clipboard-check"></i>
+                        </div>
+                    </div>
+                    
+                </div>
+
                 <!-- Barra de Filtros -->
                 <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                     <div class="md:col-span-5">
@@ -340,7 +409,16 @@ const saveComment = () => {
                 </section>
             </div>
 
-            <!-- Modal para Comentarios -->
+            <!-- Modal Componente: Gestión Global de Tiempo Extra -->
+            <ExtraTimeManagementModal
+                v-if="$page.props.auth.user.permissions.includes('Aprobar tiempo extra')"
+                v-model="showExtraTimeModal"
+                :payrollUsers="payrollUsers"
+                :payrollId="payroll.id"
+                @updated="reloadPayrollData"
+            />
+
+            <!-- Modal Clásico para Comentarios (Acción Individual) -->
             <el-dialog
                 v-model="showCommentModal"
                 :title="`Comentario para ${editingUserName}`"
