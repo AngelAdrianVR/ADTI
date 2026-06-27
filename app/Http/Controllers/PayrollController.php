@@ -100,7 +100,7 @@ class PayrollController extends Controller
         $finalUserIds = $usersCollection->pluck('id');
 
         // 2. Cargar datos SOLO para los usuarios filtrados (Optimización)
-        $allAttendances = PayrollUser::with('approver')
+        $allAttendances = PayrollUser::with(['approver', 'approvalDecisions.approver', 'approvalDecisions.approvalLevel'])
             ->where('payroll_id', $payroll->id)
             ->whereIn('user_id', $finalUserIds)
             ->get()
@@ -114,7 +114,30 @@ class PayrollController extends Controller
         $endDate = $payroll->start_date->copy()->addDays(14);
         $holidays = Holiday::whereBetween('date', [$payroll->start_date, $endDate])->get();
 
-        $formattedUsers = $usersCollection->groupBy('id')->map(function ($userGroup) use ($payroll, $allAttendances, $allComments, $holidays) {
+        // 3. Cargar costos de hora extra configurados para esta nómina
+        $extraHourCosts = $payroll->extraHourCosts()->get();
+
+        // 4. Cargar niveles de autorización con sus aprobadores
+        $approvalLevels = $payroll->approvalLevels()
+            ->with('approvers')
+            ->orderBy('level')
+            ->get()
+            ->map(function ($level) {
+                return [
+                    'id' => $level->id,
+                    'level' => $level->level,
+                    'name' => $level->name,
+                    'approvers' => $level->approvers->map(function ($approver) {
+                        return [
+                            'id' => $approver->id,
+                            'name' => $approver->name,
+                            'profile_photo_url' => $approver->profile_photo_url,
+                        ];
+                    })->values(),
+                ];
+            })->values();
+
+        $formattedUsers = $usersCollection->groupBy('id')->map(function ($userGroup) use ($payroll, $allAttendances, $allComments, $holidays, $extraHourCosts, $approvalLevels) {
             $user = $userGroup->first();
             
             // Pasamos collect([]) si está nulo para evitar llamadas extras a BD
@@ -137,11 +160,55 @@ class PayrollController extends Controller
             // Procesar incidencias
             $incidences = $payroll->getProcessedAttendances($user->id, $userAttendances, $holidays);
 
-            // Inyectar comentarios dentro de las incidencias correspondientes
+            // Inyectar comentarios, costos y datos de aprobación dentro de las incidencias
             foreach ($incidences as $incidence) {
                 $dateKey = $incidence->date->toDateString();
                 if ($commentsByDate->has($dateKey)) {
                     $incidence->comment = $commentsByDate->get($dateKey);
+                }
+
+                // Calcular costo de hora extra para este día si tiene tiempo extra
+                if ($incidence->extra_hours || $incidence->extra_minutes) {
+                    $dayOfWeek = $incidence->date->dayOfWeek; // 0=Dom, 6=Sáb
+                    
+                    // Buscar costo específico primero, luego por rango
+                    $cost = $extraHourCosts->first(function ($c) use ($dayOfWeek) {
+                        return $c->range_type === 'specific' && $c->day_of_week === $dayOfWeek;
+                    });
+                    
+                    if (!$cost) {
+                        $isWeekend = ($dayOfWeek === 0 || $dayOfWeek === 6);
+                        $rangeType = $isWeekend ? 'weekend' : 'weekday';
+                        $cost = $extraHourCosts->first(function ($c) use ($rangeType) {
+                            return $c->range_type === $rangeType;
+                        });
+                    }
+                    
+                    // Adjuntar costo por hora al objeto incidencia
+                    $incidence->cost_per_hour = $cost ? (float) $cost->cost_per_hour : 0;
+                    
+                    // Calcular monto total de tiempo extra para este día
+                    $totalHours = ($incidence->extra_hours ?? 0) + (($incidence->extra_minutes ?? 0) / 60);
+                    $incidence->extra_amount = $cost ? round($totalHours * $cost->cost_per_hour, 2) : 0;
+                }
+
+                // Adjuntar decisiones de aprobación por niveles
+                if ($incidence->relationLoaded('approvalDecisions')) {
+                    $incidence->approval_decisions = $incidence->approvalDecisions->map(function ($dec) {
+                        return [
+                            'id' => $dec->id,
+                            'level_id' => $dec->approval_level_id,
+                            'level_name' => $dec->approvalLevel->name ?? null,
+                            'approver' => [
+                                'id' => $dec->approver->id,
+                                'name' => $dec->approver->name,
+                                'profile_photo_url' => $dec->approver->profile_photo_url,
+                            ],
+                            'status' => $dec->status,
+                            'comments' => $dec->comments,
+                            'decided_at' => $dec->decided_at,
+                        ];
+                    })->values();
                 }
             }
 
@@ -170,7 +237,9 @@ class PayrollController extends Controller
         return [
             'payroll' => $payrollData,
             'payrollUsers' => $formattedUsers,
-            'noAttendances' => [], 
+            'noAttendances' => [],
+            'extraHourCosts' => $extraHourCosts,
+            'approvalLevels' => $approvalLevels,
         ];
     }
 }

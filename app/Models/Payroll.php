@@ -45,6 +45,18 @@ class Payroll extends Model
             ->withTimestamps();
     }
 
+    // Relación: Costos de hora extra configurados para esta nómina
+    public function extraHourCosts()
+    {
+        return $this->hasMany(ExtraHourCost::class);
+    }
+
+    // Relación: Niveles de autorización de horas extra
+    public function approvalLevels()
+    {
+        return $this->hasMany(ExtraHourApprovalLevel::class)->orderBy('level');
+    }
+
     public static function getCurrent()
     {
         return self::orderBy('id', 'desc')->first();

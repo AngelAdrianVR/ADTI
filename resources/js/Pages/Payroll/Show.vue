@@ -24,6 +24,11 @@ const props = defineProps({
     adjacentPayrolls: {
         type: Object,
         default: () => ({ prev: null, next: null })
+    },
+    // Niveles de autorización configurados para esta nómina
+    approvalLevels: {
+        type: Array,
+        default: () => []
     }
 });
 
@@ -382,6 +387,7 @@ const saveComment = () => {
                                     :payrollUser="item"
                                     :payroll="payroll" 
                                     :canEdit="true"
+                                    :approvalLevels="approvalLevels"
                                     @edit-comment="openCommentModal"
                                 />
                             </div>

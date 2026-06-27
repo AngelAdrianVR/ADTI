@@ -269,8 +269,10 @@ class PayrollUserController extends Controller
                         $employee->update(['paused' => null]);
                     } else {
                         // Lógica especial de pausa (protegida para que no afecte a turnos nocturnos)
-                        $shift = $employee->org_props['work_shift'] ?? 'Diurno';
-                        if ($shift === 'Diurno' && strtotime($punchTimeStr) <= strtotime('17:39')) {
+                        $shift = $employee->org_props['work_shift'] ?? 'Turno 3 (09:00 - 18:00)';
+                        // Solo pausa automática si es turno de día y antes de las 17:39
+                        $isDayShift = in_array($shift, ['Turno 1 (06:00 - 14:00)', 'Turno 3 (09:00 - 18:00)', 'Diurno']);
+                        if ($isDayShift && strtotime($punchTimeStr) <= strtotime('17:39')) {
                             $employee->setPause();
                         } else {
                             $existingEntry->update([

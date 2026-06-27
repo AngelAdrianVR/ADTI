@@ -58,6 +58,54 @@ class PayrollUser extends Pivot
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    // Relación: Decisiones de aprobación por niveles para esta entrada
+    public function approvalDecisions()
+    {
+        return $this->hasMany(ExtraHourApprovalDecision::class, 'payroll_user_id');
+    }
+
+    /**
+     * Obtiene los límites del turno según la configuración del usuario.
+     * Retorna un array con [start_of_shift, end_of_shift] como objetos Carbon.
+     * Para turnos nocturnos (que cruzan medianoche), end_of_shift tiene addDay().
+     */
+    public function getShiftBoundaries(): array
+    {
+        $shift = $this->user->org_props['work_shift'] ?? 'Turno 3 (09:00 - 18:00)';
+
+        return match ($shift) {
+            'Turno 1 (06:00 - 14:00)' => [
+                Carbon::createFromTime(6, 0),
+                Carbon::createFromTime(14, 0),
+            ],
+            'Turno 2 (14:00 - 22:00)' => [
+                Carbon::createFromTime(14, 0),
+                Carbon::createFromTime(22, 0),
+            ],
+            'Turno 3 (09:00 - 18:00)' => [
+                Carbon::createFromTime(9, 0),
+                Carbon::createFromTime(18, 0),
+            ],
+            // Retrocompatibilidad con turnos antiguos
+            'Nocturno (19:00 - 07:00)' => [
+                Carbon::createFromTime(19, 0),
+                Carbon::createFromTime(7, 0)->addDay(),
+            ],
+            'Nocturno (20:00 - 08:00)' => [
+                Carbon::createFromTime(20, 0),
+                Carbon::createFromTime(8, 0)->addDay(),
+            ],
+            'Diurno' => [
+                Carbon::createFromTime(9, 0),
+                Carbon::createFromTime(18, 0),
+            ],
+            default => [
+                Carbon::createFromTime(9, 0),
+                Carbon::createFromTime(18, 0),
+            ],
+        };
+    }
+
     public function calculateExtraTime()
     {
         // Verifica si check_in y check_out están definidos
@@ -80,20 +128,8 @@ class PayrollUser extends Pivot
 
             $total_extra_minutes = 0;
 
-            // Determinar los límites del turno basados en el usuario
-            $shift = $this->user->org_props['work_shift'] ?? 'Diurno';
-            
-            if ($shift === 'Nocturno (19:00 - 07:00)') {
-                $start_of_shift = Carbon::createFromTime(19, 0);
-                $end_of_shift = Carbon::createFromTime(7, 0)->addDay();
-            } elseif ($shift === 'Nocturno (20:00 - 08:00)') {
-                $start_of_shift = Carbon::createFromTime(20, 0);
-                $end_of_shift = Carbon::createFromTime(8, 0)->addDay();
-            } else {
-                // Diurno por defecto
-                $start_of_shift = Carbon::createFromTime(9, 0);
-                $end_of_shift = Carbon::createFromTime(18, 0);
-            }
+            // Obtener límites del turno usando el nuevo método unificado
+            [$start_of_shift, $end_of_shift] = $this->getShiftBoundaries();
 
             // Si es fin de semana, todo el tiempo trabajado es extra
             if (Carbon::parse($this->date)->isWeekend()) {
@@ -125,29 +161,23 @@ class PayrollUser extends Pivot
     public function calculateLate()
     {
         $toleranceMinutes = 15;
-        
-        // Determinar la base del turno
-        $shift = $this->user->org_props['work_shift'] ?? 'Diurno';
-        if ($shift === 'Nocturno (19:00 - 07:00)') {
-            $baseTime = Carbon::createFromTime(19, 0);
-        } elseif ($shift === 'Nocturno (20:00 - 08:00)') {
-            $baseTime = Carbon::createFromTime(20, 0);
-        } else {
-            $baseTime = Carbon::createFromTime(9, 0); // 09:00 AM
-        }
+
+        // Obtener límites del turno usando el método unificado
+        [$baseTime, $endTime] = $this->getShiftBoundaries();
+        // Para el cálculo de retardo solo nos interesa la hora de entrada (baseTime)
 
         // Verifica si existe una hora de entrada (check_in) y limpia el valor
         if (!empty($this->check_in)) {
             try {
                 $checkInTime = Carbon::createFromFormat('H:i', trim($this->check_in));
-                
-                // CORRECCIÓN AQUÍ: Extracción segura de la fecha para evitar "Double time specification"
+
+                // CORRECCIÓN: Extracción segura de la fecha para evitar "Double time specification"
                 $safeDate = Carbon::parse($this->date)->toDateString();
-                
+
                 // Normalizamos con la fecha segura
                 $baseDateTime = Carbon::parse($safeDate . ' ' . $baseTime->format('H:i'));
                 $checkInDateTime = Carbon::parse($safeDate . ' ' . $checkInTime->format('H:i'));
-                
+
                 // Si el turno empieza de noche (ej. 18:00+) y la llegada es de mañana (ej. < 12:00), cruzó medianoche
                 if ($baseTime->hour >= 18 && $checkInTime->hour < 12) {
                     $checkInDateTime->addDay();
@@ -174,7 +204,7 @@ class PayrollUser extends Pivot
                 logger()->error('Al calcular retardo. Formato de hora inválido en check_in', [
                     'check_in' => $this->check_in,
                 ]);
-                
+
                 $this->update([
                     'late' => 0,
                 ]);

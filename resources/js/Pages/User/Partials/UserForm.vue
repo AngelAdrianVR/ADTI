@@ -327,9 +327,9 @@ export default {
                 'Separado(a)',
             ],
             workShifts: [
-                'Diurno',
-                'Nocturno (19:00 - 07:00)',
-                'Nocturno (20:00 - 08:00)',
+                'Turno 1 (06:00 - 14:00)',
+                'Turno 2 (14:00 - 22:00)',
+                'Turno 3 (09:00 - 18:00)',
             ]
         }
     },

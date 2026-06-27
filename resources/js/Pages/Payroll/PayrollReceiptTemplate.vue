@@ -7,6 +7,16 @@ import { es } from 'date-fns/locale';
 const props = defineProps({
     payroll: Object,
     payrollUsers: Array,
+    // Niveles de autorización para mostrar en recibos
+    approvalLevels: {
+        type: Array,
+        default: () => []
+    },
+    // Costos configurados de hora extra
+    extraHourCosts: {
+        type: Array,
+        default: () => []
+    }
 });
 
 const printScreen = () => {
@@ -74,6 +84,14 @@ const get14DaysRecord = (userItem) => {
 
         // Verificamos si hubo tiempo extra aprobado
         const hasExtraTime = incidence?.approved_at && (incidence.approved_extra_hours > 0 || incidence.approved_extra_minutes > 0);
+        
+        // Calcular monto de tiempo extra para este día
+        let extraAmount = 0;
+        if (hasExtraTime) {
+            const costPerHour = getCostPerHour(currentDate);
+            const totalHours = (incidence.approved_extra_hours || 0) + ((incidence.approved_extra_minutes || 0) / 60);
+            extraAmount = costPerHour * totalHours;
+        }
 
         days.push({
             dateObj: currentDate,
@@ -83,12 +101,90 @@ const get14DaysRecord = (userItem) => {
             checkOut: incidence?.check_out?.substring(0, 5) || '-',
             incidenceText: incidence?.incidence && incidence.incidence !== 'Día normal' ? incidence.incidence : '',
             extraTime: hasExtraTime ? `${incidence.approved_extra_hours || 0}h ${incidence.approved_extra_minutes || 0}m` : '',
+            extraAmount: hasExtraTime && extraAmount > 0 ? `$${extraAmount.toFixed(2)}` : '',
             isAbsent: incidence?.incidence === 'Falta injustificada',
             commentText: incidence?.comment?.comments || null, // Recuperamos el comentario
         });
     }
 
     return days;
+};
+
+// --- Funciones de cálculo de montos y aprobadores ---
+
+// Obtener el costo por hora para un día específico
+const getCostPerHour = (dateObj) => {
+    if (!props.extraHourCosts || props.extraHourCosts.length === 0) return 0;
+    const dayOfWeek = dateObj.getDay(); // 0=Dom, 6=Sáb
+    
+    // Buscar costo específico del día primero
+    const specificCost = props.extraHourCosts.find(c => c.range_type === 'specific' && c.day_of_week === dayOfWeek);
+    if (specificCost) return parseFloat(specificCost.cost_per_hour);
+    
+    // Luego buscar por rango (weekday/weekend)
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const rangeCost = props.extraHourCosts.find(c => c.range_type === (isWeekend ? 'weekend' : 'weekday'));
+    return rangeCost ? parseFloat(rangeCost.cost_per_hour) : 0;
+};
+
+// Calcular el total de horas extra aprobadas y monto para un usuario
+const getExtraTimeTotal = (payrollUser) => {
+    let totalMinutes = 0;
+    let totalAmount = 0;
+
+    payrollUser.incidences.forEach(day => {
+        if (day.approved_at && (day.approved_extra_hours > 0 || day.approved_extra_minutes > 0)) {
+            const mins = (day.approved_extra_hours || 0) * 60 + (day.approved_extra_minutes || 0);
+            totalMinutes += mins;
+            
+            const dateObj = new Date(day.date);
+            const costPerHour = getCostPerHour(dateObj);
+            totalAmount += (mins / 60) * costPerHour;
+        }
+    });
+
+    if (totalMinutes === 0) return null;
+
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    return {
+        formatted: `${h}h ${m}m`,
+        amount: totalAmount.toFixed(2),
+    };
+};
+
+// Obtener aprobadores únicos de todos los niveles (solo si todas las decisiones son "approved")
+const getApproversList = (payrollUser) => {
+    if (!props.approvalLevels || props.approvalLevels.length === 0) return null;
+
+    const approversByLevel = [];
+    let hasApprovedEntries = false;
+
+    props.approvalLevels.forEach(level => {
+        const levelApprovers = [];
+        
+        payrollUser.incidences.forEach(day => {
+            if (day.approval_decisions) {
+                day.approval_decisions.forEach(dec => {
+                    if (dec.level_id === level.id && dec.status === 'approved') {
+                        if (!levelApprovers.find(a => a.id === dec.approver.id)) {
+                            levelApprovers.push(dec.approver);
+                        }
+                        hasApprovedEntries = true;
+                    }
+                });
+            }
+        });
+
+        if (levelApprovers.length > 0) {
+            approversByLevel.push({
+                name: level.name || `Nivel ${level.level}`,
+                approvers: levelApprovers,
+            });
+        }
+    });
+
+    return hasApprovedEntries ? approversByLevel : null;
 };
 
 onMounted(() => {
@@ -169,7 +265,10 @@ onMounted(() => {
                                     </div>
                                 </td>
 
-                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono text-gray-800 border-l border-gray-200 print:border-gray-300 align-top">{{ day.extraTime }}</td>
+                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono text-gray-800 border-l border-gray-200 print:border-gray-300 align-top">
+                                    {{ day.extraTime }}
+                                    <span v-if="day.extraAmount" class="block text-[7px] text-green-600 font-semibold">{{ day.extraAmount }}</span>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -210,11 +309,38 @@ onMounted(() => {
                                     </div>
                                 </td>
 
-                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono text-gray-800 border-l border-gray-200 print:border-gray-300 align-top">{{ day.extraTime }}</td>
+                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono text-gray-800 border-l border-gray-200 print:border-gray-300 align-top">
+                                    {{ day.extraTime }}
+                                    <span v-if="day.extraAmount" class="block text-[7px] text-green-600 font-semibold">{{ day.extraAmount }}</span>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
 
+                </div>
+
+                <!-- Resumen de Tiempo Extra y Aprobadores -->
+                <div v-if="getExtraTimeTotal(item)" class="mt-2 pt-1 border-t border-gray-200 print:border-gray-300 text-[8px] print:text-[7px]">
+                    <div class="flex justify-between items-start gap-4">
+                        <!-- Total Tiempo Extra -->
+                        <div>
+                            <span class="font-bold text-gray-700 uppercase">Total T.E. Aprobado:</span>
+                            <span class="font-mono text-green-700 font-bold ml-1">{{ getExtraTimeTotal(item).formatted }}</span>
+                            <span class="font-mono text-green-700 font-bold ml-2">${{ getExtraTimeTotal(item).amount }}</span>
+                        </div>
+                        
+                        <!-- Aprobadores por Nivel (solo si todos aprobaron) -->
+                        <div v-if="getApproversList(item)" class="text-right">
+                            <span class="font-bold text-gray-700 uppercase block mb-0.5">Autorizado por:</span>
+                            <div v-for="(level, idx) in getApproversList(item)" :key="idx" class="flex items-center justify-end gap-1 text-[7px]">
+                                <span class="text-gray-500">{{ level.name }}:</span>
+                                <span v-for="approver in level.approvers" :key="approver.id" class="flex items-center gap-0.5">
+                                    <img :src="approver.profile_photo_url" class="w-3.5 h-3.5 rounded-full border border-white object-cover" :alt="approver.name">
+                                    <span class="text-gray-700">{{ approver.name.split(' ')[0] }}</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Footer (Firma) -->

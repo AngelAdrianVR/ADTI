@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import { format, addDays, parseISO } from 'date-fns';
@@ -136,9 +136,20 @@ const createPayroll = () => {
                             </template>
                         </el-table-column>
 
-                        <el-table-column align="right" width="80">
-                            <template #default>
-                                <i class="fa-solid fa-chevron-right text-gray-300"></i>
+                        <el-table-column align="right" width="120" fixed="right">
+                            <template #default="scope">
+                                <div class="flex items-center gap-1 justify-end">
+                                    <el-tooltip content="Configurar horas extra" placement="top">
+                                        <Link 
+                                            :href="route('payrolls.extra-hours-config', scope.row.id)"
+                                            @click.stop
+                                            class="w-7 h-7 flex items-center justify-center rounded-full text-indigo-500 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                                        >
+                                            <i class="fa-solid fa-gear text-xs"></i>
+                                        </Link>
+                                    </el-tooltip>
+                                    <i class="fa-solid fa-chevron-right text-gray-300 ml-1"></i>
+                                </div>
                             </template>
                         </el-table-column>
                     </el-table>

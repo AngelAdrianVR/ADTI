@@ -17,6 +17,11 @@ const props = defineProps({
     canEdit: {
         type: Boolean,
         default: true
+    },
+    // Niveles de autorización configurados para esta nómina
+    approvalLevels: {
+        type: Array,
+        default: () => []
     }
 });
 
@@ -25,7 +30,9 @@ const emit = defineEmits(['edit-comment']);
 // State
 const isOpen = ref(false); 
 const showAttendanceModal = ref(false);
-const showApproveModal = ref(false); 
+const showApproveModal = ref(false);
+// Control de visibilidad del tiempo extra en la UI
+const showExtraTime = ref(true);
 const incidences = ref(['Falta injustificada', 'Falta justificada', 'Incapacidad', 'Permiso sin goce', 'Permiso con goce', 'Vacaciones', 'Descanso', 'Día festivo', 'Salió de Viaje']);
 
 const form = useForm({
@@ -101,6 +108,44 @@ const getIncidenceColor = (incidence) => {
     if (incidence.incidence === 'Descanso') return 'bg-gray-50 border-gray-200';
     if (incidence.incidence === 'Salió de Viaje') return 'bg-purple-50 border-purple-200';
     return 'bg-amber-50 border-amber-200';
+};
+
+// --- Helpers para niveles de aprobación ---
+// Obtiene el resumen de aprobación para un día específico
+const getDayApprovalSummary = (day) => {
+    if (!props.approvalLevels || props.approvalLevels.length === 0) return null;
+    if (!day.approval_decisions || day.approval_decisions.length === 0) return null;
+
+    const levels = props.approvalLevels.map(level => {
+        const decisions = day.approval_decisions.filter(d => d.level_id === level.id);
+        const allApproved = decisions.length > 0 && decisions.every(d => d.status === 'approved');
+        const hasRejection = decisions.some(d => d.status === 'rejected');
+        const pending = decisions.length === 0 || decisions.some(d => d.status === 'pending');
+
+        return {
+            ...level,
+            decisions,
+            status: hasRejection ? 'rejected' : (allApproved ? 'approved' : 'pending'),
+        };
+    });
+
+    // Determinar estado global
+    const globalRejected = levels.some(l => l.status === 'rejected');
+    const allLevelsApproved = levels.every(l => l.status === 'approved');
+
+    return {
+        levels,
+        globalStatus: globalRejected ? 'rejected' : (allLevelsApproved ? 'approved' : 'pending'),
+    };
+};
+
+// Obtiene el color del badge de estado de aprobación
+const getApprovalStatusBadge = (status) => {
+    switch (status) {
+        case 'approved': return { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300', icon: 'fa-check-circle', label: 'Aprobado' };
+        case 'rejected': return { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', icon: 'fa-xmark-circle', label: 'Rechazado' };
+        default: return { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-300', icon: 'fa-clock', label: 'Pendiente' };
+    }
 };
 
 // --- Helpers para validación GPS ---
@@ -255,11 +300,22 @@ const submitRejectExtraTime = () => {
                     <span class="uppercase text-[10px] text-gray-400 font-bold">Retardos</span>
                     <span :class="stats.late !== '0h 0m' ? 'text-red-500 font-bold' : ''">{{ stats.late }}</span>
                 </div>
-                <div class="flex flex-col items-end">
+                <!-- Toggle para ocultar/mostrar tiempo extra -->
+                <button 
+                    @click.stop="showExtraTime = !showExtraTime" 
+                    class="flex flex-col items-end group cursor-pointer"
+                    :title="showExtraTime ? 'Ocultar tiempo extra' : 'Mostrar tiempo extra'"
+                >
+                    <span class="uppercase text-[10px] font-bold transition-colors" 
+                          :class="showExtraTime ? 'text-gray-400' : 'text-gray-300'">
+                        <i :class="showExtraTime ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash'" class="mr-0.5"></i> T.E.
+                    </span>
+                </button>
+                <div v-show="showExtraTime" class="flex flex-col items-end">
                     <span class="uppercase text-[10px] text-gray-400 font-bold">T. E. (Pend)</span>
                     <span :class="stats.extraPending !== '0h 0m' ? 'text-amber-500 font-bold' : ''">{{ stats.extraPending }}</span>
                 </div>
-                <div class="flex flex-col items-end">
+                <div v-show="showExtraTime" class="flex flex-col items-end">
                     <span class="uppercase text-[10px] text-green-600 font-bold">T. E. (Aprob)</span>
                     <span :class="stats.extraApproved !== '0h 0m' ? 'text-green-600 font-bold' : ''">{{ stats.extraApproved }}</span>
                 </div>
@@ -381,27 +437,79 @@ const submitRejectExtraTime = () => {
                                     Retardo: {{ day.late }}m
                                 </div>
 
-                                <!-- UI de Tiempo Extra -->
-                                <div v-if="day.approved_at && (day.extra_hours || day.extra_minutes)">
-                                    <!-- Aprobado con 0 horas/minutos = RECHAZADO -->
-                                    <div v-if="day.approved_extra_hours === 0 && day.approved_extra_minutes === 0" class="text-[10px] text-red-700 bg-red-100 px-1.5 py-0.5 rounded border border-red-300 font-semibold text-center leading-tight w-full mt-1" title="Tiempo Extra Rechazado">
-                                        T.E. Rechazado <i class="fa-solid fa-xmark ml-0.5"></i>
-                                        <div class="text-[8px] mt-0.5 font-normal text-red-700 border-t border-red-200 pt-0.5" title="Persona que rechazó">
-                                            Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}
+                                <!-- UI de Tiempo Extra (Ocultable) -->
+                                <template v-if="showExtraTime">
+                                    <div v-if="day.approved_at && (day.extra_hours || day.extra_minutes)">
+                                        <!-- Aprobado con 0 horas/minutos = RECHAZADO -->
+                                        <div v-if="day.approved_extra_hours === 0 && day.approved_extra_minutes === 0" class="text-[10px] text-red-700 bg-red-100 px-1.5 py-0.5 rounded border border-red-300 font-semibold text-center leading-tight w-full mt-1" title="Tiempo Extra Rechazado">
+                                            T.E. Rechazado <i class="fa-solid fa-xmark ml-0.5"></i>
+                                            <div class="text-[8px] mt-0.5 font-normal text-red-700 border-t border-red-200 pt-0.5" title="Persona que rechazó">
+                                                Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Aprobado con Horas/Minutos > 0 = APROBADO -->
+                                        <div v-else class="text-[10px] text-green-700 bg-green-100 px-1.5 py-0.5 rounded border border-green-300 font-semibold text-center leading-tight w-full mt-1" title="Tiempo Extra Aprobado">
+                                            T.E. Aprobado:<br>{{ day.approved_extra_hours }}h {{ day.approved_extra_minutes }}m <i class="fa-solid fa-check-circle ml-0.5"></i>
+                                            <div class="text-[8px] mt-0.5 font-normal text-green-700 border-t border-green-200 pt-0.5" title="Persona que aprobó">
+                                                Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}
+                                            </div>
                                         </div>
                                     </div>
-                                    
-                                    <!-- Aprobado con Horas/Minutos > 0 = APROBADO -->
-                                    <div v-else class="text-[10px] text-green-700 bg-green-100 px-1.5 py-0.5 rounded border border-green-300 font-semibold text-center leading-tight w-full mt-1" title="Tiempo Extra Aprobado">
-                                        T.E. Aprobado:<br>{{ day.approved_extra_hours }}h {{ day.approved_extra_minutes }}m <i class="fa-solid fa-check-circle ml-0.5"></i>
-                                        <div class="text-[8px] mt-0.5 font-normal text-green-700 border-t border-green-200 pt-0.5" title="Persona que aprobó">
-                                            Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}
+                                    <div v-else-if="day.extra_hours || day.extra_minutes" class="text-[10px] text-amber-600 bg-amber-50 px-1.5 rounded border border-amber-200 text-center leading-tight mt-1" title="Pendiente de aprobación">
+                                        Extra:<br>{{ day.extra_hours }}h {{ day.extra_minutes }}m
+                                        <!-- Costo por hora si está configurado -->
+                                        <span v-if="day.cost_per_hour" class="block text-[8px] text-amber-500 mt-0.5">
+                                            ${{ day.cost_per_hour }}/hr
+                                        </span>
+                                    </div>
+
+                                    <!-- Niveles de Autorización (solo si hay niveles configurados y tiempo extra) -->
+                                    <div v-if="(day.extra_hours || day.extra_minutes) && getDayApprovalSummary(day)" class="mt-1.5 border-t border-gray-100 pt-1">
+                                        <div class="flex flex-col gap-0.5">
+                                            <div 
+                                                v-for="level in getDayApprovalSummary(day).levels" 
+                                                :key="level.id"
+                                                class="flex items-center gap-1 text-[8px]"
+                                                :title="`${level.name || 'Nivel ' + level.level}: ${getApprovalStatusBadge(level.status).label}`"
+                                            >
+                                                <!-- Badge de estado del nivel -->
+                                                <span class="flex-shrink-0 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[6px]"
+                                                      :class="getApprovalStatusBadge(level.status).bg + ' ' + getApprovalStatusBadge(level.status).text">
+                                                    <i :class="'fa-solid ' + getApprovalStatusBadge(level.status).icon"></i>
+                                                </span>
+                                                <!-- Avatares de aprobadores del nivel -->
+                                                <span class="text-gray-500 font-medium truncate">{{ level.name || 'N' + level.level }}:</span>
+                                                <div class="flex -space-x-1.5">
+                                                    <el-tooltip 
+                                                        v-for="approver in level.approvers" 
+                                                        :key="approver.id"
+                                                        :content="approver.name"
+                                                        placement="top"
+                                                    >
+                                                        <img 
+                                                            :src="approver.profile_photo_url" 
+                                                            class="w-4 h-4 rounded-full border border-white object-cover"
+                                                            :alt="approver.name"
+                                                        >
+                                                    </el-tooltip>
+                                                </div>
+                                                <!-- Indicador de decisión -->
+                                                <span v-if="level.decisions.length > 0" class="ml-auto flex -space-x-1">
+                                                    <span 
+                                                        v-for="dec in level.decisions" 
+                                                        :key="dec.id"
+                                                        class="w-3 h-3 rounded-full border border-white flex items-center justify-center text-[6px]"
+                                                        :class="dec.status === 'approved' ? 'bg-green-400 text-white' : 'bg-red-400 text-white'"
+                                                        :title="dec.approver.name + ': ' + (dec.status === 'approved' ? 'Aprobó' : 'Rechazó')"
+                                                    >
+                                                        <i :class="dec.status === 'approved' ? 'fa-solid fa-check' : 'fa-solid fa-xmark'"></i>
+                                                    </span>
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                <div v-else-if="day.extra_hours || day.extra_minutes" class="text-[10px] text-amber-600 bg-amber-50 px-1.5 rounded border border-amber-200 text-center leading-tight mt-1" title="Pendiente de aprobación">
-                                    Extra (Pend.):<br>{{ day.extra_hours }}h {{ day.extra_minutes }}m
-                                </div>
+                                </template>
 
                             </template>
                            <template v-else>

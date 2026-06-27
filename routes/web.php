@@ -11,6 +11,7 @@ use App\Http\Controllers\KioskController;
 use App\Http\Controllers\MeasureUnitController;
 use App\Http\Controllers\PayrollCommentController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\PayrollExtraHoursController;
 use App\Http\Controllers\PayrollUserController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProjectController;
@@ -145,6 +146,18 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::put('payroll-users/revert-extra-time', [PayrollUserController::class, 'revertExtraTime'])->name('payroll-users.revert-extra-time');
     Route::put('payroll-users/reject-extra-time', [PayrollUserController::class, 'rejectExtraTime'])->name('payroll-users.reject-extra-time');
     Route::get('payroll-users/recalculate-extra-time', [PayrollUserController::class, 'recalculateExtraTime'])->name('payroll-users.recalculate-extra-time');
+
+    // --- CONFIGURACIÓN DE HORAS EXTRA POR NÓMINA ---
+    // Vista de configuración (costos + niveles de autorización)
+    Route::get('payrolls/{payroll}/extra-hours-config', [PayrollExtraHoursController::class, 'config'])->name('payrolls.extra-hours-config');
+    // Guardar costos
+    Route::post('payrolls/{payroll}/extra-hours-costs', [PayrollExtraHoursController::class, 'saveCosts'])->name('payrolls.extra-hours-costs.save');
+    // Guardar niveles de autorización
+    Route::post('payrolls/{payroll}/extra-hours-levels', [PayrollExtraHoursController::class, 'saveApprovalLevels'])->name('payrolls.extra-hours-levels.save');
+    // Decidir (aprobar/rechazar) en un nivel
+    Route::post('payrolls/extra-hours-decide', [PayrollExtraHoursController::class, 'decide'])->name('payrolls.extra-hours-decide');
+    // Revertir decisión
+    Route::delete('payrolls/extra-hours-revert', [PayrollExtraHoursController::class, 'revertDecision'])->name('payrolls.extra-hours-revert');
 
     Route::resource('holidays', HolidayController::class);
     Route::post('holidays/massive-delete', [HolidayController::class, 'massiveDelete'])->name('holidays.massive-delete');
