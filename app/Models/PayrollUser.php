@@ -26,6 +26,7 @@ class PayrollUser extends Pivot
         'user_id',
         'payroll_id',
         'incidence',
+        'project_id',
         'additionals',
         'checked_in_platform',
         // Nuevos campos
@@ -39,6 +40,7 @@ class PayrollUser extends Pivot
         'date' => 'date',
         'additionals' => 'array',
         'approved_at' => 'datetime',
+        'project_id' => 'integer',
     ];
 
     // relationships
@@ -56,6 +58,12 @@ class PayrollUser extends Pivot
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    // Relación: Proyecto vinculado a este día
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
     }
 
     // Relación: Decisiones de aprobación por niveles para esta entrada

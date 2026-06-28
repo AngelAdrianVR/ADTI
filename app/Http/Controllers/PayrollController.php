@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ExtraHourApprovalDecision;
 use App\Models\Holiday;
 use App\Models\Payroll;
 use App\Models\PayrollComment;
@@ -14,7 +15,9 @@ class PayrollController extends Controller
 {
     public function index()
     {
-        $payrolls = Payroll::latest()->get();
+        $payrolls = Payroll::latest()
+            ->withCount(['extraHourCosts', 'approvalGroups'])
+            ->get();
 
         return inertia('Payroll/Index', compact('payrolls'));
     }
@@ -100,11 +103,18 @@ class PayrollController extends Controller
         $finalUserIds = $usersCollection->pluck('id');
 
         // 2. Cargar datos SOLO para los usuarios filtrados (Optimización)
-        $allAttendances = PayrollUser::with(['approver', 'approvalDecisions.approver', 'approvalDecisions.approvalLevel'])
+        $allAttendances = PayrollUser::with(['approver', 'project'])
             ->where('payroll_id', $payroll->id)
             ->whereIn('user_id', $finalUserIds)
             ->get()
             ->groupBy('user_id');
+
+        // Cargar decisiones de aprobación por separado (más fiable que eager-load en Pivot)
+        $payrollUserIds = $allAttendances->flatten(1)->pluck('id');
+        $allDecisions = ExtraHourApprovalDecision::whereIn('payroll_user_id', $payrollUserIds)
+            ->with(['approver', 'approvalLevel'])
+            ->get()
+            ->groupBy('payroll_user_id');
 
         $allComments = PayrollComment::where('payroll_id', $payroll->id)
             ->whereIn('user_id', $finalUserIds)
@@ -114,30 +124,40 @@ class PayrollController extends Controller
         $endDate = $payroll->start_date->copy()->addDays(14);
         $holidays = Holiday::whereBetween('date', [$payroll->start_date, $endDate])->get();
 
+        // 2.5 Cargar proyectos activos para vinculación por día
+        $projects = \App\Models\Project::where('status', 'active')
+            ->select('id', 'name', 'client')
+            ->orderBy('name')
+            ->get();
+
         // 3. Cargar costos de hora extra configurados para esta nómina
         $extraHourCosts = $payroll->extraHourCosts()->get();
 
-        // 4. Cargar niveles de autorización con sus aprobadores
-        $approvalLevels = $payroll->approvalLevels()
-            ->with('approvers')
-            ->orderBy('level')
+        // 4. Cargar grupos de autorización con sus aprobadores y empleados
+        $approvalLevels = $payroll->approvalGroups()
+            ->with(['employees', 'levels.approvers'])
             ->get()
-            ->map(function ($level) {
-                return [
-                    'id' => $level->id,
-                    'level' => $level->level,
-                    'name' => $level->name,
-                    'approvers' => $level->approvers->map(function ($approver) {
-                        return [
-                            'id' => $approver->id,
-                            'name' => $approver->name,
-                            'profile_photo_url' => $approver->profile_photo_url,
-                        ];
-                    })->values(),
-                ];
-            })->values();
+            ->flatMap(function ($group) {
+                return $group->levels->map(function ($level) use ($group) {
+                    return [
+                        'id' => $level->id,
+                        'level' => $level->level,
+                        'name' => $level->name,
+                        'group_name' => $group->name,
+                        'group_id' => $group->id,
+                        'approvers' => $level->approvers->map(function ($approver) {
+                            return [
+                                'id' => $approver->id,
+                                'name' => $approver->name,
+                                'profile_photo_url' => $approver->profile_photo_url,
+                            ];
+                        })->values()->toArray(),
+                        'employee_ids' => $group->employees->pluck('id')->values()->toArray(),
+                    ];
+                });
+            })->values()->toArray();
 
-        $formattedUsers = $usersCollection->groupBy('id')->map(function ($userGroup) use ($payroll, $allAttendances, $allComments, $holidays, $extraHourCosts, $approvalLevels) {
+        $formattedUsers = $usersCollection->groupBy('id')->map(function ($userGroup) use ($payroll, $allAttendances, $allComments, $holidays, $extraHourCosts, $approvalLevels, $allDecisions) {
             $user = $userGroup->first();
             
             // Pasamos collect([]) si está nulo para evitar llamadas extras a BD
@@ -192,24 +212,23 @@ class PayrollController extends Controller
                     $incidence->extra_amount = $cost ? round($totalHours * $cost->cost_per_hour, 2) : 0;
                 }
 
-                // Adjuntar decisiones de aprobación por niveles
-                if ($incidence->relationLoaded('approvalDecisions')) {
-                    $incidence->approval_decisions = $incidence->approvalDecisions->map(function ($dec) {
-                        return [
-                            'id' => $dec->id,
-                            'level_id' => $dec->approval_level_id,
-                            'level_name' => $dec->approvalLevel->name ?? null,
-                            'approver' => [
-                                'id' => $dec->approver->id,
-                                'name' => $dec->approver->name,
-                                'profile_photo_url' => $dec->approver->profile_photo_url,
-                            ],
-                            'status' => $dec->status,
-                            'comments' => $dec->comments,
-                            'decided_at' => $dec->decided_at,
-                        ];
-                    })->values();
-                }
+                // Adjuntar decisiones de aprobación (consulta directa, más fiable)
+                $incidenceDecisions = $allDecisions->get($incidence->id) ?? collect([]);
+                $incidence->approval_decisions = $incidenceDecisions->map(function ($dec) {
+                    return [
+                        'id' => $dec->id,
+                        'level_id' => $dec->approval_level_id,
+                        'level_name' => $dec->approvalLevel->name ?? null,
+                        'approver' => [
+                            'id' => $dec->approver->id,
+                            'name' => $dec->approver->name,
+                            'profile_photo_url' => $dec->approver->profile_photo_url,
+                        ],
+                        'status' => $dec->status,
+                        'comments' => $dec->comments,
+                        'decided_at' => $dec->decided_at,
+                    ];
+                })->values();
             }
 
             return [
@@ -240,6 +259,7 @@ class PayrollController extends Controller
             'noAttendances' => [],
             'extraHourCosts' => $extraHourCosts,
             'approvalLevels' => $approvalLevels,
+            'projects' => $projects,
         ];
     }
 }

@@ -1,11 +1,12 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, toRef } from 'vue';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Back from '@/Components/MyComponents/Back.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import IncidencesTable from '@/Components/MyComponents/Payroll/IncidencesTable.vue';
-import ExtraTimeManagementModal from './Partials/ExtraTimeManagementModal.vue'; // NUEVO IMPORT
+import ExtraTimeManagementModal from './Partials/ExtraTimeManagementModal.vue';
+import { useApprovalHierarchy } from '@/Composables/payroll/useApprovalHierarchy.js';
 import { ElMessage } from 'element-plus';
 
 const props = defineProps({
@@ -29,11 +30,22 @@ const props = defineProps({
     approvalLevels: {
         type: Array,
         default: () => []
+    },
+    // Proyectos activos para vinculación por día
+    projects: {
+        type: Array,
+        default: () => []
     }
 });
 
 // --- Loading State Global ---
 const isLoading = ref(false);
+
+// --- Jerarquía de aprobación ---
+const page = usePage();
+const authUserId = computed(() => page.props?.auth?.user?.id || null);
+const approvalLevelsRef = computed(() => props.approvalLevels || []);
+const hierarchy = useApprovalHierarchy(approvalLevelsRef, authUserId);
 
 // --- Scroll & Pagination State ---
 const limit = ref(5); // Cantidad inicial de usuarios a mostrar
@@ -121,17 +133,72 @@ const visiblePayrollUsers = computed(() => {
     return filteredPayrollUsers.value.slice(0, limit.value);
 });
 
-// --- NUEVO COMPUTED: KPIs DE TIEMPO EXTRA ---
+// --- COMPUTED: KPIs DE TIEMPO EXTRA (Dinámicos por aprobador) ---
 const totalExtraTimeStats = computed(() => {
-    let pendingMins = 0;
-    let approvedMins = 0;
+    let pendingMins = 0;   // Tiempo que ESTE aprobador debe revisar
+    let approvedMins = 0;  // Tiempo que ESTE aprobador ya aprobó
+
+    const isApprover = hierarchy.isCurrentUserApprover.value;
+    const employeeIds = hierarchy.myEmployeeIds.value;
+    const hasHierarchy = props.approvalLevels && props.approvalLevels.length > 0;
+    const cid = Number(authUserId.value);
 
     props.payrollUsers.forEach(item => {
+        if (hasHierarchy && isApprover && !employeeIds.has(Number(item.user.id))) return;
+
         item.incidences.forEach(inc => {
-            if (!inc.approved_at && (inc.extra_hours > 0 || inc.extra_minutes > 0)) {
-                pendingMins += (inc.extra_hours || 0) * 60 + (inc.extra_minutes || 0);
-            } else if (inc.approved_at && (inc.approved_extra_hours > 0 || inc.approved_extra_minutes > 0)) {
-                approvedMins += (inc.approved_extra_hours || 0) * 60 + (inc.approved_extra_minutes || 0);
+            const hasExtra = (inc.extra_hours > 0 || inc.extra_minutes > 0);
+            if (!hasExtra) return;
+
+            const decisions = inc.approval_decisions || [];
+            const totalMins = (inc.extra_hours || 0) * 60 + (inc.extra_minutes || 0);
+
+            if (hasHierarchy && isApprover) {
+                // ── Lógica por niveles ──
+                const sortedLevels = [...props.approvalLevels].sort((a, b) => a.level - b.level);
+                const currentLevel = hierarchy.currentUserLevel.value;
+                if (!currentLevel) return;
+
+                // ¿Ya decidió este aprobador?
+                const myDecision = decisions.find(d => 
+                    Number(d.approver?.id) === cid && d.level_id === currentLevel.id
+                );
+
+                if (myDecision) {
+                    // Su decisión ya está registrada
+                    if (myDecision.status === 'approved') {
+                        approvedMins += totalMins;
+                    }
+                    // Si rechazó, no suma a pending ni a approved
+                    return;
+                }
+
+                // No ha decidido aún. Verificar si los niveles anteriores están aprobados.
+                let allPreviousApproved = true;
+                for (const level of sortedLevels) {
+                    if (level.level >= currentLevel.level) break;
+                    const levelDecs = decisions.filter(d => d.level_id === level.id);
+                    const hasRejection = levelDecs.some(d => d.status === 'rejected');
+                    const approverCount = (level.approvers || []).length;
+                    const approvedCount = levelDecs.filter(d => d.status === 'approved').length;
+                    
+                    if (hasRejection || (approverCount > 0 && approvedCount < approverCount)) {
+                        allPreviousApproved = false;
+                        break;
+                    }
+                }
+
+                if (allPreviousApproved) {
+                    // Le toca a este nivel → es tiempo pendiente para ESTE aprobador
+                    pendingMins += totalMins;
+                }
+            } else {
+                // Sin jerarquía: pendiente = no resuelto, aprobado = resuelto con horas > 0
+                if (!inc.approved_at) {
+                    pendingMins += totalMins;
+                } else if (inc.approved_extra_hours > 0 || inc.approved_extra_minutes > 0) {
+                    approvedMins += totalMins;
+                }
             }
         });
     });
@@ -140,7 +207,9 @@ const totalExtraTimeStats = computed(() => {
 
     return {
         pending: formatTime(pendingMins),
-        approved: formatTime(approvedMins)
+        approved: formatTime(approvedMins),
+        isApprover,
+        hasHierarchy,
     };
 });
 
@@ -206,9 +275,9 @@ const openReceipts = () => {
     window.open(url, '_blank');
 };
 
-// Actualizar vista cuando el Modal Masivo apruebe/rechace algo
+// Actualizar vista en segundo plano sin cerrar el modal
 const reloadPayrollData = () => {
-    router.reload({ only: ['payrollUsers'] });
+    router.reload({ preserveState: true, preserveScroll: true });
 };
 
 // --- Manejo de Comentarios ---
@@ -310,8 +379,9 @@ const saveComment = () => {
                     </div>
                 </div>
 
-                <!-- NUEVO: KPIs DE TIEMPO EXTRA -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" v-if="$page.props.auth.user.permissions.includes('Aprobar tiempo extra')">
+                <!-- KPIs DE TIEMPO EXTRA (solo visibles para aprobadores) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" 
+                    v-if="totalExtraTimeStats.isApprover || !totalExtraTimeStats.hasHierarchy">
                     
                     <!-- KPI Tiempo Pendiente -->
                     <div @click="showExtraTimeModal = true" class="bg-white p-4 rounded-xl shadow-sm border border-amber-100 flex items-center justify-between cursor-pointer hover:shadow-md hover:border-amber-300 transition-all group">
@@ -321,7 +391,9 @@ const saveComment = () => {
                             </p>
                             <div class="flex items-baseline gap-2">
                                 <p class="text-3xl font-black text-gray-800 group-hover:text-amber-600 transition-colors font-mono">{{ totalExtraTimeStats.pending }}</p>
-                                <span class="text-[10px] text-gray-500 font-bold uppercase bg-gray-100 px-2 py-0.5 rounded-full">Por revisar</span>
+                                <span class="text-[10px] text-gray-500 font-bold uppercase bg-gray-100 px-2 py-0.5 rounded-full">
+                                    {{ totalExtraTimeStats.isApprover ? 'Tu turno' : 'Por revisar' }}
+                                </span>
                             </div>
                         </div>
                         <div class="w-14 h-14 bg-amber-50 rounded-full flex items-center justify-center text-amber-500 text-xl group-hover:scale-110 transition-transform">
@@ -330,14 +402,16 @@ const saveComment = () => {
                     </div>
 
                     <!-- KPI Tiempo Resuelto (Aprobado) -->
-                    <div @click="showExtraTimeModal = true" class="bg-white p-4 rounded-xl shadow-sm border border-green-100 flex items-center justify-between cursor-pointer hover:shadow-md hover:border-green-300 transition-all group lg:col-start-2">
+                    <div @click="showExtraTimeModal = true" class="bg-white p-4 rounded-xl shadow-sm border border-green-100 flex items-center justify-between cursor-pointer hover:shadow-md hover:border-green-300 transition-all group">
                         <div>
                             <p class="text-xs text-green-600 font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5">
                                 <i class="fa-solid fa-check-double"></i> Tiempo Aprobado
                             </p>
                             <div class="flex items-baseline gap-2">
                                 <p class="text-3xl font-black text-gray-800 group-hover:text-green-600 transition-colors font-mono">{{ totalExtraTimeStats.approved }}</p>
-                                <span class="text-[10px] text-gray-500 font-bold uppercase bg-gray-100 px-2 py-0.5 rounded-full">En nómina</span>
+                                <span class="text-[10px] text-gray-500 font-bold uppercase bg-gray-100 px-2 py-0.5 rounded-full">
+                                    {{ totalExtraTimeStats.isApprover ? 'Tuyas' : 'En nómina' }}
+                                </span>
                             </div>
                         </div>
                         <div class="w-14 h-14 bg-green-50 rounded-full flex items-center justify-center text-green-500 text-xl group-hover:scale-110 transition-transform">
@@ -379,7 +453,7 @@ const saveComment = () => {
                             class="flex items-start gap-3 transition-all duration-300 animate-in fade-in slide-in-from-bottom-2"
                         >
                             <div class="pt-4 pl-2">
-                                <el-checkbox :value="item.user.id" v-model="selectedUsers" @change="handleSingleSelect" size="large" />
+                                <el-checkbox :label="item.user.id" v-model="selectedUsers" @change="handleSingleSelect" size="large" />
                             </div>
                             <div class="flex-1 min-w-0">
                                 <!-- AQUI pasamos :canEdit="true" para que los que pueden ver esto, SIEMPRE puedan editar -->
@@ -388,6 +462,7 @@ const saveComment = () => {
                                     :payroll="payroll" 
                                     :canEdit="true"
                                     :approvalLevels="approvalLevels"
+                                    :projects="projects"
                                     @edit-comment="openCommentModal"
                                 />
                             </div>
@@ -415,12 +490,14 @@ const saveComment = () => {
                 </section>
             </div>
 
-            <!-- Modal Componente: Gestión Global de Tiempo Extra -->
+            <!-- Modal: Gestión de Tiempo Extra (solo aprobadores) -->
             <ExtraTimeManagementModal
-                v-if="$page.props.auth.user.permissions.includes('Aprobar tiempo extra')"
+                v-if="totalExtraTimeStats.isApprover || !totalExtraTimeStats.hasHierarchy"
                 v-model="showExtraTimeModal"
                 :payrollUsers="payrollUsers"
                 :payrollId="payroll.id"
+                :approvalLevels="approvalLevels"
+                :employeeIds="hierarchy.myEmployeeIds.value"
                 @updated="reloadPayrollData"
             />
 

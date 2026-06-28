@@ -14,6 +14,7 @@ class ExtraHourApprovalLevel extends Model
 
     protected $fillable = [
         'payroll_id',
+        'approval_group_id',
         'level',
         'name',
     ];
@@ -26,6 +27,12 @@ class ExtraHourApprovalLevel extends Model
     public function payroll(): BelongsTo
     {
         return $this->belongsTo(Payroll::class);
+    }
+
+    // Grupo de aprobación al que pertenece este nivel
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(ExtraHourApprovalGroup::class, 'approval_group_id');
     }
 
     // Usuarios aprobadores de este nivel

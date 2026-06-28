@@ -51,10 +51,16 @@ class Payroll extends Model
         return $this->hasMany(ExtraHourCost::class);
     }
 
-    // Relación: Niveles de autorización de horas extra
+    // Relación: Niveles de autorización de horas extra (retrocompatibilidad)
     public function approvalLevels()
     {
         return $this->hasMany(ExtraHourApprovalLevel::class)->orderBy('level');
+    }
+
+    // Relación: Grupos de aprobación (nuevo sistema con empleados asignados)
+    public function approvalGroups()
+    {
+        return $this->hasMany(ExtraHourApprovalGroup::class);
     }
 
     public static function getCurrent()

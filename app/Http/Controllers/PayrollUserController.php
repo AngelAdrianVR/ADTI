@@ -440,6 +440,44 @@ class PayrollUserController extends Controller
         return response()->json(['success' => true]);
     }
 
+    /**
+     * Eliminar el tiempo extra de un día específico.
+     * Borra horas/minutos extra y cualquier dato de aprobación asociado.
+     */
+    public function clearExtraTime(Request $request)
+    {
+        $request->validate([
+            'date' => 'required|date',
+            'user_id' => 'required|exists:users,id',
+        ]);
+
+        $payrollUser = PayrollUser::where('user_id', $request->user_id)
+            ->whereDate('date', clone \Carbon\Carbon::parse($request->date))
+            ->first();
+
+        if ($payrollUser) {
+            // Limpiar tiempo extra calculado y aprobación
+            $payrollUser->update([
+                'extra_hours' => null,
+                'extra_minutes' => null,
+                'approved_extra_hours' => null,
+                'approved_extra_minutes' => null,
+                'approved_by' => null,
+                'approved_at' => null,
+            ]);
+
+            // Eliminar decisiones de aprobación asociadas
+            \App\Models\ExtraHourApprovalDecision::where('payroll_user_id', $payrollUser->id)->delete();
+        }
+
+        // Detectar si la petición viene de Inertia o de Axios
+        if ($request->header('X-Inertia')) {
+            return back();
+        }
+
+        return response()->json(['success' => true]);
+    }
+
     public function recalculateExtraTime()
     {
         // 1. Obtener la nómina activa actual
@@ -468,5 +506,33 @@ class PayrollUserController extends Controller
             'payroll_id' => $currentPayroll->id,
             'records_updated' => $processedCount
         ]);
+    }
+
+    /**
+     * Vincula o desvincula un proyecto a un día específico de un usuario.
+     */
+    public function setProject(Request $request)
+    {
+        $request->validate([
+            'date' => 'required|date',
+            'user_id' => 'required|exists:users,id',
+            'project_id' => 'nullable|exists:projects,id',
+        ]);
+
+        $payrollUser = PayrollUser::where('user_id', $request->user_id)
+            ->whereDate('date', $request->date)
+            ->first();
+
+        if ($payrollUser) {
+            $payrollUser->update([
+                'project_id' => $request->project_id,
+            ]);
+        }
+
+        if ($request->header('X-Inertia')) {
+            return back();
+        }
+
+        return response()->json(['success' => true]);
     }
 }

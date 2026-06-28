@@ -126,7 +126,32 @@ const submitInactivate = () => {
 
 // Helper para diseño de turnos
 const getShiftBadgeStyle = (shift) => {
-    if (!shift || shift === 'Diurno') {
+    if (!shift) {
+        return {
+            class: 'bg-gray-50 text-gray-500 border border-gray-200',
+            icon: 'fa-solid fa-circle-question'
+        };
+    }
+    if (shift.startsWith('Turno 1')) {
+        return {
+            class: 'bg-orange-50 text-orange-600 border border-orange-200',
+            icon: 'fa-solid fa-sun'
+        };
+    }
+    if (shift.startsWith('Turno 2')) {
+        return {
+            class: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
+            icon: 'fa-solid fa-moon'
+        };
+    }
+    if (shift.startsWith('Turno 3')) {
+        return {
+            class: 'bg-blue-50 text-blue-600 border border-blue-200',
+            icon: 'fa-solid fa-clock'
+        };
+    }
+    // Fallback para valores antiguos como "Diurno" o "Nocturno"
+    if (shift === 'Diurno') {
         return {
             class: 'bg-orange-50 text-orange-600 border border-orange-200',
             icon: 'fa-solid fa-sun'
