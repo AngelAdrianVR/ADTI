@@ -11,6 +11,7 @@ use App\Http\Controllers\KioskController;
 use App\Http\Controllers\MeasureUnitController;
 use App\Http\Controllers\PayrollCommentController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\PayrollExtraHoursController;
 use App\Http\Controllers\PayrollUserController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProjectController;
@@ -127,16 +128,25 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::resource('job-positions', JobPositionController::class);
 
     // --- NÓMINAS (PAYROLLS) ---
-    Route::resource('payrolls', PayrollController::class);
+    // Rutas personalizadas DEBEN ir antes del resource para evitar conflicto
     Route::get('payrolls/{payroll}/pre-payroll', [PayrollController::class, 'prePayrollTemplate'])->name('payrolls.pre-payroll');
     Route::get('payrolls/{payroll}/receipts', [PayrollController::class, 'receiptsTemplate'])->name('payrolls.receipts');
+    Route::get('payrolls/{payroll}/extra-hours-config', [PayrollExtraHoursController::class, 'config'])->name('payrolls.extra-hours-config');
+    Route::post('payrolls/{payroll}/extra-hours-costs', [PayrollExtraHoursController::class, 'saveCosts'])->name('payrolls.extra-hours-costs.save');
+    Route::post('payrolls/{payroll}/extra-hours-groups', [PayrollExtraHoursController::class, 'saveApprovalGroups'])->name('payrolls.extra-hours-groups.save');
+    Route::post('payrolls/{payroll}/extra-hours-copy', [PayrollExtraHoursController::class, 'copyFromPrevious'])->name('payrolls.extra-hours-copy');
+    // Decidir (aprobar/rechazar) en un nivel
+    Route::post('payrolls/{payroll}/extra-hours-decide', [PayrollExtraHoursController::class, 'decide'])->name('payrolls.extra-hours-decide');
+    // Revertir decisión
+    Route::delete('payrolls/extra-hours-revert', [PayrollExtraHoursController::class, 'revertDecision'])->name('payrolls.extra-hours-revert');
+
+    Route::resource('payrolls', PayrollController::class)->only(['index', 'show']);
 
     Route::resource('payroll-comments', PayrollCommentController::class)->middleware('auth');
 
     // --- USUARIOS DE NÓMINA (PAYROLL USERS) ---
-    // Agregamos rutas específicas para las acciones de los empleados en la nómina
-    Route::post('payroll-users/set-attendance', [PayrollUserController::class, 'store'])->name('payroll-users.set-attendance'); // Asistencia manual (admin)
-    Route::put('payroll-users/update-attendance', [PayrollUserController::class, 'update'])->name('payroll-users.update-attendance'); // Editar horas
+    Route::post('payroll-users/set-attendance', [PayrollUserController::class, 'store'])->name('payroll-users.set-attendance');
+    Route::put('payroll-users/update-attendance', [PayrollUserController::class, 'update'])->name('payroll-users.update-attendance');
     Route::put('payroll-users/set-incidence', [PayrollUserController::class, 'setIncidence'])->name('payroll-users.set-incidence');
     Route::put('payroll-users/remove-late', [PayrollUserController::class, 'removeLate'])->name('payroll-users.remove-late');
 
@@ -145,6 +155,8 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::put('payroll-users/revert-extra-time', [PayrollUserController::class, 'revertExtraTime'])->name('payroll-users.revert-extra-time');
     Route::put('payroll-users/reject-extra-time', [PayrollUserController::class, 'rejectExtraTime'])->name('payroll-users.reject-extra-time');
     Route::get('payroll-users/recalculate-extra-time', [PayrollUserController::class, 'recalculateExtraTime'])->name('payroll-users.recalculate-extra-time');
+    Route::put('payroll-users/clear-extra-time', [PayrollUserController::class, 'clearExtraTime'])->name('payroll-users.clear-extra-time');
+    Route::put('payroll-users/set-project', [PayrollUserController::class, 'setProject'])->name('payroll-users.set-project');
 
     Route::resource('holidays', HolidayController::class);
     Route::post('holidays/massive-delete', [HolidayController::class, 'massiveDelete'])->name('holidays.massive-delete');
