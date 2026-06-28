@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import { format, addDays, parseISO } from 'date-fns';
@@ -121,7 +121,7 @@ const createPayroll = () => {
                             </template>
                         </el-table-column>
 
-                        <el-table-column label="Estatus" width="150" align="center">
+                        <el-table-column label="Estatus" width="120" align="center">
                             <template #default="scope">
                                 <div v-if="scope.row.is_active" class="flex items-center justify-center gap-1 text-green-600 bg-green-50 px-2 py-1 rounded text-xs font-bold">
                                     <span class="relative flex h-2 w-2">
@@ -136,9 +136,66 @@ const createPayroll = () => {
                             </template>
                         </el-table-column>
 
-                        <el-table-column align="right" width="80">
-                            <template #default>
-                                <i class="fa-solid fa-chevron-right text-gray-300"></i>
+                        <!-- NUEVA COLUMNA: Configuración de horas extra -->
+                        <el-table-column label="Config. H.E." width="170" align="center">
+                            <template #default="scope">
+                                <div class="flex items-center justify-center gap-1.5">
+                                    <!-- Indicador de costos -->
+                                    <el-tooltip :content="scope.row.extra_hour_costs_count > 0 ? 'Costos configurados' : 'Sin costos configurados'" placement="top">
+                                        <span 
+                                            class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] border"
+                                            :class="scope.row.extra_hour_costs_count > 0 
+                                                ? 'bg-green-50 text-green-600 border-green-200' 
+                                                : 'bg-gray-50 text-gray-300 border-gray-200'"
+                                        >
+                                            <i class="fa-solid fa-dollar-sign"></i>
+                                        </span>
+                                    </el-tooltip>
+                                    <!-- Indicador de grupos de aprobación -->
+                                    <el-tooltip :content="scope.row.approval_groups_count > 0 ? 'Grupos de autorización configurados' : 'Sin grupos de autorización'" placement="top">
+                                        <span 
+                                            class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] border"
+                                            :class="scope.row.approval_groups_count > 0 
+                                                ? 'bg-indigo-50 text-indigo-600 border-indigo-200' 
+                                                : 'bg-gray-50 text-gray-300 border-gray-200'"
+                                        >
+                                            <i class="fa-solid fa-users-gear"></i>
+                                        </span>
+                                    </el-tooltip>
+                                    <!-- Badge resumen -->
+                                    <span 
+                                        v-if="scope.row.extra_hour_costs_count > 0 || scope.row.approval_groups_count > 0"
+                                        class="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                                        :class="scope.row.extra_hour_costs_count > 0 && scope.row.approval_groups_count > 0 
+                                            ? 'bg-green-100 text-green-700 border border-green-200' 
+                                            : 'bg-amber-100 text-amber-700 border border-amber-200'"
+                                    >
+                                        {{ scope.row.extra_hour_costs_count > 0 && scope.row.approval_groups_count > 0 ? 'Completo' : 'Parcial' }}
+                                    </span>
+                                    <span 
+                                        v-else
+                                        class="text-[9px] text-gray-300 italic"
+                                    >
+                                        Sin config.
+                                    </span>
+                                </div>
+                            </template>
+                        </el-table-column>
+
+                        <el-table-column align="right" width="120" fixed="right">
+                            <template #default="scope">
+                                <div class="flex items-center gap-1 justify-end">
+                                    <el-tooltip content="Configurar horas extra" placement="top">
+                                        <Link 
+                                            :href="route('payrolls.extra-hours-config', scope.row.id)"
+                                            @click.stop
+                                            class="w-7 h-7 flex items-center justify-center rounded-full text-indigo-500 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                                        >
+                                            <i class="fa-solid fa-gear text-xs"></i>
+                                        </Link>
+                                    </el-tooltip>
+                                    <i class="fa-solid fa-chevron-right text-gray-300 ml-1"></i>
+                                </div>
                             </template>
                         </el-table-column>
                     </el-table>
