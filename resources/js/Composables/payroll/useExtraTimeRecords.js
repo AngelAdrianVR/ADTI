@@ -144,6 +144,7 @@ export function useExtraTimeRecords(payrollUsers, filters, employeeIds = null) {
             item.incidences.forEach(inc => {
                 if (!(inc.extra_hours > 0 || inc.extra_minutes > 0)) return;
                 if (!filters.passesCommentFilter(inc)) return;
+                if (!filters.passesProjectFilter(inc)) return;
 
                 records.push({
                     user: item.user,

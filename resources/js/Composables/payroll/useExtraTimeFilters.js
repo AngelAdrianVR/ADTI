@@ -4,6 +4,7 @@ import { ref, computed } from 'vue';
 export function useExtraTimeFilters(payrollUsers) {
     const selectedDepartment = ref('');
     const selectedCommentFilter = ref('all');
+    const selectedProject = ref('');
 
     // Departamentos disponibles
     const availableDepartments = computed(() => {
@@ -14,6 +15,19 @@ export function useExtraTimeFilters(payrollUsers) {
             }
         });
         return Array.from(depts).sort();
+    });
+
+    // Proyectos disponibles (de incidencias vinculadas)
+    const availableProjects = computed(() => {
+        const projects = new Map();
+        payrollUsers.value?.forEach(item => {
+            item.incidences.forEach(inc => {
+                if (inc.project) {
+                    projects.set(inc.project.id, { id: inc.project.id, name: inc.project.name, client: inc.project.client });
+                }
+            });
+        });
+        return Array.from(projects.values()).sort((a, b) => a.name.localeCompare(b.name));
     });
 
     // Helper: ¿tiene comentario una incidencia?
@@ -36,10 +50,17 @@ export function useExtraTimeFilters(payrollUsers) {
         return user.org_props?.department === selectedDepartment.value;
     }
 
+    // Helper: ¿pasa el filtro de proyecto?
+    function passesProjectFilter(inc) {
+        if (!selectedProject.value) return true;
+        return inc.project?.id === selectedProject.value;
+    }
+
     // Resetear filtros
     function resetFilters() {
         selectedDepartment.value = '';
         selectedCommentFilter.value = 'all';
+        selectedProject.value = '';
     }
 
     // Texto descriptivo de filtros activos
@@ -49,16 +70,23 @@ export function useExtraTimeFilters(payrollUsers) {
         if (selectedCommentFilter.value !== 'all') {
             parts.push(selectedCommentFilter.value === 'with' ? 'con comentarios' : 'sin comentarios');
         }
+        if (selectedProject.value) {
+            const proj = availableProjects.value.find(p => p.id === selectedProject.value);
+            if (proj) parts.push(`proyecto: ${proj.name}`);
+        }
         return parts.length > 0 ? parts.join(', ') : null;
     });
 
     return {
         selectedDepartment,
         selectedCommentFilter,
+        selectedProject,
         availableDepartments,
+        availableProjects,
         hasComment,
         passesCommentFilter,
         passesDeptFilter,
+        passesProjectFilter,
         resetFilters,
         activeFiltersLabel,
     };

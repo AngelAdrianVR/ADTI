@@ -65,7 +65,10 @@ class PayrollUserController extends Controller
                 } else {
                     $existing->update([
                         'check_in' => null,
-                        'check_out' => null
+                        'check_out' => null,
+                        'break_start' => null,
+                        'break_end' => null,
+                        'break_minutes' => null,
                     ]);
                     $existing->calculateLate();
                     $existing->calculateExtraTime();
@@ -88,9 +91,77 @@ class PayrollUserController extends Controller
             ]
         );
 
+        // Procesar tiempo de comida/break
+        $this->processBreakUpdate($payrollUser, $request);
+
         // Recalcular lógica de negocio
         $payrollUser->calculateLate();
         $payrollUser->calculateExtraTime();
+    }
+
+    /**
+     * Procesa la actualización de tiempos de comida desde el modal de edición.
+     */
+    private function processBreakUpdate(PayrollUser $payrollUser, Request $request)
+    {
+        $breakStart = $request->input('break_start');
+        $breakEnd = $request->input('break_end');
+
+        // Ambos vacíos: eliminar el registro de comida
+        if (empty($breakStart) && empty($breakEnd)) {
+            $payrollUser->update([
+                'break_start' => null,
+                'break_end' => null,
+                'break_minutes' => null,
+            ]);
+            return;
+        }
+
+        // Solo inicio: dejar como pausa en curso (sin calcular minutos)
+        if (!empty($breakStart) && empty($breakEnd)) {
+            $payrollUser->update([
+                'break_start' => $breakStart,
+                'break_end' => null,
+                'break_minutes' => null,
+            ]);
+            return;
+        }
+
+        // Ambos presentes: calcular la duración
+        if (!empty($breakStart) && !empty($breakEnd)) {
+            try {
+                $start = Carbon::createFromFormat('H:i', trim($breakStart));
+                $end = Carbon::createFromFormat('H:i', trim($breakEnd));
+
+                // Si el fin es menor que el inicio (cruzó medianoche)
+                if ($end->lessThan($start)) {
+                    $end->addDay();
+                }
+
+                $minutes = $start->diffInMinutes($end);
+
+                $payrollUser->update([
+                    'break_start' => $breakStart,
+                    'break_end' => $breakEnd,
+                    'break_minutes' => $minutes,
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Error al calcular break en edición manual', [
+                    'break_start' => $breakStart,
+                    'break_end' => $breakEnd,
+                    'error' => $e->getMessage(),
+                ]);
+                // Guardar sin calcular minutos
+                $payrollUser->update([
+                    'break_start' => $breakStart,
+                    'break_end' => $breakEnd,
+                    'break_minutes' => null,
+                ]);
+            }
+            return;
+        }
+
+        // Solo fin sin inicio: no tiene sentido, ignorar
     }
 
     public function setIncidence(Request $request)
@@ -261,12 +332,76 @@ class PayrollUserController extends Controller
                 if ($isDuplicate) {
                     Log::info("BioTime Sync: Checada ignorada por ser muy cercana a la anterior (Empleado {$emp_code} a las {$punchTimeStr})");
                 } else {
+                    // --- DETECCIÓN DE REGRESO DE COMIDA (BREAK END) ---
+                    // Si el registro ya tiene break_start pero NO break_end, y el nuevo punch
+                    // está en un horario razonable después del break_start, es un regreso de comida.
+                    if ($existingEntry->break_start && !$existingEntry->break_end) {
+                        $safeDate = Carbon::parse($existingEntry->date)->toDateString();
+                        $breakStartDateTime = Carbon::parse($safeDate . ' ' . trim($existingEntry->break_start));
+                        $minutesSinceBreakStart = $breakStartDateTime->diffInMinutes($punchDateTime, false);
+                        
+                        // Solo consideramos regreso de comida si pasaron entre 20 min y 3 hrs desde el inicio
+                        if ($minutesSinceBreakStart >= 20 && $minutesSinceBreakStart <= 180) {
+                            // Es un regreso de comida: registrar fin del break y reabrir turno
+                            $existingEntry->endBreak($punchTimeStr);
+                            // Reabrir el turno: borrar check_out para permitir la salida de la tarde
+                            $existingEntry->update(['check_out' => null]);
+                            $employee->update(['paused' => null]);
+                            
+                            Log::info("BioTime Sync: Regreso de comida detectado para empleado {$emp_code} a las {$punchTimeStr}");
+                        } else {
+                            // Fuera del rango esperado para comida, tratar como nuevo check_in normal
+                            // (actualizando el existente)
+                            if ($minutesSinceBreakStart > 180) {
+                                // Pasaron más de 3 horas, probablemente ya terminó el turno
+                                // Registrar el fin del break de todas formas
+                                $existingEntry->endBreak($punchTimeStr);
+                                $existingEntry->update(['check_out' => $punchTimeStr]);
+                                $employee->update(['paused' => null]);
+                            } else {
+                                // Menos de 20 min, probablemente solo fue al baño o similar
+                                // Cancelar el break_start (no era comida real)
+                                $existingEntry->update([
+                                    'break_start' => null,
+                                    'break_end' => null,
+                                    'break_minutes' => null,
+                                    'check_out' => $punchTimeStr,
+                                ]);
+                                $employee->update(['paused' => null]);
+                            }
+                        }
+                    }
                     // Procesar normalmente si pasó el tiempo de gracia
-                    if ($existingEntry->check_in && !$existingEntry->check_out) {
-                        $existingEntry->update([
-                            'check_out' => $punchTimeStr,
-                        ]);
-                        $employee->update(['paused' => null]);
+                    elseif ($existingEntry->check_in && !$existingEntry->check_out) {
+                        // Si hay un break abierto (iniciado por web), cerrarlo ahora
+                        if ($existingEntry->break_start && !$existingEntry->break_end) {
+                            $existingEntry->endBreak($punchTimeStr);
+                        }
+
+                        // Cerrando turno abierto (posible check_out o inicio de comida)
+                        $punchHour = (int) $punchDateTime->format('H');
+                        $punchMinute = (int) $punchDateTime->format('i');
+                        $punchTotalMinutes = $punchHour * 60 + $punchMinute;
+
+                        // Detectar si esta salida es para comida (entre 11:00 y 15:00)
+                        $isLunchTime = ($punchTotalMinutes >= 660 && $punchTotalMinutes <= 900); // 11:00-15:00
+                        
+                        // Verificar que la entrada fue en la mañana (antes de las 12:00)
+                        $checkInHour = (int) Carbon::parse($existingEntry->check_in)->format('H');
+                        $isMorningEntry = ($checkInHour < 12);
+
+                        if ($isLunchTime && $isMorningEntry) {
+                            // Es salida para comida: registrar check_out Y break_start
+                            $existingEntry->update(['check_out' => $punchTimeStr]);
+                            $existingEntry->startBreak($punchTimeStr);
+                            $employee->update(['paused' => null]);
+                            
+                            Log::info("BioTime Sync: Inicio de comida detectado para empleado {$emp_code} a las {$punchTimeStr}");
+                        } else {
+                            // Es salida normal (fin de turno)
+                            $existingEntry->update(['check_out' => $punchTimeStr]);
+                            $employee->update(['paused' => null]);
+                        }
                     } else {
                         // Lógica especial de pausa (protegida para que no afecte a turnos nocturnos)
                         $shift = $employee->org_props['work_shift'] ?? 'Turno 3 (09:00 - 18:00)';

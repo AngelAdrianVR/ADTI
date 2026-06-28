@@ -284,7 +284,7 @@ async function confirmAndReject(record) {
                                 <td class="px-4 py-2.5">
                                     <div v-if="getAllLevelsSummary(record).length === 0" class="text-[11px] text-gray-300">—</div>
                                     <div v-else class="flex flex-col gap-2.5">
-                                        <div v-for="lvl in getAllLevelsSummary(record)" :key="lvl.levelId"
+                                        <div v-for="(lvl, idx) in getAllLevelsSummary(record)" :key="lvl.levelId"
                                             class="rounded px-2 py-1.5"
                                             :class="{
                                                 'bg-green-50 border border-green-100': lvl.allApproved,
@@ -292,8 +292,19 @@ async function confirmAndReject(record) {
                                                 'bg-blue-50 border border-blue-100': lvl.isPending && !lvl.hasRejection,
                                                 'bg-gray-50 border border-gray-100': !lvl.allApproved && !lvl.hasRejection && !lvl.isPending,
                                             }">
-                                            <!-- Nombre del nivel -->
-                                            <div class="text-[11px] font-semibold text-gray-700 mb-1.5">{{ lvl.levelName }}</div>
+                                            <!-- Nombre del nivel con badge -->
+                                            <div class="flex items-center justify-between mb-1.5">
+                                                <span class="text-[11px] font-semibold text-gray-700">{{ lvl.levelName }}</span>
+                                                <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full border"
+                                                    :class="{
+                                                        'bg-green-100 text-green-700 border-green-200': lvl.allApproved,
+                                                        'bg-red-100 text-red-700 border-red-200': lvl.hasRejection,
+                                                        'bg-blue-100 text-blue-700 border-blue-200': lvl.isPending && !lvl.hasRejection,
+                                                        'bg-gray-100 text-gray-500 border-gray-200': !lvl.allApproved && !lvl.hasRejection && !lvl.isPending,
+                                                    }">
+                                                    Nivel {{ idx + 1 }}
+                                                </span>
+                                            </div>
                                             <!-- Avatares en fila -->
                                             <div class="flex flex-wrap items-end gap-3">
                                                 <div v-for="approver in lvl.approvers" :key="approver.id" class="flex flex-col items-center gap-1">

@@ -33,7 +33,11 @@ class PayrollUser extends Pivot
         'approved_extra_hours',
         'approved_extra_minutes',
         'approved_by',
-        'approved_at'
+        'approved_at',
+        // Campos de pausa/comida
+        'break_start',
+        'break_end',
+        'break_minutes',
     ];
 
     protected $casts = [
@@ -41,6 +45,7 @@ class PayrollUser extends Pivot
         'additionals' => 'array',
         'approved_at' => 'datetime',
         'project_id' => 'integer',
+        'break_minutes' => 'integer',
     ];
 
     // relationships
@@ -218,5 +223,74 @@ class PayrollUser extends Pivot
                 ]);
             }
         }
+    }
+
+    /**
+     * Registra el inicio de una pausa (comida/break).
+     * Se llama cuando el usuario pausa desde la web o cuando se detecta
+     * una salida por comida desde BioTime.
+     */
+    public function startBreak($time = null)
+    {
+        $breakStart = $time ?? now()->format('H:i');
+        
+        $this->update([
+            'break_start' => $breakStart,
+            'break_end' => null,
+            'break_minutes' => null,
+        ]);
+        
+        Log::info('Break iniciado', [
+            'payroll_user_id' => $this->id,
+            'user_id' => $this->user_id,
+            'break_start' => $breakStart,
+        ]);
+    }
+
+    /**
+     * Registra el fin de una pausa (comida/break).
+     * Calcula la duración total en minutos.
+     */
+    public function endBreak($time = null)
+    {
+        if (!$this->break_start) {
+            Log::warning('Intento de finalizar break sin inicio registrado', [
+                'payroll_user_id' => $this->id,
+            ]);
+            return;
+        }
+
+        $breakEnd = $time ?? now()->format('H:i');
+        
+        try {
+            $breakStartCarbon = Carbon::createFromFormat('H:i', trim($this->break_start));
+            $breakEndCarbon = Carbon::createFromFormat('H:i', trim($breakEnd));
+            
+            // Si la hora de fin es menor que la de inicio (cruzó medianoche)
+            if ($breakEndCarbon->lessThan($breakStartCarbon)) {
+                $breakEndCarbon->addDay();
+            }
+            
+            $breakMinutes = $breakStartCarbon->diffInMinutes($breakEndCarbon);
+        } catch (\Exception $e) {
+            Log::error('Error al calcular duración de break', [
+                'break_start' => $this->break_start,
+                'break_end' => $breakEnd,
+                'error' => $e->getMessage(),
+            ]);
+            $breakMinutes = 0;
+        }
+
+        $this->update([
+            'break_end' => $breakEnd,
+            'break_minutes' => $breakMinutes,
+        ]);
+        
+        Log::info('Break finalizado', [
+            'payroll_user_id' => $this->id,
+            'user_id' => $this->user_id,
+            'break_end' => $breakEnd,
+            'break_minutes' => $breakMinutes,
+        ]);
     }
 }

@@ -60,9 +60,8 @@ class PayrollExtraHoursController extends Controller
                 ];
             })->values();
 
-        // Usuarios elegibles como aprobadores (todos los activos con rol apropiado)
+        // Usuarios elegibles como aprobadores (todos los activos, incluyendo directivos)
         $eligibleApprovers = User::where('is_active', true)
-            ->whereNotIn('org_props->position', ['Dirección', 'Soporte DTW'])
             ->select('id', 'name', 'code', 'org_props', 'profile_photo_path')
             ->get()
             ->map(function ($user) {

@@ -103,7 +103,11 @@ class User extends Authenticatable implements HasMedia
                 'approved_extra_hours',
                 'approved_extra_minutes',
                 'approved_by',
-                'approved_at'
+                'approved_at',
+                // Campos de pausa/comida
+                'break_start',
+                'break_end',
+                'break_minutes',
             ])
             ->withTimestamps();
     }
@@ -219,6 +223,11 @@ class User extends Authenticatable implements HasMedia
                     return 'Registrar salida';
                 }
 
+                // Si hay un break abierto (sin end), cerrarlo antes de marcar la salida
+                if ($open_attendance->break_start && !$open_attendance->break_end) {
+                    $open_attendance->endBreak($now_time);
+                }
+
                 $open_attendance->update([
                     'check_out' => $now_time,
                     'check_out_location' => $location,
@@ -257,12 +266,47 @@ class User extends Authenticatable implements HasMedia
 
     public function setPause()
     {
+        $today = now()->toDateString();
+        $nowTime = now()->format('H:i');
+        $activePayroll = Payroll::firstWhere('is_active', true);
+
+        // Si no hay nómina activa, solo alternar el estado paused sin registrar break
+        if (!$activePayroll) {
+            if ($this->paused) {
+                $this->update(['paused' => null]);
+                return false;
+            } else {
+                $time = now()->isoFormat('h:mm a');
+                $this->update(['paused' => $time]);
+                return $time;
+            }
+        }
+
+        // Buscar o crear el registro de asistencia de hoy
+        $todayAttendance = PayrollUser::firstOrCreate(
+            ['date' => $today, 'user_id' => $this->id],
+            [
+                'payroll_id' => $activePayroll->id,
+                'checked_in_platform' => true,
+            ]
+        );
+
         if ($this->paused) {
+            // --- REANUDAR (fin del break) ---
             $this->update(['paused' => null]);
+
+            // Registrar fin del break en payroll_user
+            $todayAttendance->endBreak($nowTime);
+
             return false;
         } else {
+            // --- PAUSAR (inicio del break) ---
             $time = now()->isoFormat('h:mm a');
             $this->update(['paused' => $time]);
+
+            // Registrar inicio del break en payroll_user
+            $todayAttendance->startBreak($nowTime);
+
             return $time;
         }
     }

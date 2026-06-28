@@ -27,20 +27,54 @@ const showApproveModal = ref(false);
 const showProjectModal = ref(false);
 const incidences = ref(['Falta injustificada', 'Falta justificada', 'Incapacidad', 'Permiso sin goce', 'Permiso con goce', 'Vacaciones', 'Descanso', 'Día festivo', 'Salió de Viaje']);
 
-const form = useForm({ date: null, check_in: null, check_out: null, incidence: null, user_id: props.payrollUser.user.id, payroll_id: props.payroll.id });
+// ─── Drag-to-scroll ───
+const scrollContainer = ref(null);
+const isDragging = ref(false);
+const dragStartX = ref(0);
+const dragScrollLeft = ref(0);
+
+const onDragStart = (e) => {
+    isDragging.value = true;
+    dragStartX.value = e.pageX - scrollContainer.value.offsetLeft;
+    dragScrollLeft.value = scrollContainer.value.scrollLeft;
+    scrollContainer.value.style.cursor = 'grabbing';
+    scrollContainer.value.style.userSelect = 'none';
+};
+
+const onDragMove = (e) => {
+    if (!isDragging.value) return;
+    e.preventDefault();
+    const x = e.pageX - scrollContainer.value.offsetLeft;
+    const walk = (x - dragStartX.value) * 1.5; // Multiplicador para velocidad
+    scrollContainer.value.scrollLeft = dragScrollLeft.value - walk;
+};
+
+const onDragEnd = () => {
+    isDragging.value = false;
+    if (scrollContainer.value) {
+        scrollContainer.value.style.cursor = 'grab';
+        scrollContainer.value.style.userSelect = '';
+    }
+};
+
+const form = useForm({ date: null, check_in: null, check_out: null, break_start: null, break_end: null, incidence: null, user_id: props.payrollUser.user.id, payroll_id: props.payroll.id });
 const approveForm = useForm({ date: null, user_id: props.payrollUser.user.id, payroll_id: props.payroll.id, approved_extra_hours: 0, approved_extra_minutes: 0, comments: '' });
 const projectForm = useForm({ date: null, user_id: props.payrollUser.user.id, project_id: null });
 
 // ─── Stats ───
 const stats = computed(() => {
-    let extraMinutesApproved = 0, extraMinutesPending = 0, lateMinutes = 0;
+    let extraMinutesApproved = 0, extraMinutesPending = 0, lateMinutes = 0, breakMinutes = 0, breakCount = 0;
     props.payrollUser.incidences.forEach(day => {
         if (day.approved_at) extraMinutesApproved += (day.approved_extra_hours || 0) * 60 + (day.approved_extra_minutes || 0);
         else if (day.extra_hours || day.extra_minutes) extraMinutesPending += (day.extra_hours || 0) * 60 + (day.extra_minutes || 0);
         if (day.late) lateMinutes += day.late;
+        if (day.break_minutes) {
+            breakMinutes += day.break_minutes;
+            breakCount++;
+        }
     });
     const fmt = m => `${Math.floor(m / 60)}h ${m % 60}m`;
-    return { extraApproved: fmt(extraMinutesApproved), extraPending: fmt(extraMinutesPending), late: fmt(lateMinutes) };
+    return { extraApproved: fmt(extraMinutesApproved), extraPending: fmt(extraMinutesPending), late: fmt(lateMinutes), breakTime: fmt(breakMinutes), breakCount };
 });
 
 // ─── GPS ───
@@ -58,6 +92,8 @@ const handleCommand = (command) => {
         const r = props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(date)));
         form.check_in = r?.check_in?.substring(0, 5) || null;
         form.check_out = r?.check_out?.substring(0, 5) || null;
+        form.break_start = r?.break_start?.substring(0, 5) || null;
+        form.break_end = r?.break_end?.substring(0, 5) || null;
         showAttendanceModal.value = true;
     } else if (action === 'remove_late') removeLate();
     else if (action === 'edit_comment') {
@@ -127,6 +163,7 @@ const submitRejectExtraTime = () => approveForm.put(route('payroll-users.reject-
             </div>
             <div class="flex items-center gap-4 lg:gap-6 text-xs text-gray-600 w-full md:w-auto justify-end">
                 <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-gray-400 font-bold">Retardos</span><span :class="stats.late !== '0h 0m' ? 'text-red-500 font-bold' : ''">{{ stats.late }}</span></div>
+                <div v-if="stats.breakCount > 0" class="flex flex-col items-end"><span class="uppercase text-[10px] text-orange-400 font-bold">Comidas</span><span class="text-orange-600 font-bold">{{ stats.breakTime }}</span></div>
                 <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-gray-400 font-bold">T. E. (Pend)</span><span :class="stats.extraPending !== '0h 0m' ? 'text-amber-500 font-bold' : ''">{{ stats.extraPending }}</span></div>
                 <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-green-600 font-bold">T. E. (Aprob)</span><span :class="stats.extraApproved !== '0h 0m' ? 'text-green-600 font-bold' : ''">{{ stats.extraApproved }}</span></div>
                 <i class="fa-solid fa-chevron-down text-gray-400 transition-transform duration-300 ml-2" :class="{'rotate-180': isOpen}"></i>
@@ -135,7 +172,14 @@ const submitRejectExtraTime = () => approveForm.put(route('payroll-users.reject-
 
         <!-- Body -->
         <div v-show="isOpen" class="border-t border-gray-100 bg-gray-50/50 p-4">
-            <div class="overflow-x-auto pb-2">
+            <div
+                ref="scrollContainer"
+                class="overflow-x-auto pb-2 cursor-grab"
+                @mousedown="onDragStart"
+                @mousemove="onDragMove"
+                @mouseup="onDragEnd"
+                @mouseleave="onDragEnd"
+            >
                 <div class="flex gap-2 min-w-max">
                     <IncidencesDayCard
                         v-for="(day, index) in payrollUser.incidences" :key="index"
@@ -162,6 +206,20 @@ const submitRejectExtraTime = () => approveForm.put(route('payroll-users.reject-
             <div class="grid grid-cols-2 gap-6 py-2">
                 <div><label class="block text-sm font-semibold text-gray-700 mb-2">Hora de entrada</label><el-time-picker v-model="form.check_in" format="HH:mm" value-format="HH:mm" placeholder="00:00" class="!w-full" clearable /></div>
                 <div><label class="block text-sm font-semibold text-gray-700 mb-2">Hora de salida</label><el-time-picker v-model="form.check_out" format="HH:mm" value-format="HH:mm" placeholder="00:00" class="!w-full" clearable /></div>
+            </div>
+
+            <!-- Tiempo de comida / Break -->
+            <div class="mt-4 pt-4 border-t border-dashed border-gray-200">
+                <div class="flex items-center gap-2 mb-3">
+                    <i class="fa-solid fa-utensils text-orange-500 text-sm"></i>
+                    <span class="text-sm font-semibold text-gray-700">Tiempo de comida</span>
+                    <span class="text-[10px] text-gray-400">(opcional)</span>
+                </div>
+                <div class="grid grid-cols-2 gap-6">
+                    <div><label class="block text-sm font-semibold text-gray-700 mb-2">Inicio de comida</label><el-time-picker v-model="form.break_start" format="HH:mm" value-format="HH:mm" placeholder="12:00" class="!w-full" clearable /></div>
+                    <div><label class="block text-sm font-semibold text-gray-700 mb-2">Fin de comida</label><el-time-picker v-model="form.break_end" format="HH:mm" value-format="HH:mm" placeholder="13:00" class="!w-full" clearable /></div>
+                </div>
+                <p class="text-[10px] text-gray-400 mt-2">Si ambos campos están vacíos, se eliminará el registro de comida. Si solo llenas el inicio, se dejará como pausa en curso.</p>
             </div>
             <template #footer>
                 <div class="flex justify-end gap-2 pt-2">

@@ -110,6 +110,11 @@ watch(payrollUsersRef, () => {
                     <el-option label="Con comentarios" value="with" />
                     <el-option label="Sin comentarios" value="without" />
                 </el-select>
+                <span class="text-gray-300">|</span>
+                <el-select v-model="filters.selectedProject.value" placeholder="Todos los proyectos" clearable
+                    class="!w-56" :disabled="actions.isProcessing.value">
+                    <el-option v-for="proj in filters.availableProjects.value" :key="proj.id" :label="proj.name" :value="proj.id" />
+                </el-select>
             </div>
 
             <!-- Info de jerarquía -->

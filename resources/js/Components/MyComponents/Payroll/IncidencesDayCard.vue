@@ -22,6 +22,7 @@ const getDayName = (date) => format(new Date(date), 'EEEE', { locale: es });
 
 const getIncidenceColor = (incidence) => {
     if (!incidence) return 'bg-white';
+    if (incidence.break_start && !incidence.break_end) return 'bg-orange-50 border-orange-300';
     if (incidence.check_in && incidence.check_out) return 'bg-green-50 border-green-200';
     if (incidence.incidence === 'Falta injustificada') return 'bg-red-50 border-red-200';
     if (incidence.incidence === 'Vacaciones') return 'bg-blue-50 border-blue-200';
@@ -34,7 +35,7 @@ const handleCommand = (cmd) => emit('command', cmd);
 </script>
 
 <template>
-    <div class="flex flex-col w-44 border rounded-lg bg-white overflow-hidden shadow-sm transition-all hover:shadow-md relative"
+    <div class="flex flex-col w-48 border rounded-lg bg-white overflow-hidden shadow-sm transition-all hover:shadow-md relative"
          :class="getIncidenceColor(day)">
         <!-- Indicador de Comentario -->
         <div v-if="day.comment" class="absolute top-1 left-1 z-10">
@@ -144,6 +145,20 @@ const handleCommand = (cmd) => emit('command', cmd);
                         <el-tooltip v-else-if="getLocationError(day.check_out_location)" :content="`Error GPS: ${getLocationError(day.check_out_location)}`" placement="top">
                             <i class="fa-solid fa-location-crosshairs text-red-400 text-[9px] cursor-help"></i>
                         </el-tooltip>
+                    </div>
+                </div>
+
+                <!-- Tiempo de Comida / Break -->
+                <div v-if="day.break_start" class="mt-1 text-[9px] text-orange-700 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200 text-center leading-tight w-full">
+                    <div class="flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-utensils text-[8px]"></i>
+                        <span class="font-semibold">{{ day.break_start?.substring(0, 5) }}</span>
+                        <span v-if="day.break_end" class="text-orange-400">-</span>
+                        <span v-if="day.break_end" class="font-semibold">{{ day.break_end?.substring(0, 5) }}</span>
+                        <span v-else class="text-orange-400 animate-pulse">en curso...</span>
+                    </div>
+                    <div v-if="day.break_minutes" class="text-[8px] text-orange-600 mt-0.5 font-medium">
+                        {{ day.break_minutes }} min
                     </div>
                 </div>
 
