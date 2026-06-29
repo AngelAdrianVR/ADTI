@@ -191,16 +191,39 @@ class PayrollController extends Controller
                 if ($incidence->extra_hours || $incidence->extra_minutes) {
                     $dayOfWeek = $incidence->date->dayOfWeek; // 0=Dom, 6=Sáb
                     
-                    // Buscar costo específico primero, luego por rango
-                    $cost = $extraHourCosts->first(function ($c) use ($dayOfWeek) {
-                        return $c->range_type === 'specific' && $c->day_of_week === $dayOfWeek;
+                    // 1. Buscar costo específico para ESTE usuario (tiene prioridad)
+                    $cost = $extraHourCosts->first(function ($c) use ($dayOfWeek, $user) {
+                        return $c->user_id === $user->id
+                            && $c->range_type === 'specific'
+                            && $c->day_of_week === $dayOfWeek;
                     });
                     
+                    // 2. Buscar costo por rango para ESTE usuario
+                    if (!$cost) {
+                        $isWeekend = ($dayOfWeek === 0 || $dayOfWeek === 6);
+                        $rangeType = $isWeekend ? 'weekend' : 'weekday';
+                        $cost = $extraHourCosts->first(function ($c) use ($rangeType, $user) {
+                            return $c->user_id === $user->id
+                                && $c->range_type === $rangeType;
+                        });
+                    }
+                    
+                    // 3. Fallback a costo general específico (user_id = null)
+                    if (!$cost) {
+                        $cost = $extraHourCosts->first(function ($c) use ($dayOfWeek) {
+                            return $c->user_id === null
+                                && $c->range_type === 'specific'
+                                && $c->day_of_week === $dayOfWeek;
+                        });
+                    }
+                    
+                    // 4. Fallback a costo general por rango
                     if (!$cost) {
                         $isWeekend = ($dayOfWeek === 0 || $dayOfWeek === 6);
                         $rangeType = $isWeekend ? 'weekend' : 'weekday';
                         $cost = $extraHourCosts->first(function ($c) use ($rangeType) {
-                            return $c->range_type === $rangeType;
+                            return $c->user_id === null
+                                && $c->range_type === $rangeType;
                         });
                     }
                     

@@ -21,8 +21,22 @@ class PayrollExtraHoursController extends Controller
      */
     public function config(Payroll $payroll)
     {
-        // Cargar costos configurados
-        $costs = $payroll->extraHourCosts()->get();
+        // Cargar costos configurados (generales + por usuario)
+        $costs = $payroll->extraHourCosts()
+            ->with('user')
+            ->get()
+            ->map(function ($cost) {
+                return [
+                    'id' => $cost->id,
+                    'payroll_id' => $cost->payroll_id,
+                    'user_id' => $cost->user_id,
+                    'user_name' => $cost->user?->name,
+                    'day_of_week' => $cost->day_of_week,
+                    'range_type' => $cost->range_type,
+                    'cost_per_hour' => (float) $cost->cost_per_hour,
+                ];
+            })
+            ->values();
 
         // Cargar grupos de aprobación con sus niveles y aprobadores
         $approvalGroups = $payroll->approvalGroups()
@@ -140,19 +154,21 @@ class PayrollExtraHoursController extends Controller
     {
         $request->validate([
             'costs' => 'required|array',
+            'costs.*.user_id' => 'nullable|integer|exists:users,id',
             'costs.*.range_type' => 'required|in:weekday,weekend,specific',
             'costs.*.day_of_week' => 'nullable|integer|min:0|max:6',
             'costs.*.cost_per_hour' => 'required|numeric|min:0',
         ]);
 
         DB::transaction(function () use ($request, $payroll) {
-            // Eliminar costos existentes
+            // Eliminar costos existentes de esta nómina
             $payroll->extraHourCosts()->delete();
 
-            // Insertar nuevos costos
+            // Insertar nuevos costos (generales y por usuario)
             foreach ($request->costs as $cost) {
                 ExtraHourCost::create([
                     'payroll_id' => $payroll->id,
+                    'user_id' => $cost['user_id'] ?? null,
                     'range_type' => $cost['range_type'],
                     'day_of_week' => $cost['day_of_week'] ?? null,
                     'cost_per_hour' => $cost['cost_per_hour'],
@@ -231,6 +247,7 @@ class PayrollExtraHoursController extends Controller
             foreach ($previous->extraHourCosts as $cost) {
                 ExtraHourCost::create([
                     'payroll_id' => $payroll->id,
+                    'user_id' => $cost->user_id,
                     'range_type' => $cost->range_type,
                     'day_of_week' => $cost->day_of_week,
                     'cost_per_hour' => $cost->cost_per_hour,

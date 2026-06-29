@@ -12,12 +12,14 @@ class ExtraHourCost extends Model
 
     protected $fillable = [
         'payroll_id',
+        'user_id',
         'day_of_week',
         'range_type',
         'cost_per_hour',
     ];
 
     protected $casts = [
+        'user_id' => 'integer',
         'day_of_week' => 'integer',
         'cost_per_hour' => 'decimal:2',
     ];
@@ -26,5 +28,10 @@ class ExtraHourCost extends Model
     public function payroll(): BelongsTo
     {
         return $this->belongsTo(Payroll::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }
