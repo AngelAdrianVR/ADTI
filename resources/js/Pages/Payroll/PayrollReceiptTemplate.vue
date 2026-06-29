@@ -88,7 +88,7 @@ const get14DaysRecord = (userItem) => {
         // Calcular monto de tiempo extra para este día
         let extraAmount = 0;
         if (hasExtraTime) {
-            const costPerHour = getCostPerHour(currentDate);
+            const costPerHour = getCostPerHour(currentDate, userItem.user.id);
             const totalHours = (incidence.approved_extra_hours || 0) + ((incidence.approved_extra_minutes || 0) / 60);
             extraAmount = costPerHour * totalHours;
         }
@@ -112,19 +112,38 @@ const get14DaysRecord = (userItem) => {
 
 // --- Funciones de cálculo de montos y aprobadores ---
 
-// Obtener el costo por hora para un día específico
-const getCostPerHour = (dateObj) => {
+// Obtener el costo por hora para un día y usuario específico.
+// Prioridad: 1) Usuario + día, 2) Usuario + rango, 3) General + día, 4) General + rango
+const getCostPerHour = (dateObj, userId) => {
     if (!props.extraHourCosts || props.extraHourCosts.length === 0) return 0;
     const dayOfWeek = dateObj.getDay(); // 0=Dom, 6=Sáb
-    
-    // Buscar costo específico del día primero
-    const specificCost = props.extraHourCosts.find(c => c.range_type === 'specific' && c.day_of_week === dayOfWeek);
-    if (specificCost) return parseFloat(specificCost.cost_per_hour);
-    
-    // Luego buscar por rango (weekday/weekend)
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    const rangeCost = props.extraHourCosts.find(c => c.range_type === (isWeekend ? 'weekend' : 'weekday'));
-    return rangeCost ? parseFloat(rangeCost.cost_per_hour) : 0;
+    const rangeType = isWeekend ? 'weekend' : 'weekday';
+    
+    // 1. Costo específico para ESTE usuario + día
+    let cost = props.extraHourCosts.find(c =>
+        c.user_id === userId && c.range_type === 'specific' && c.day_of_week === dayOfWeek
+    );
+    // 2. Costo por rango para ESTE usuario
+    if (!cost) {
+        cost = props.extraHourCosts.find(c =>
+            c.user_id === userId && c.range_type === rangeType
+        );
+    }
+    // 3. Costo general específico del día
+    if (!cost) {
+        cost = props.extraHourCosts.find(c =>
+            c.user_id === null && c.range_type === 'specific' && c.day_of_week === dayOfWeek
+        );
+    }
+    // 4. Costo general por rango
+    if (!cost) {
+        cost = props.extraHourCosts.find(c =>
+            c.user_id === null && c.range_type === rangeType
+        );
+    }
+    
+    return cost ? parseFloat(cost.cost_per_hour) : 0;
 };
 
 // Calcular el total de horas extra aprobadas y monto para un usuario
@@ -138,7 +157,7 @@ const getExtraTimeTotal = (payrollUser) => {
             totalMinutes += mins;
             
             const dateObj = new Date(day.date);
-            const costPerHour = getCostPerHour(dateObj);
+            const costPerHour = getCostPerHour(dateObj, payrollUser.user.id);
             totalAmount += (mins / 60) * costPerHour;
         }
     });

@@ -27,8 +27,10 @@ const specificCosts = ref(dayNames.map((name, idx) => ({
     enabled: false,
 })));
 
-// Cargar datos existentes
+// Cargar datos existentes (solo costos generales: user_id === null)
 props.costs.forEach(cost => {
+    if (cost.user_id !== null && cost.user_id !== undefined) return; // Saltar costos por usuario
+    
     if (cost.range_type === 'weekday') {
         weekdayCost.value = parseFloat(cost.cost_per_hour);
     } else if (cost.range_type === 'weekend') {
@@ -42,18 +44,90 @@ props.costs.forEach(cost => {
     }
 });
 
+// ─── SECCIÓN 1B: Costos por usuario ─────────────────────────────
+const userCosts = ref([]); // [{ id, userId, weekdayCost, weekendCost, specificCosts: [{day_of_week, name, cost_per_hour, enabled}] }]
+
+// Cargar costos por usuario existentes
+const userCostsMap = new Map(); // userId -> { weekday, weekend, specifics }
+props.costs.forEach(cost => {
+    if (!cost.user_id) return; // Solo costos por usuario
+    if (!userCostsMap.has(cost.user_id)) {
+        userCostsMap.set(cost.user_id, { weekdayCost: 0, weekendCost: 0, specifics: {} });
+    }
+    const uc = userCostsMap.get(cost.user_id);
+    if (cost.range_type === 'weekday') {
+        uc.weekdayCost = parseFloat(cost.cost_per_hour);
+    } else if (cost.range_type === 'weekend') {
+        uc.weekendCost = parseFloat(cost.cost_per_hour);
+    } else if (cost.range_type === 'specific' && cost.day_of_week !== null) {
+        uc.specifics[cost.day_of_week] = parseFloat(cost.cost_per_hour);
+    }
+});
+
+// Convertir mapa a array reactivo
+userCostsMap.forEach((val, userId) => {
+    userCosts.value.push({
+        userId,
+        weekdayCost: val.weekdayCost,
+        weekendCost: val.weekendCost,
+        specificCosts: dayNames.map((name, idx) => ({
+            day_of_week: idx,
+            name,
+            cost_per_hour: val.specifics[idx] || 0,
+            enabled: val.specifics[idx] !== undefined,
+        })),
+    });
+});
+
+const addUserCost = () => {
+    userCosts.value.push({
+        userId: null,
+        weekdayCost: 0,
+        weekendCost: 0,
+        specificCosts: dayNames.map((name, idx) => ({
+            day_of_week: idx,
+            name,
+            cost_per_hour: 0,
+            enabled: false,
+        })),
+    });
+};
+
+const removeUserCost = (index) => {
+    userCosts.value.splice(index, 1);
+};
+
+const getUserById = (id) => props.eligibleEmployees.find(e => e.id === id);
+const getSelectedUserIds = () => new Set(userCosts.value.map(uc => uc.userId).filter(Boolean));
+
 const costsForm = useForm({ costs: [] });
 
 const saveCosts = () => {
     const allCosts = [];
+    
+    // Costos generales
     if (weekdayCost.value > 0) {
-        allCosts.push({ range_type: 'weekday', day_of_week: null, cost_per_hour: weekdayCost.value });
+        allCosts.push({ user_id: null, range_type: 'weekday', day_of_week: null, cost_per_hour: weekdayCost.value });
     }
     if (weekendCost.value > 0) {
-        allCosts.push({ range_type: 'weekend', day_of_week: null, cost_per_hour: weekendCost.value });
+        allCosts.push({ user_id: null, range_type: 'weekend', day_of_week: null, cost_per_hour: weekendCost.value });
     }
     specificCosts.value.filter(s => s.enabled && s.cost_per_hour > 0).forEach(s => {
-        allCosts.push({ range_type: 'specific', day_of_week: s.day_of_week, cost_per_hour: s.cost_per_hour });
+        allCosts.push({ user_id: null, range_type: 'specific', day_of_week: s.day_of_week, cost_per_hour: s.cost_per_hour });
+    });
+
+    // Costos por usuario
+    userCosts.value.forEach(uc => {
+        if (!uc.userId) return; // Saltar sin usuario seleccionado
+        if (uc.weekdayCost > 0) {
+            allCosts.push({ user_id: uc.userId, range_type: 'weekday', day_of_week: null, cost_per_hour: uc.weekdayCost });
+        }
+        if (uc.weekendCost > 0) {
+            allCosts.push({ user_id: uc.userId, range_type: 'weekend', day_of_week: null, cost_per_hour: uc.weekendCost });
+        }
+        uc.specificCosts.filter(s => s.enabled && s.cost_per_hour > 0).forEach(s => {
+            allCosts.push({ user_id: uc.userId, range_type: 'specific', day_of_week: s.day_of_week, cost_per_hour: s.cost_per_hour });
+        });
     });
 
     costsForm.costs = allCosts;
@@ -147,10 +221,12 @@ const copyForm = useForm({});
 
 const copyFromPrevious = () => {
     copyForm.post(route('payrolls.extra-hours-copy', props.payroll.id), {
-        preserveScroll: true,
+        preserveScroll: false,
+        preserveState: false,
         onSuccess: () => {
-            notify.success('Configuración copiada. Recarga la página para ver los cambios.');
-            setTimeout(() => window.location.reload(), 1000);
+            notify.success('Configuración copiada correctamente.');
+            // Recarga dura para asegurar datos frescos del servidor
+            // window.location.reload();
         },
     });
 };
@@ -300,6 +376,153 @@ const formatExtraTime = (minutes) => {
                                 >
                                     <i class="fa-solid fa-floppy-disk mr-2"></i> Guardar costos
                                 </el-button>
+                            </div>
+                        </div>
+
+                        <!-- ─── SECCIÓN: Costos por usuario ─── -->
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                            <div class="flex justify-between items-center mb-1">
+                                <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                    <i class="fa-solid fa-user-gear text-teal-600"></i> Costos por usuario
+                                </h2>
+                                <el-button size="small" @click="addUserCost" class="!rounded-lg">
+                                    <i class="fa-solid fa-plus mr-1"></i> Agregar usuario
+                                </el-button>
+                            </div>
+                            <p class="text-xs text-gray-500 mb-5">
+                                Configura costos de hora extra específicos para usuarios particulares.
+                                Estos costos <strong>sobreescriben</strong> los costos generales para ese usuario.
+                            </p>
+
+                            <!-- Sin costos por usuario -->
+                            <div v-if="userCosts.length === 0" class="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                                <i class="fa-solid fa-users-slash text-gray-300 text-3xl mb-2"></i>
+                                <p class="text-gray-400 text-sm">Sin costos por usuario configurados.</p>
+                                <p class="text-gray-400 text-xs mt-1">Los costos generales aplican para todos.</p>
+                            </div>
+
+                            <!-- Lista de costos por usuario -->
+                            <div v-else class="space-y-6">
+                                <div
+                                    v-for="(uc, uci) in userCosts"
+                                    :key="uci"
+                                    class="bg-gray-50 rounded-xl p-5 border border-gray-200 relative"
+                                >
+                                    <button
+                                        @click="removeUserCost(uci)"
+                                        class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 shadow z-10"
+                                        title="Quitar usuario"
+                                    >
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+
+                                    <div class="space-y-4">
+                                        <!-- Selector de usuario -->
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-600 mb-1">Empleado</label>
+                                            <el-select
+                                                v-model="uc.userId"
+                                                filterable
+                                                placeholder="Selecciona un empleado..."
+                                                class="w-full"
+                                                size="default"
+                                            >
+                                                <el-option
+                                                    v-for="emp in eligibleEmployees"
+                                                    :key="emp.id"
+                                                    :label="`${emp.name} (${emp.department || 'Sin depto'})`"
+                                                    :value="emp.id"
+                                                    :disabled="getSelectedUserIds().has(emp.id) && emp.id !== uc.userId"
+                                                >
+                                                    <div class="flex items-center gap-2">
+                                                        <img :src="emp.profile_photo_url" class="w-5 h-5 rounded-full object-cover">
+                                                        <span>{{ emp.name }}</span>
+                                                        <span class="text-xs text-gray-400">{{ emp.department }}</span>
+                                                    </div>
+                                                </el-option>
+                                            </el-select>
+                                        </div>
+
+                                        <!-- Rangos generales del usuario -->
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div class="bg-blue-50/50 rounded-lg p-3 border border-blue-100">
+                                                <label class="block text-xs font-bold text-blue-800 mb-1.5">
+                                                    <i class="fa-solid fa-calendar-day mr-1"></i> Entre semana (L-V)
+                                                </label>
+                                                <div class="flex items-center gap-1.5">
+                                                    <span class="text-blue-600 font-bold text-xs">$</span>
+                                                    <el-input-number
+                                                        v-model="uc.weekdayCost"
+                                                        :min="0"
+                                                        :precision="2"
+                                                        :step="10"
+                                                        size="small"
+                                                        class="!w-full"
+                                                        controls-position="right"
+                                                        placeholder="0.00"
+                                                    />
+                                                    <span class="text-[10px] text-gray-400">/h</span>
+                                                </div>
+                                            </div>
+                                            <div class="bg-amber-50/50 rounded-lg p-3 border border-amber-100">
+                                                <label class="block text-xs font-bold text-amber-800 mb-1.5">
+                                                    <i class="fa-solid fa-calendar-week mr-1"></i> Fin de semana (S-D)
+                                                </label>
+                                                <div class="flex items-center gap-1.5">
+                                                    <span class="text-amber-600 font-bold text-xs">$</span>
+                                                    <el-input-number
+                                                        v-model="uc.weekendCost"
+                                                        :min="0"
+                                                        :precision="2"
+                                                        :step="10"
+                                                        size="small"
+                                                        class="!w-full"
+                                                        controls-position="right"
+                                                        placeholder="0.00"
+                                                    />
+                                                    <span class="text-[10px] text-gray-400">/h</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Días específicos del usuario -->
+                                        <div>
+                                            <span class="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Días específicos</span>
+                                            <div class="grid grid-cols-4 gap-1.5 mt-1.5">
+                                                <div
+                                                    v-for="spec in uc.specificCosts"
+                                                    :key="spec.day_of_week"
+                                                    class="text-center"
+                                                >
+                                                    <div
+                                                        class="rounded-md p-2 border transition-all cursor-pointer"
+                                                        :class="spec.enabled
+                                                            ? 'border-teal-300 bg-teal-50'
+                                                            : 'border-gray-200 bg-white hover:border-gray-300'"
+                                                        @click="spec.enabled = !spec.enabled"
+                                                    >
+                                                        <p class="text-[10px] font-bold mb-1"
+                                                           :class="spec.enabled ? 'text-teal-700' : 'text-gray-400'">
+                                                            {{ spec.name.substring(0, 3) }}
+                                                        </p>
+                                                        <el-input-number
+                                                            v-if="spec.enabled"
+                                                            v-model="spec.cost_per_hour"
+                                                            :min="0"
+                                                            :precision="2"
+                                                            :step="5"
+                                                            size="small"
+                                                            class="!w-full"
+                                                            controls-position="right"
+                                                            @click.stop
+                                                        />
+                                                        <span v-else class="text-[10px] text-gray-300">—</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

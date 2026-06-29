@@ -35,8 +35,18 @@ const props = defineProps({
     projects: {
         type: Array,
         default: () => []
+    },
+    // Costos de hora extra configurados
+    extraHourCosts: {
+        type: Array,
+        default: () => []
     }
 });
+
+// ─── Indicadores de configuración ───
+const costsConfigured = computed(() => props.extraHourCosts && props.extraHourCosts.length > 0);
+const approvalsConfigured = computed(() => props.approvalLevels && props.approvalLevels.length > 0);
+const isFullyConfigured = computed(() => costsConfigured.value && approvalsConfigured.value);
 
 // --- Loading State Global ---
 const isLoading = ref(false);
@@ -360,6 +370,22 @@ const saveComment = () => {
                     </div>
 
                     <div class="w-full md:w-auto flex flex-col md:flex-row justify-end gap-2">
+                        <!-- Configuración de horas extra -->
+                        <Link
+                            v-if="$page.props.auth.user.permissions.includes('Aprobar tiempo extra')"
+                            :href="route('payrolls.extra-hours-config', payroll.id)"
+                            class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-700 transition-all shadow-sm w-full md:w-auto justify-center"
+                        >
+                            <i class="fa-solid fa-gear"></i>
+                            Configurar horas extra
+                            <!-- Indicadores de estado -->
+                            <span class="flex items-center gap-1 ml-1">
+                                <span v-if="costsConfigured" class="w-1.5 h-1.5 rounded-full bg-green-500" title="Costos configurados"></span>
+                                <span v-else class="w-1.5 h-1.5 rounded-full bg-red-400" title="Costos sin configurar"></span>
+                                <span v-if="approvalsConfigured" class="w-1.5 h-1.5 rounded-full bg-green-500" title="Autorizaciones configuradas"></span>
+                                <span v-else class="w-1.5 h-1.5 rounded-full bg-red-400" title="Autorizaciones sin configurar"></span>
+                            </span>
+                        </Link>
                         <PrimaryButton 
                             v-if="$page.props.auth.user.permissions.includes('Ver pre-nominas')"
                             @click="openReceipts"
