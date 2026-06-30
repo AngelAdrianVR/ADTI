@@ -524,6 +524,20 @@ const formatExtraTime = (minutes) => {
                                     </div>
                                 </div>
                             </div>
+
+                            <div v-if="userCosts.length > 0" class="mt-5 pt-4 border-t border-gray-100 flex justify-between">
+                                <el-button size="small" @click="addUserCost" class="!rounded-lg">
+                                    <i class="fa-solid fa-plus mr-1"></i> Agregar usuario
+                                </el-button>
+                                <el-button
+                                    type="primary"
+                                    @click="saveCosts"
+                                    :loading="costsForm.processing"
+                                    class="!bg-teal-600 !border-teal-600"
+                                >
+                                    <i class="fa-solid fa-floppy-disk mr-2"></i> Guardar costos por usuario
+                                </el-button>
+                            </div>
                         </div>
 
                         <!-- ─── SECCIÓN: Grupos de autorización ─── -->
