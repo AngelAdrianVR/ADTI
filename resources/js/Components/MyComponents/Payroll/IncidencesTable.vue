@@ -20,6 +20,14 @@ const emit = defineEmits(['edit-comment']);
 // ─── Jerarquía ───
 const approval = useIncidencesApproval(computed(() => props.approvalLevels));
 
+// ─── Control de visibilidad de montos ───
+// Solo los aprobadores ven montos, y solo de empleados en su grupo
+const canSeeMoney = computed(() => {
+    const hierarchy = approval.hierarchy;
+    if (!hierarchy.isCurrentUserApprover.value) return false;
+    return hierarchy.myEmployeeIds.value.has(Number(props.payrollUser.user.id));
+});
+
 // ─── State ───
 const isOpen = ref(false);
 const showAttendanceModal = ref(false);
@@ -61,12 +69,27 @@ const form = useForm({ date: null, check_in: null, check_out: null, break_start:
 const approveForm = useForm({ date: null, user_id: props.payrollUser.user.id, payroll_id: props.payroll.id, approved_extra_hours: 0, approved_extra_minutes: 0, comments: '' });
 const projectForm = useForm({ date: null, user_id: props.payrollUser.user.id, project_id: null });
 
+// ─── Formateador de dinero con separadores de miles ───
+const formatMoney = (value) => {
+    if (value === null || value === undefined || value === 0) return '0.00';
+    return Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
 // ─── Stats ───
 const stats = computed(() => {
     let extraMinutesApproved = 0, extraMinutesPending = 0, lateMinutes = 0, breakMinutes = 0, breakCount = 0;
+    let extraAmountApproved = 0, extraAmountPending = 0;
     props.payrollUser.incidences.forEach(day => {
-        if (day.approved_at) extraMinutesApproved += (day.approved_extra_hours || 0) * 60 + (day.approved_extra_minutes || 0);
-        else if (day.extra_hours || day.extra_minutes) extraMinutesPending += (day.extra_hours || 0) * 60 + (day.extra_minutes || 0);
+        if (day.approved_at) {
+            // Solo contar aprobados con horas reales (> 0)
+            if ((day.approved_extra_hours || 0) > 0 || (day.approved_extra_minutes || 0) > 0) {
+                extraMinutesApproved += (day.approved_extra_hours || 0) * 60 + (day.approved_extra_minutes || 0);
+                extraAmountApproved += (day.extra_amount || 0);
+            }
+        } else if (day.extra_hours || day.extra_minutes) {
+            extraMinutesPending += (day.extra_hours || 0) * 60 + (day.extra_minutes || 0);
+            extraAmountPending += (day.extra_amount || 0);
+        }
         if (day.late) lateMinutes += day.late;
         if (day.break_minutes) {
             breakMinutes += day.break_minutes;
@@ -74,7 +97,15 @@ const stats = computed(() => {
         }
     });
     const fmt = m => `${Math.floor(m / 60)}h ${m % 60}m`;
-    return { extraApproved: fmt(extraMinutesApproved), extraPending: fmt(extraMinutesPending), late: fmt(lateMinutes), breakTime: fmt(breakMinutes), breakCount };
+    return {
+        extraApproved: fmt(extraMinutesApproved),
+        extraPending: fmt(extraMinutesPending),
+        late: fmt(lateMinutes),
+        breakTime: fmt(breakMinutes),
+        breakCount,
+        extraAmountApproved: extraAmountApproved,
+        extraAmountPending: extraAmountPending,
+    };
 });
 
 // ─── GPS ───
@@ -164,8 +195,8 @@ const submitRejectExtraTime = () => approveForm.put(route('payroll-users.reject-
             <div class="flex items-center gap-4 lg:gap-6 text-xs text-gray-600 w-full md:w-auto justify-end">
                 <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-gray-400 font-bold">Retardos</span><span :class="stats.late !== '0h 0m' ? 'text-red-500 font-bold' : ''">{{ stats.late }}</span></div>
                 <div v-if="stats.breakCount > 0" class="flex flex-col items-end"><span class="uppercase text-[10px] text-orange-400 font-bold">Comidas</span><span class="text-orange-600 font-bold">{{ stats.breakTime }}</span></div>
-                <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-gray-400 font-bold">T. E. (Pend)</span><span :class="stats.extraPending !== '0h 0m' ? 'text-amber-500 font-bold' : ''">{{ stats.extraPending }}</span></div>
-                <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-green-600 font-bold">T. E. (Aprob)</span><span :class="stats.extraApproved !== '0h 0m' ? 'text-green-600 font-bold' : ''">{{ stats.extraApproved }}</span></div>
+                <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-gray-400 font-bold">T. E. (Pend)</span><span :class="stats.extraPending !== '0h 0m' ? 'text-amber-500 font-bold' : ''">{{ stats.extraPending }}</span><span v-if="canSeeMoney && stats.extraAmountPending > 0" class="text-[9px] text-amber-600 font-bold">${{ formatMoney(stats.extraAmountPending) }}</span></div>
+                <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-green-600 font-bold">T. E. (Aprob)</span><span :class="stats.extraApproved !== '0h 0m' ? 'text-green-600 font-bold' : ''">{{ stats.extraApproved }}</span><span v-if="canSeeMoney && stats.extraAmountApproved > 0" class="text-[9px] text-green-700 font-bold">${{ formatMoney(stats.extraAmountApproved) }}</span></div>
                 <i class="fa-solid fa-chevron-down text-gray-400 transition-transform duration-300 ml-2" :class="{'rotate-180': isOpen}"></i>
             </div>
         </div>
@@ -191,6 +222,7 @@ const submitRejectExtraTime = () => approveForm.put(route('payroll-users.reject-
                         :isValidLocation="isValidLocation"
                         :getLocationError="getLocationError"
                         :projects="projects"
+                        :canSeeMoney="canSeeMoney"
                         @command="handleCommand"
                     />
                 </div>

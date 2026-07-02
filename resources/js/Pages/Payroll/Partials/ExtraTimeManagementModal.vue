@@ -123,7 +123,6 @@ watch(payrollUsersRef, () => {
                     <i class="fa-solid fa-sitemap mr-1"></i>
                     {{ hierarchy.currentUserLevel.value?.name || 'Aprobador nivel ' + hierarchy.currentUserLevel.value?.level }}
                 </span>
-                <span class="text-gray-500">{{ hierarchy.myEmployeeIds.value.size }} empleados en tu grupo de aprobación</span>
             </div>
             <div v-else class="flex items-center gap-2 text-xs">
                 <span class="bg-gray-100 text-gray-600 px-2 py-1 rounded-full font-bold border border-gray-200">
