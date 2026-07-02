@@ -407,7 +407,7 @@ const saveComment = () => {
 
                 <!-- KPIs DE TIEMPO EXTRA (solo visibles para aprobadores) -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" 
-                    v-if="totalExtraTimeStats.isApprover || !totalExtraTimeStats.hasHierarchy">
+                    v-if="totalExtraTimeStats.isApprover">
                     
                     <!-- KPI Tiempo Pendiente -->
                     <div @click="showExtraTimeModal = true" class="bg-white p-4 rounded-xl shadow-sm border border-amber-100 flex items-center justify-between cursor-pointer hover:shadow-md hover:border-amber-300 transition-all group">

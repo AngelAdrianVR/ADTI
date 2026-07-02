@@ -13,6 +13,7 @@ const props = defineProps({
     eligibleEmployees: Array,
     usersWithExtraTime: Array,
     hasPreviousPayroll: Boolean,
+    hasNextPayroll: Boolean,
 });
 
 // ─── SECCIÓN 1: Costos de hora extra ────────────────────────────
@@ -225,8 +226,16 @@ const copyFromPrevious = () => {
         preserveState: false,
         onSuccess: () => {
             notify.success('Configuración copiada correctamente.');
-            // Recarga dura para asegurar datos frescos del servidor
-            // window.location.reload();
+        },
+    });
+};
+
+const copyFromNext = () => {
+    copyForm.post(route('payrolls.extra-hours-copy-next', props.payroll.id), {
+        preserveScroll: false,
+        preserveState: false,
+        onSuccess: () => {
+            notify.success('Configuración copiada correctamente.');
         },
     });
 };
@@ -259,17 +268,29 @@ const formatExtraTime = (minutes) => {
                         </div>
                     </div>
 
-                    <!-- Botón de copia rápida -->
-                    <el-button
-                        v-if="hasPreviousPayroll"
-                        type="warning"
-                        plain
-                        @click="copyFromPrevious"
-                        :loading="copyForm.processing"
-                        class="!rounded-lg"
-                    >
-                        <i class="fa-solid fa-copy mr-2"></i> Copiar de catorcena anterior
-                    </el-button>
+                    <!-- Botones de copia -->
+                    <div class="flex items-center gap-2">
+                        <el-button
+                            v-if="hasPreviousPayroll"
+                            type="warning"
+                            plain
+                            @click="copyFromPrevious"
+                            :loading="copyForm.processing"
+                            class="!rounded-lg"
+                        >
+                            <i class="fa-solid fa-copy mr-2"></i> Copiar de catorcena anterior
+                        </el-button>
+                        <el-button
+                            v-if="hasNextPayroll"
+                            type="primary"
+                            plain
+                            @click="copyFromNext"
+                            :loading="copyForm.processing"
+                            class="!rounded-lg"
+                        >
+                            <i class="fa-solid fa-copy mr-2"></i> Copiar de catorcena siguiente
+                        </el-button>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">

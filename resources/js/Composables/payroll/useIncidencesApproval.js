@@ -24,9 +24,17 @@ export function useIncidencesApproval(approvalLevels) {
     function getDayApprovalSummary(day) {
         if (!approvalLevels.value || approvalLevels.value.length === 0) return null;
 
+        // 🔑 Filtrar SOLO los niveles que corresponden al grupo de este empleado
+        const relevantLevels = approvalLevels.value.filter(level => {
+            if (!level.employee_ids || level.employee_ids.length === 0) return false;
+            return level.employee_ids.map(Number).includes(Number(day.user_id));
+        });
+
+        if (relevantLevels.length === 0) return null;
+
         const decisions = day.approval_decisions || [];
 
-        const levels = approvalLevels.value.map(level => {
+        const levels = relevantLevels.map(level => {
             const levelDecisions = decisions.filter(d => d.level_id === level.id);
             const allApproved = levelDecisions.length > 0 && levelDecisions.every(d => d.status === 'approved');
             const hasRejection = levelDecisions.some(d => d.status === 'rejected');

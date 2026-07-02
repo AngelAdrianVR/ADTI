@@ -339,12 +339,12 @@ async function confirmAndReject(record) {
                                         <div v-if="getMyDecisionInfo(record).canAct" class="flex items-center gap-1">
                                             <el-input-number 
                                                 v-model="editableRecords[`${record.user.id}_${record.date}`].hours"
-                                                :min="0" size="small" class="!w-16" controls-position="right" 
+                                                :min="0" size="small" class="!w-24" controls-position="right" 
                                             />
                                             <span class="text-[10px] text-gray-400">h</span>
                                             <el-input-number 
                                                 v-model="editableRecords[`${record.user.id}_${record.date}`].minutes"
-                                                :min="0" :max="59" size="small" class="!w-16" controls-position="right" 
+                                                :min="0" :max="59" size="small" class="!w-24" controls-position="right" 
                                             />
                                             <span class="text-[10px] text-gray-400">m</span>
                                         </div>
