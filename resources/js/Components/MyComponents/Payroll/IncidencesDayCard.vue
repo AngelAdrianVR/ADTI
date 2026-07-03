@@ -13,12 +13,19 @@ const props = defineProps({
     getLocationError: { type: Function, required: true },
     incidences: { type: Array, required: true },
     projects: { type: Array, default: () => [] },
+    canSeeMoney: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['command']);
 
 const formatDate = (date) => format(new Date(date), 'dd MMM', { locale: es });
 const getDayName = (date) => format(new Date(date), 'EEEE', { locale: es });
+
+// ─── Formateador de dinero con separadores de miles ───
+const formatMoney = (value) => {
+    if (value === null || value === undefined || value === 0) return '0.00';
+    return Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
 const getIncidenceColor = (incidence) => {
     if (!incidence) return 'bg-white';
@@ -169,15 +176,18 @@ const handleCommand = (cmd) => emit('command', cmd);
                     <div v-if="day.approved_extra_hours === 0 && day.approved_extra_minutes === 0" class="text-[10px] text-red-700 bg-red-100 px-1.5 py-0.5 rounded border border-red-300 font-semibold text-center leading-tight w-full mt-1">
                         T.E. Rechazado <i class="fa-solid fa-xmark ml-0.5"></i>
                         <div class="text-[8px] mt-0.5 font-normal text-red-700 border-t border-red-200 pt-0.5">Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}</div>
+                        <span v-if="canSeeMoney && day.cost_per_hour" class="block text-[8px] text-red-500 mt-0.5">${{ formatMoney(day.cost_per_hour) }}/hr · $0.00</span>
                     </div>
                     <div v-else class="text-[10px] text-green-700 bg-green-100 px-1.5 py-0.5 rounded border border-green-300 font-semibold text-center leading-tight w-full mt-1">
                         T.E. Aprobado:<br>{{ day.approved_extra_hours }}h {{ day.approved_extra_minutes }}m <i class="fa-solid fa-check-circle ml-0.5"></i>
                         <div class="text-[8px] mt-0.5 font-normal text-green-700 border-t border-green-200 pt-0.5">Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}</div>
+                        <span v-if="canSeeMoney && day.extra_amount" class="block text-[8px] text-green-600 font-bold mt-0.5">${{ formatMoney(day.extra_amount) }}</span>
                     </div>
                 </div>
                 <div v-else-if="day.extra_hours || day.extra_minutes" class="text-[10px] text-amber-600 bg-amber-50 px-1.5 rounded border border-amber-200 text-center leading-tight mt-1">
                     Extra:<br>{{ day.extra_hours }}h {{ day.extra_minutes }}m
-                    <span v-if="day.cost_per_hour" class="block text-[8px] text-amber-500 mt-0.5">${{ day.cost_per_hour }}/hr</span>
+                    <span v-if="canSeeMoney && day.cost_per_hour" class="block text-[8px] text-amber-500 mt-0.5">${{ formatMoney(day.cost_per_hour) }}/hr</span>
+                    <span v-if="canSeeMoney && day.extra_amount" class="block text-[8px] text-amber-600 font-bold mt-0.5">${{ formatMoney(day.extra_amount) }}</span>
                 </div>
 
                 <!-- Pipeline de aprobación -->

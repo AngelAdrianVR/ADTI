@@ -135,6 +135,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::post('payrolls/{payroll}/extra-hours-costs', [PayrollExtraHoursController::class, 'saveCosts'])->name('payrolls.extra-hours-costs.save');
     Route::post('payrolls/{payroll}/extra-hours-groups', [PayrollExtraHoursController::class, 'saveApprovalGroups'])->name('payrolls.extra-hours-groups.save');
     Route::post('payrolls/{payroll}/extra-hours-copy', [PayrollExtraHoursController::class, 'copyFromPrevious'])->name('payrolls.extra-hours-copy');
+    Route::post('payrolls/{payroll}/extra-hours-copy-next', [PayrollExtraHoursController::class, 'copyFromNext'])->name('payrolls.extra-hours-copy-next');
     // Decidir (aprobar/rechazar) en un nivel
     Route::post('payrolls/{payroll}/extra-hours-decide', [PayrollExtraHoursController::class, 'decide'])->name('payrolls.extra-hours-decide');
     // Revertir decisión

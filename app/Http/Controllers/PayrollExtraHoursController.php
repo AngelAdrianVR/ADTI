@@ -132,6 +132,9 @@ class PayrollExtraHoursController extends Controller
         // Verificar si hay una nómina anterior para copiar
         $hasPreviousPayroll = Payroll::where('id', '<', $payroll->id)->exists();
 
+        // Verificar si hay una nómina siguiente para copiar
+        $hasNextPayroll = Payroll::where('id', '>', $payroll->id)->exists();
+
         return Inertia::render('Payroll/ExtraHoursConfig', [
             'payroll' => [
                 'id' => $payroll->id,
@@ -144,6 +147,7 @@ class PayrollExtraHoursController extends Controller
             'eligibleEmployees' => $eligibleEmployees,
             'usersWithExtraTime' => $usersWithExtraTime,
             'hasPreviousPayroll' => $hasPreviousPayroll,
+            'hasNextPayroll' => $hasNextPayroll,
         ]);
     }
 
@@ -281,6 +285,61 @@ class PayrollExtraHoursController extends Controller
         });
 
         return back()->with('success', 'Configuración copiada de la nómina anterior correctamente.');
+    }
+
+    /**
+     * Copia la configuración (costos + grupos) de la nómina siguiente a la actual.
+     */
+    public function copyFromNext(Payroll $payroll)
+    {
+        $next = Payroll::where('id', '>', $payroll->id)
+            ->orderBy('id', 'asc')
+            ->first();
+
+        if (!$next) {
+            return back()->withErrors(['error' => 'No hay una nómina siguiente para copiar.']);
+        }
+
+        DB::transaction(function () use ($payroll, $next) {
+            // 1. Copiar costos
+            $payroll->extraHourCosts()->delete();
+            foreach ($next->extraHourCosts as $cost) {
+                ExtraHourCost::create([
+                    'payroll_id' => $payroll->id,
+                    'user_id' => $cost->user_id,
+                    'range_type' => $cost->range_type,
+                    'day_of_week' => $cost->day_of_week,
+                    'cost_per_hour' => $cost->cost_per_hour,
+                ]);
+            }
+
+            // 2. Copiar grupos de aprobación con sus niveles y aprobadores
+            $payroll->approvalGroups()->each(function ($g) { $g->delete(); });
+
+            foreach ($next->approvalGroups()->with(['employees', 'levels.approvers'])->get() as $nextGroup) {
+                $newGroup = ExtraHourApprovalGroup::create([
+                    'payroll_id' => $payroll->id,
+                    'name' => $nextGroup->name,
+                ]);
+
+                // Copiar empleados
+                $newGroup->employees()->sync($nextGroup->employees->pluck('id'));
+
+                // Copiar niveles con aprobadores
+                foreach ($nextGroup->levels as $nextLevel) {
+                    $newLevel = ExtraHourApprovalLevel::create([
+                        'payroll_id' => $payroll->id,
+                        'approval_group_id' => $newGroup->id,
+                        'level' => $nextLevel->level,
+                        'name' => $nextLevel->name,
+                    ]);
+
+                    $newLevel->approvers()->sync($nextLevel->approvers->pluck('id'));
+                }
+            }
+        });
+
+        return back()->with('success', 'Configuración copiada de la nómina siguiente correctamente.');
     }
 
     /**

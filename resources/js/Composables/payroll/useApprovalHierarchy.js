@@ -29,11 +29,17 @@ export function useApprovalHierarchy(approvalLevels, currentUserId) {
         ) || null;
     });
 
-    // IDs de empleados que el usuario actual debe aprobar (según su grupo)
+    // IDs de empleados que el usuario actual debe aprobar (UNIÓN de todos sus grupos)
     const myEmployeeIds = computed(() => {
-        if (!currentUserLevel.value) return new Set();
-        // Convertir a número para garantizar comparación estricta
-        return new Set((currentUserLevel.value.employee_ids || []).map(Number));
+        if (!approvalLevels.value || approvalLevels.value.length === 0) return new Set();
+        const cid = Number(currentUserId.value);
+        const allIds = new Set();
+        approvalLevels.value.forEach(level => {
+            if (level.approvers?.some(a => Number(a.id) === cid)) {
+                (level.employee_ids || []).forEach(id => allIds.add(Number(id)));
+            }
+        });
+        return allIds;
     });
 
     /**
