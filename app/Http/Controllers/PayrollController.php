@@ -133,31 +133,33 @@ class PayrollController extends Controller
         // 3. Cargar costos de hora extra configurados para esta nómina
         $extraHourCosts = $payroll->extraHourCosts()->get();
 
-        // 4. Cargar grupos de autorización con sus aprobadores y empleados
-        $approvalLevels = $payroll->approvalGroups()
+        // 4. Cargar grupos de autorización con sus aprobadores y empleados (formato anidado eficiente)
+        $approvalGroups = $payroll->approvalGroups()
             ->with(['employees', 'levels.approvers'])
             ->get()
-            ->flatMap(function ($group) {
-                return $group->levels->map(function ($level) use ($group) {
-                    return [
-                        'id' => $level->id,
-                        'level' => $level->level,
-                        'name' => $level->name,
-                        'group_name' => $group->name,
-                        'group_id' => $group->id,
-                        'approvers' => $level->approvers->map(function ($approver) {
-                            return [
-                                'id' => $approver->id,
-                                'name' => $approver->name,
-                                'profile_photo_url' => $approver->profile_photo_url,
-                            ];
-                        })->values()->toArray(),
-                        'employee_ids' => $group->employees->pluck('id')->values()->toArray(),
-                    ];
-                });
+            ->map(function ($group) {
+                return [
+                    'id' => $group->id,
+                    'name' => $group->name,
+                    'employee_ids' => $group->employees->pluck('id')->values()->toArray(),
+                    'levels' => $group->levels->map(function ($level) {
+                        return [
+                            'id' => $level->id,
+                            'level' => $level->level,
+                            'name' => $level->name,
+                            'approvers' => $level->approvers->map(function ($approver) {
+                                return [
+                                    'id' => $approver->id,
+                                    'name' => $approver->name,
+                                    'profile_photo_url' => $approver->profile_photo_url,
+                                ];
+                            })->values()->toArray(),
+                        ];
+                    })->values()->toArray(),
+                ];
             })->values()->toArray();
 
-        $formattedUsers = $usersCollection->groupBy('id')->map(function ($userGroup) use ($payroll, $allAttendances, $allComments, $holidays, $extraHourCosts, $approvalLevels, $allDecisions) {
+        $formattedUsers = $usersCollection->groupBy('id')->map(function ($userGroup) use ($payroll, $allAttendances, $allComments, $holidays, $extraHourCosts, $approvalGroups, $allDecisions) {
             $user = $userGroup->first();
             
             // Pasamos collect([]) si está nulo para evitar llamadas extras a BD
@@ -252,6 +254,10 @@ class PayrollController extends Controller
                         'decided_at' => $dec->decided_at,
                     ];
                 })->values();
+
+                // Columnas desnormalizadas del flujo (vienen directo de payroll_user)
+                $incidence->extra_hour_status = $incidence->extra_hour_status ?? 'none';
+                $incidence->current_approval_level_id = $incidence->current_approval_level_id ?? null;
             }
 
             return [
@@ -281,7 +287,7 @@ class PayrollController extends Controller
             'payrollUsers' => $formattedUsers,
             'noAttendances' => [],
             'extraHourCosts' => $extraHourCosts,
-            'approvalLevels' => $approvalLevels,
+            'approvalGroups' => $approvalGroups,
             'projects' => $projects,
         ];
     }

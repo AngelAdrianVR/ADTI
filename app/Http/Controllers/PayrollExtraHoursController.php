@@ -2,19 +2,24 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ExtraHourApprovalDecision;
+use App\Http\Requests\BulkDecideExtraHourRequest;
+use App\Http\Requests\DecideExtraHourRequest;
 use App\Models\ExtraHourApprovalGroup;
 use App\Models\ExtraHourApprovalLevel;
 use App\Models\ExtraHourCost;
 use App\Models\Payroll;
 use App\Models\PayrollUser;
 use App\Models\User;
+use App\Services\ExtraHourApprovalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class PayrollExtraHoursController extends Controller
 {
+    public function __construct(
+        private ExtraHourApprovalService $approvals
+    ) {}
     /**
      * Muestra la vista de configuración de costos y niveles de autorización
      * para una nómina específica.
@@ -199,6 +204,17 @@ class PayrollExtraHoursController extends Controller
             'groups.*.levels.*.approver_ids.*' => 'required|integer|exists:users,id',
         ]);
 
+        // Validar que un empleado no esté duplicado entre grupos
+        $allEmployeeIds = [];
+        foreach ($request->groups as $gi => $groupData) {
+            foreach ($groupData['employee_ids'] as $empId) {
+                if (in_array($empId, $allEmployeeIds)) {
+                    return back()->withErrors(['error' => "El empleado ID {$empId} no puede estar en más de un grupo de aprobación."]);
+                }
+                $allEmployeeIds[] = $empId;
+            }
+        }
+
         DB::transaction(function () use ($request, $payroll) {
             // Eliminar grupos existentes (cascade elimina niveles, pivotes y decisiones)
             $payroll->approvalGroups()->each(function ($group) {
@@ -346,80 +362,44 @@ class PayrollExtraHoursController extends Controller
      * Procesa la decisión de un aprobador sobre una entrada de tiempo extra.
      * Se llama desde el modal de gestión de tiempo extra.
      */
-    public function decide(Request $request)
+    public function decide(DecideExtraHourRequest $request)
     {
-        $request->validate([
-            'payroll_user_id' => 'required|integer|exists:payroll_user,id',
-            'status' => 'required|in:approved,rejected',
-            'approved_extra_hours' => 'nullable|integer|min:0',
-            'approved_extra_minutes' => 'nullable|integer|min:0|max:59',
-            'comments' => 'nullable|string|max:500',
-        ]);
-
         $payrollUser = PayrollUser::findOrFail($request->payroll_user_id);
-        $payroll = $payrollUser->payroll;
-        $currentUser = auth()->user();
 
-        // Buscar el grupo al que pertenece este empleado
-        $group = $this->findGroupForUser($payroll, $payrollUser->user_id);
-
-        if (!$group) {
-            return $this->handleDirectApproval($payrollUser, $currentUser, $request);
+        try {
+            $this->approvals->decide($payrollUser, $request->user(), $request->status, $request->validated());
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['error' => $e->getMessage()]);
         }
 
-        $levels = $group->levels()->with('approvers')->orderBy('level')->get();
-
-        if ($levels->isEmpty()) {
-            return $this->handleDirectApproval($payrollUser, $currentUser, $request);
-        }
-
-        // Encontrar el nivel donde el usuario actual es aprobador
-        $currentLevel = null;
-        foreach ($levels as $level) {
-            if ($level->approvers->contains('id', $currentUser->id)) {
-                $currentLevel = $level;
-                break;
-            }
-        }
-
-        if (!$currentLevel) {
-            return back()->withErrors(['error' => 'No tienes permisos para aprobar/rechazar en esta nómina.']);
-        }
-
-        // Verificar que los niveles anteriores estén todos aprobados
-        for ($i = 0; $i < $currentLevel->level - 1; $i++) {
-            $prevLevel = $levels->where('level', $i + 1)->first();
-            if ($prevLevel) {
-                $allApproved = $this->checkLevelFullyApproved($payrollUser->id, $prevLevel);
-                if (!$allApproved) {
-                    return back()->withErrors(['error' => 'El nivel anterior (' . $prevLevel->name . ') aún no ha sido completamente aprobado.']);
-                }
-            }
-        }
-
-        // Registrar la decisión del aprobador actual
-        ExtraHourApprovalDecision::updateOrCreate(
-            [
-                'payroll_user_id' => $payrollUser->id,
-                'approval_level_id' => $currentLevel->id,
-                'approver_id' => $currentUser->id,
-            ],
-            [
-                'status' => $request->status,
-                'comments' => $request->comments,
-                'decided_at' => now(),
-            ]
-        );
-
-        // Verificar si este nivel ya está completamente decidido y proceder
-        $this->processLevelCompletion($payrollUser, $currentLevel, $levels, $request);
-
-        // Detectar si la petición viene de Inertia o de Axios
         if ($request->header('X-Inertia')) {
             return back()->with('success', 'Decisión registrada correctamente.');
         }
 
         return response()->json(['success' => true, 'message' => 'Decisión registrada correctamente.']);
+    }
+
+    /**
+     * Aprueba o rechaza múltiples registros en lote.
+     */
+    public function decideBulk(BulkDecideExtraHourRequest $request)
+    {
+        $result = $this->approvals->bulkDecide(
+            $request->payroll_user_ids,
+            $request->user(),
+            $request->status,
+            $request->validated()
+        );
+
+        $okCount = count($result['ok']);
+        $errCount = count($result['errors']);
+        $msg = "{$okCount} registros procesados." . ($errCount ? " {$errCount} errores." : '');
+
+        if ($request->header('X-Inertia')) {
+            return back()->with($errCount ? 'warning' : 'success', $msg);
+        }
+
+        return response()->json(['success' => true, 'message' => $msg, 'result' => $result]);
     }
 
     /**
@@ -429,138 +409,15 @@ class PayrollExtraHoursController extends Controller
     {
         $request->validate([
             'payroll_user_id' => 'required|integer|exists:payroll_user,id',
-            'approval_level_id' => 'required|integer|exists:extra_hour_approval_levels,id',
         ]);
 
-        $decision = ExtraHourApprovalDecision::where([
-            'payroll_user_id' => $request->payroll_user_id,
-            'approval_level_id' => $request->approval_level_id,
-            'approver_id' => auth()->id(),
-        ])->first();
-
-        if ($decision) {
-            $decision->delete();
-        }
-
-        // Revertir también la aprobación final en payroll_user si existía
-        $payrollUser = PayrollUser::find($request->payroll_user_id);
-        if ($payrollUser && $payrollUser->approved_at) {
-            $payrollUser->update([
-                'approved_extra_hours' => null,
-                'approved_extra_minutes' => null,
-                'approved_by' => null,
-                'approved_at' => null,
-            ]);
+        try {
+            $payrollUser = PayrollUser::findOrFail($request->payroll_user_id);
+            $this->approvals->revert($payrollUser, $request->user());
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['error' => $e->getMessage()]);
         }
 
         return back()->with('success', 'Decisión revocada correctamente.');
-    }
-
-    // ─── Métodos privados ────────────────────────────────────────────
-
-    /**
-     * Encuentra el grupo de aprobación al que pertenece un usuario.
-     */
-    private function findGroupForUser(Payroll $payroll, int $userId): ?ExtraHourApprovalGroup
-    {
-        return $payroll->approvalGroups()
-            ->whereHas('employees', function ($q) use ($userId) {
-                $q->where('user_id', $userId);
-            })
-            ->first();
-    }
-
-    private function checkLevelFullyApproved(int $payrollUserId, ExtraHourApprovalLevel $level): bool
-    {
-        $approverIds = $level->approvers->pluck('id');
-        $approvedCount = ExtraHourApprovalDecision::where([
-            'payroll_user_id' => $payrollUserId,
-            'approval_level_id' => $level->id,
-            'status' => 'approved',
-        ])->whereIn('approver_id', $approverIds)->count();
-
-        return $approvedCount >= $approverIds->count();
-    }
-
-    /**
-     * Verifica si algún aprobador del nivel rechazó.
-     */
-    private function checkLevelHasRejection(int $payrollUserId, ExtraHourApprovalLevel $level): bool
-    {
-        return ExtraHourApprovalDecision::where([
-            'payroll_user_id' => $payrollUserId,
-            'approval_level_id' => $level->id,
-            'status' => 'rejected',
-        ])->exists();
-    }
-
-    /**
-     * Procesa la finalización de un nivel: si todos aprobaron, pasa al siguiente.
-     * Si hay rechazo, se detiene el flujo.
-     */
-    private function processLevelCompletion(PayrollUser $payrollUser, ExtraHourApprovalLevel $currentLevel, $allLevels, Request $request): void
-    {
-        if ($this->checkLevelHasRejection($payrollUser->id, $currentLevel)) {
-            // Rechazo en este nivel: marcar como rechazado globalmente
-            $payrollUser->update([
-                'approved_extra_hours' => 0,
-                'approved_extra_minutes' => 0,
-                'approved_by' => auth()->id(),
-                'approved_at' => now(),
-            ]);
-            return;
-        }
-
-        if (!$this->checkLevelFullyApproved($payrollUser->id, $currentLevel)) {
-            // Aún faltan aprobadores en este nivel
-            return;
-        }
-
-        // Este nivel está completamente aprobado.
-        // Siempre marcar como resuelto (pasa a Historial) aunque queden más niveles.
-        $isLastLevel = $currentLevel->level >= $allLevels->max('level');
-
-        if ($isLastLevel) {
-            // Último nivel: guardar horas finales y marcar como resuelto
-            $approvedHours = $request->has('approved_extra_hours') 
-                ? $request->integer('approved_extra_hours') 
-                : $payrollUser->extra_hours;
-            $approvedMinutes = $request->has('approved_extra_minutes') 
-                ? $request->integer('approved_extra_minutes') 
-                : $payrollUser->extra_minutes;
-
-            $payrollUser->update([
-                'approved_extra_hours' => $approvedHours,
-                'approved_extra_minutes' => $approvedMinutes,
-                'approved_by' => auth()->id(),
-                'approved_at' => now(),
-            ]);
-        }
-        // Niveles intermedios: solo se registró la decisión, NO se marca approved_at.
-        // El siguiente nivel lo verá como pendiente.
-    }
-
-    /**
-     * Maneja la aprobación directa cuando no hay niveles configurados (retrocompatibilidad).
-     */
-    private function handleDirectApproval(PayrollUser $payrollUser, User $currentUser, Request $request)
-    {
-        if ($request->status === 'approved') {
-            $payrollUser->update([
-                'approved_extra_hours' => $request->approved_extra_hours ?? $payrollUser->extra_hours,
-                'approved_extra_minutes' => $request->approved_extra_minutes ?? $payrollUser->extra_minutes,
-                'approved_by' => $currentUser->id,
-                'approved_at' => now(),
-            ]);
-        } else {
-            $payrollUser->update([
-                'approved_extra_hours' => 0,
-                'approved_extra_minutes' => 0,
-                'approved_by' => $currentUser->id,
-                'approved_at' => now(),
-            ]);
-        }
-
-        return back()->with('success', 'Decisión registrada correctamente.');
     }
 }

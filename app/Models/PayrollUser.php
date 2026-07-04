@@ -38,6 +38,9 @@ class PayrollUser extends Pivot
         'break_start',
         'break_end',
         'break_minutes',
+        // Desnormalización del flujo de aprobación
+        'extra_hour_status',
+        'current_approval_level_id',
     ];
 
     protected $casts = [
@@ -46,6 +49,7 @@ class PayrollUser extends Pivot
         'approved_at' => 'datetime',
         'project_id' => 'integer',
         'break_minutes' => 'integer',
+        'current_approval_level_id' => 'integer',
     ];
 
     // relationships
@@ -75,6 +79,12 @@ class PayrollUser extends Pivot
     public function approvalDecisions()
     {
         return $this->hasMany(ExtraHourApprovalDecision::class, 'payroll_user_id');
+    }
+
+    // Relación: Nivel de aprobación actual
+    public function currentApprovalLevel()
+    {
+        return $this->belongsTo(ExtraHourApprovalLevel::class, 'current_approval_level_id');
     }
 
     /**
@@ -168,6 +178,9 @@ class PayrollUser extends Pivot
                 'extra_hours' => $extra_hours,
                 'extra_minutes' => $extra_minutes,
             ]);
+
+            // Inicializar/reiniciar el flujo de aprobación
+            app(\App\Services\ExtraHourApprovalService::class)->initializeWorkflow($this);
         }
     }
 

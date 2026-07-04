@@ -44,6 +44,12 @@ class HandleInertiaRequests extends Middleware
                 }
                 return [];
             },
+            'auth.user.roles' => function () use ($request) {
+                if ($request->user()) {
+                    return $request->user()->roles()->pluck('name');
+                }
+                return [];
+            },
             'auth.user.nextAttendance' => function () use ($request) {
                 if ($request->user()) {
                     return $request->user()->getNextAttendance();

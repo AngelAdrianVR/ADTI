@@ -11,8 +11,9 @@ const props = defineProps({
     modelValue: Boolean,
     payrollUsers: Array,
     payrollId: Number,
-    approvalLevels: { type: Array, default: () => [] },
+    approvalGroups: { type: Array, default: () => [] },
     employeeIds: { type: Object, default: null }, // Set de IDs de empleados del aprobador
+    payrollStartDate: { type: String, default: '' }, // Fecha inicio de la catorcena (ISO YYYY-MM-DD)
 });
 
 const emit = defineEmits(['update:modelValue', 'updated']);
@@ -25,16 +26,29 @@ const page = usePage();
 const authUserId = computed(() => page.props?.auth?.user?.id || null);
 
 // approvalLevels como computed para asegurar reactividad
-const approvalLevelsRef = computed(() => props.approvalLevels || []);
+const approvalGroupsRef = computed(() => props.approvalGroups || []);
+
+// ─── Rango de fechas de la catorcena ───
+const payrollDateRange = computed(() => {
+    if (!props.payrollStartDate) return { start: '', end: '' };
+    // Extraer solo la fecha (YYYY-MM-DD) sin importar el formato de entrada
+    const dateStr = String(props.payrollStartDate).split('T')[0];
+    const start = new Date(dateStr + 'T00:00:00');
+    const end = new Date(start);
+    end.setDate(end.getDate() + 13); // 14 días = start + 13
+    return {
+        start: dateStr,
+        end: end.toISOString().split('T')[0],
+    };
+});
 
 // ─── Composables ───
-const filters = useExtraTimeFilters(payrollUsersRef);
-const hierarchy = useApprovalHierarchy(approvalLevelsRef, authUserId);
+const filters = useExtraTimeFilters(payrollUsersRef, payrollDateRange);
+const hierarchy = useApprovalHierarchy(approvalGroupsRef, authUserId);
 
 // ¿Se deben mostrar los botones de acción masiva?
-// Solo si el usuario es aprobador y tiene registros accionables
 const canDoMassActions = computed(() => {
-    if (!approvalLevelsRef.value || approvalLevelsRef.value.length === 0) return true;
+    if (!approvalGroupsRef.value || approvalGroupsRef.value.length === 0) return true;
     if (!hierarchy.isCurrentUserApprover.value) return false;
     return actionableCount.value > 0;
 });
@@ -95,33 +109,60 @@ watch(payrollUsersRef, () => {
         :show-close="!actions.isProcessing.value"
     >
         <!-- Filtros -->
-        <div class="mb-4 flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <div class="flex items-center gap-3">
+        <div class="mb-4 flex flex-wrap items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200 gap-3">
+            <div class="flex items-center gap-3 flex-wrap">
                 <i class="fa-solid fa-filter text-gray-400"></i>
                 <span class="text-sm font-semibold text-gray-700">Filtrar tabla por:</span>
                 <el-select v-model="filters.selectedDepartment.value" placeholder="Todos los departamentos" clearable
-                    class="!w-56" :disabled="actions.isProcessing.value">
+                    class="!w-44" :disabled="actions.isProcessing.value">
                     <el-option v-for="dept in filters.availableDepartments.value" :key="dept" :label="dept" :value="dept" />
                 </el-select>
                 <span class="text-gray-300">|</span>
                 <el-select v-model="filters.selectedCommentFilter.value" placeholder="Comentarios"
-                    class="!w-44" :disabled="actions.isProcessing.value">
+                    class="!w-40" :disabled="actions.isProcessing.value">
                     <el-option label="Todos" value="all" />
                     <el-option label="Con comentarios" value="with" />
                     <el-option label="Sin comentarios" value="without" />
                 </el-select>
                 <span class="text-gray-300">|</span>
                 <el-select v-model="filters.selectedProject.value" placeholder="Todos los proyectos" clearable
-                    class="!w-56" :disabled="actions.isProcessing.value">
+                    class="!w-48" :disabled="actions.isProcessing.value">
                     <el-option v-for="proj in filters.availableProjects.value" :key="proj.id" :label="proj.name" :value="proj.id" />
                 </el-select>
+                <span class="text-gray-300">|</span>
+                <div class="flex items-center gap-1.5">
+                    <span class="text-xs text-gray-500">Fechas:</span>
+                    <el-date-picker
+                        v-model="filters.dateFrom.value"
+                        type="date"
+                        placeholder="Desde"
+                        format="DD/MM/YYYY"
+                        value-format="YYYY-MM-DD"
+                        size="small"
+                        class="!w-32"
+                        :disabled="actions.isProcessing.value"
+                        clearable
+                    />
+                    <span class="text-gray-400 text-xs">—</span>
+                    <el-date-picker
+                        v-model="filters.dateTo.value"
+                        type="date"
+                        placeholder="Hasta"
+                        format="DD/MM/YYYY"
+                        value-format="YYYY-MM-DD"
+                        size="small"
+                        class="!w-32"
+                        :disabled="actions.isProcessing.value"
+                        clearable
+                    />
+                </div>
             </div>
 
             <!-- Info de jerarquía -->
             <div v-if="hierarchy.isCurrentUserApprover.value" class="flex items-center gap-2 text-xs">
                 <span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full font-bold border border-indigo-200">
                     <i class="fa-solid fa-sitemap mr-1"></i>
-                    {{ hierarchy.currentUserLevel.value?.name || 'Aprobador nivel ' + hierarchy.currentUserLevel.value?.level }}
+                    Aprobador
                 </span>
             </div>
             <div v-else class="flex items-center gap-2 text-xs">
@@ -150,7 +191,7 @@ watch(payrollUsersRef, () => {
                 :processingType="actions.processingType.value"
                 :activeFiltersLabel="filters.activeFiltersLabel.value"
                 :hierarchy="hierarchy"
-                :approvalLevels="approvalLevelsRef.value"
+                :approvalGroups="approvalGroupsRef.value"
                 :actionableCount="actionableCount"
                 @approve-single="actions.approveSingle"
                 @reject-single="actions.rejectSingle"

@@ -138,6 +138,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::post('payrolls/{payroll}/extra-hours-copy-next', [PayrollExtraHoursController::class, 'copyFromNext'])->name('payrolls.extra-hours-copy-next');
     // Decidir (aprobar/rechazar) en un nivel
     Route::post('payrolls/{payroll}/extra-hours-decide', [PayrollExtraHoursController::class, 'decide'])->name('payrolls.extra-hours-decide');
+    Route::post('payrolls/{payroll}/extra-hours-decide-bulk', [PayrollExtraHoursController::class, 'decideBulk'])->name('payrolls.extra-hours-decide-bulk');
     // Revertir decisión
     Route::delete('payrolls/extra-hours-revert', [PayrollExtraHoursController::class, 'revertDecision'])->name('payrolls.extra-hours-revert');
 
@@ -225,6 +226,11 @@ Route::get('/storage-link', function () {
 Route::get('/payrolls-close', function () {
     Artisan::call('payrolls:close');
     return 'Listo!';
+});
+
+Route::get('/backfill-status', function () {
+    Artisan::call('extra-hours:backfill-status');
+    return 'Backfill completado.';
 });
 
 // --- OTROS / API ---
