@@ -1,10 +1,18 @@
 // ─── Composable: Filtros del panel de tiempo extra ───
 import { ref, computed } from 'vue';
 
-export function useExtraTimeFilters(payrollUsers) {
+/**
+ * @param {Ref<Array>} payrollUsers
+ * @param {Ref<Object>} payrollDateRange - { start: String, end: String } fechas ISO (YYYY-MM-DD)
+ */
+export function useExtraTimeFilters(payrollUsers, payrollDateRange = null) {
     const selectedDepartment = ref('');
     const selectedCommentFilter = ref('all');
     const selectedProject = ref('');
+
+    // Filtro de rango de fechas (por defecto el de la catorcena actual)
+    const dateFrom = ref(payrollDateRange?.value?.start || '');
+    const dateTo = ref(payrollDateRange?.value?.end || '');
 
     // Departamentos disponibles
     const availableDepartments = computed(() => {
@@ -56,11 +64,22 @@ export function useExtraTimeFilters(payrollUsers) {
         return inc.project?.id === selectedProject.value;
     }
 
+    // Helper: ¿pasa el filtro de fechas?
+    function passesDateFilter(inc) {
+        if (!dateFrom.value && !dateTo.value) return true;
+        const incDate = inc.date.split('T')[0];
+        if (dateFrom.value && incDate < dateFrom.value) return false;
+        if (dateTo.value && incDate > dateTo.value) return false;
+        return true;
+    }
+
     // Resetear filtros
     function resetFilters() {
         selectedDepartment.value = '';
         selectedCommentFilter.value = 'all';
         selectedProject.value = '';
+        dateFrom.value = payrollDateRange?.value?.start || '';
+        dateTo.value = payrollDateRange?.value?.end || '';
     }
 
     // Texto descriptivo de filtros activos
@@ -74,6 +93,10 @@ export function useExtraTimeFilters(payrollUsers) {
             const proj = availableProjects.value.find(p => p.id === selectedProject.value);
             if (proj) parts.push(`proyecto: ${proj.name}`);
         }
+        const defaultStart = payrollDateRange?.value?.start || '';
+        const defaultEnd = payrollDateRange?.value?.end || '';
+        if (dateFrom.value && dateFrom.value !== defaultStart) parts.push(`desde: ${dateFrom.value}`);
+        if (dateTo.value && dateTo.value !== defaultEnd) parts.push(`hasta: ${dateTo.value}`);
         return parts.length > 0 ? parts.join(', ') : null;
     });
 
@@ -81,12 +104,15 @@ export function useExtraTimeFilters(payrollUsers) {
         selectedDepartment,
         selectedCommentFilter,
         selectedProject,
+        dateFrom,
+        dateTo,
         availableDepartments,
         availableProjects,
         hasComment,
         passesCommentFilter,
         passesDeptFilter,
         passesProjectFilter,
+        passesDateFilter,
         resetFilters,
         activeFiltersLabel,
     };

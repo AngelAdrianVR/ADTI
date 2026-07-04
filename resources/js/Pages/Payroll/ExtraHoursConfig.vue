@@ -249,6 +249,22 @@ const formatExtraTime = (minutes) => {
     const m = minutes % 60;
     return `${h}h ${m}m`;
 };
+
+// ─── Navegación entre secciones ──────────────────────────────────
+const activeSection = ref('costos');
+const sectionRefs = {};
+
+const scrollToSection = (sectionId) => {
+    activeSection.value = sectionId;
+    const el = sectionRefs[sectionId];
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+};
+
+const setSectionRef = (sectionId) => (el) => {
+    if (el) sectionRefs[sectionId] = el;
+};
 </script>
 
 <template>
@@ -299,7 +315,7 @@ const formatExtraTime = (minutes) => {
                     <div class="lg:col-span-2 space-y-6">
 
                         <!-- ─── SECCIÓN: Costos por hora extra ─── -->
-                        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                        <div :ref="setSectionRef('costos')" class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                             <h2 class="text-lg font-bold text-gray-800 mb-1 flex items-center gap-2">
                                 <i class="fa-solid fa-dollar-sign text-green-600"></i> Costos por hora extra
                             </h2>
@@ -401,7 +417,7 @@ const formatExtraTime = (minutes) => {
                         </div>
 
                         <!-- ─── SECCIÓN: Costos por usuario ─── -->
-                        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                        <div :ref="setSectionRef('usuarios')" class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                             <div class="flex justify-between items-center mb-1">
                                 <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
                                     <i class="fa-solid fa-user-gear text-teal-600"></i> Costos por usuario
@@ -562,7 +578,7 @@ const formatExtraTime = (minutes) => {
                         </div>
 
                         <!-- ─── SECCIÓN: Grupos de autorización ─── -->
-                        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                        <div :ref="setSectionRef('grupos')" class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                             <div class="flex justify-between items-center mb-1">
                                 <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
                                     <i class="fa-solid fa-users-gear text-indigo-600"></i> Grupos de autorización
@@ -736,8 +752,52 @@ const formatExtraTime = (minutes) => {
                     </div>
 
                     <!-- Columna derecha: panel lateral -->
-                    <div class="space-y-6">
-                        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 sticky top-4">
+                    <div>
+                        <div class="sticky top-4 space-y-6">
+                            <!-- Índice de navegación -->
+                            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                                <h3 class="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                    <i class="fa-solid fa-list-ul text-indigo-600"></i>
+                                    Índice rápido
+                                </h3>
+                                <nav class="space-y-1">
+                                    <button
+                                        @click="scrollToSection('costos')"
+                                        class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+                                        :class="activeSection === 'costos'
+                                            ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'"
+                                    >
+                                        <i class="fa-solid fa-dollar-sign text-xs w-4 text-center"
+                                           :class="activeSection === 'costos' ? 'text-green-600' : 'text-gray-400'"></i>
+                                        Costos por hora extra
+                                    </button>
+                                    <button
+                                        @click="scrollToSection('usuarios')"
+                                        class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+                                        :class="activeSection === 'usuarios'
+                                            ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'"
+                                    >
+                                        <i class="fa-solid fa-user-gear text-xs w-4 text-center"
+                                           :class="activeSection === 'usuarios' ? 'text-teal-600' : 'text-gray-400'"></i>
+                                        Costos por usuario
+                                    </button>
+                                    <button
+                                        @click="scrollToSection('grupos')"
+                                        class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+                                        :class="activeSection === 'grupos'
+                                            ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'"
+                                    >
+                                        <i class="fa-solid fa-users-gear text-xs w-4 text-center"
+                                           :class="activeSection === 'grupos' ? 'text-indigo-600' : 'text-gray-400'"></i>
+                                        Grupos de autorización
+                                    </button>
+                                </nav>
+                            </div>
+
+                            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
                             <h3 class="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
                                 <i class="fa-solid fa-users text-amber-600"></i>
                                 Usuarios con tiempo extra
@@ -767,6 +827,7 @@ const formatExtraTime = (minutes) => {
                             </div>
                         </div>
                     </div>
+                </div>
 
                 </div>
             </div>

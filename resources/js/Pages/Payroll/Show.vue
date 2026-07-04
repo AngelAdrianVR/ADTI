@@ -27,7 +27,7 @@ const props = defineProps({
         default: () => ({ prev: null, next: null })
     },
     // Niveles de autorización configurados para esta nómina
-    approvalLevels: {
+    approvalGroups: {
         type: Array,
         default: () => []
     },
@@ -45,7 +45,7 @@ const props = defineProps({
 
 // ─── Indicadores de configuración ───
 const costsConfigured = computed(() => props.extraHourCosts && props.extraHourCosts.length > 0);
-const approvalsConfigured = computed(() => props.approvalLevels && props.approvalLevels.length > 0);
+const approvalsConfigured = computed(() => props.approvalGroups && props.approvalGroups.length > 0);
 const isFullyConfigured = computed(() => costsConfigured.value && approvalsConfigured.value);
 
 // --- Loading State Global ---
@@ -54,8 +54,8 @@ const isLoading = ref(false);
 // --- Jerarquía de aprobación ---
 const page = usePage();
 const authUserId = computed(() => page.props?.auth?.user?.id || null);
-const approvalLevelsRef = computed(() => props.approvalLevels || []);
-const hierarchy = useApprovalHierarchy(approvalLevelsRef, authUserId);
+const approvalGroupsRef = computed(() => props.approvalGroups || []);
+const hierarchy = useApprovalHierarchy(approvalGroupsRef, authUserId);
 
 // --- Scroll & Pagination State ---
 const limit = ref(5); // Cantidad inicial de usuarios a mostrar
@@ -145,13 +145,12 @@ const visiblePayrollUsers = computed(() => {
 
 // --- COMPUTED: KPIs DE TIEMPO EXTRA (Dinámicos por aprobador) ---
 const totalExtraTimeStats = computed(() => {
-    let pendingMins = 0;   // Tiempo que ESTE aprobador debe revisar
-    let approvedMins = 0;  // Tiempo que ESTE aprobador ya aprobó
+    let pendingMins = 0;
+    let approvedMins = 0;
 
     const isApprover = hierarchy.isCurrentUserApprover.value;
     const employeeIds = hierarchy.myEmployeeIds.value;
-    const hasHierarchy = props.approvalLevels && props.approvalLevels.length > 0;
-    const cid = Number(authUserId.value);
+    const hasHierarchy = props.approvalGroups && props.approvalGroups.length > 0;
 
     props.payrollUsers.forEach(item => {
         if (hasHierarchy && isApprover && !employeeIds.has(Number(item.user.id))) return;
@@ -160,55 +159,17 @@ const totalExtraTimeStats = computed(() => {
             const hasExtra = (inc.extra_hours > 0 || inc.extra_minutes > 0);
             if (!hasExtra) return;
 
-            const decisions = inc.approval_decisions || [];
             const totalMins = (inc.extra_hours || 0) * 60 + (inc.extra_minutes || 0);
+            const status = inc.extra_hour_status || 'none';
 
-            if (hasHierarchy && isApprover) {
-                // ── Lógica por niveles ──
-                const sortedLevels = [...props.approvalLevels].sort((a, b) => a.level - b.level);
-                const currentLevel = hierarchy.currentUserLevel.value;
-                if (!currentLevel) return;
-
-                // ¿Ya decidió este aprobador?
-                const myDecision = decisions.find(d => 
-                    Number(d.approver?.id) === cid && d.level_id === currentLevel.id
-                );
-
-                if (myDecision) {
-                    // Su decisión ya está registrada
-                    if (myDecision.status === 'approved') {
-                        approvedMins += totalMins;
-                    }
-                    // Si rechazó, no suma a pending ni a approved
-                    return;
-                }
-
-                // No ha decidido aún. Verificar si los niveles anteriores están aprobados.
-                let allPreviousApproved = true;
-                for (const level of sortedLevels) {
-                    if (level.level >= currentLevel.level) break;
-                    const levelDecs = decisions.filter(d => d.level_id === level.id);
-                    const hasRejection = levelDecs.some(d => d.status === 'rejected');
-                    const approverCount = (level.approvers || []).length;
-                    const approvedCount = levelDecs.filter(d => d.status === 'approved').length;
-                    
-                    if (hasRejection || (approverCount > 0 && approvedCount < approverCount)) {
-                        allPreviousApproved = false;
-                        break;
-                    }
-                }
-
-                if (allPreviousApproved) {
-                    // Le toca a este nivel → es tiempo pendiente para ESTE aprobador
+            if (status === 'pending') {
+                // Verificar si el nivel actual me corresponde
+                const levelId = inc.current_approval_level_id;
+                if (!levelId || hierarchy.myLevelIds.value.has(Number(levelId))) {
                     pendingMins += totalMins;
                 }
-            } else {
-                // Sin jerarquía: pendiente = no resuelto, aprobado = resuelto con horas > 0
-                if (!inc.approved_at) {
-                    pendingMins += totalMins;
-                } else if (inc.approved_extra_hours > 0 || inc.approved_extra_minutes > 0) {
-                    approvedMins += totalMins;
-                }
+            } else if (status === 'approved') {
+                approvedMins += totalMins;
             }
         });
     });
@@ -487,7 +448,7 @@ const saveComment = () => {
                                     :payrollUser="item"
                                     :payroll="payroll" 
                                     :canEdit="true"
-                                    :approvalLevels="approvalLevels"
+                                    :approvalGroups="approvalGroups"
                                     :projects="projects"
                                     @edit-comment="openCommentModal"
                                 />
@@ -522,8 +483,9 @@ const saveComment = () => {
                 v-model="showExtraTimeModal"
                 :payrollUsers="payrollUsers"
                 :payrollId="payroll.id"
-                :approvalLevels="approvalLevels"
+                :approvalGroups="approvalGroups"
                 :employeeIds="hierarchy.myEmployeeIds.value"
+                :payrollStartDate="payroll.start_date"
                 @updated="reloadPayrollData"
             />
 

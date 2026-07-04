@@ -14,7 +14,7 @@ const props = defineProps({
     processingType: { type: String, default: null },
     activeFiltersLabel: { type: String, default: null },
     hierarchy: { type: Object, default: null },
-    approvalLevels: { type: Array, default: () => [] },
+    approvalGroups: { type: Array, default: () => [] },
     actionableCount: { type: Number, default: 0 },
 });
 

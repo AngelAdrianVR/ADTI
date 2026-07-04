@@ -38,7 +38,7 @@ export function useExtraTimeActions(payrollId, editableRecords, hierarchy, emit)
             }
             // Agregar/actualizar la decisión del usuario actual en los datos locales
             const currentUserId = window.__inertia_page?.props?.auth?.user?.id || null;
-            const currentLevelId = hierarchy.currentUserLevel?.value?.id || null;
+            const currentLevelId = record.incidence.current_approval_level_id || null;
             const existingIdx = record.incidence.approval_decisions.findIndex(
                 d => d.approver?.id === currentUserId && d.level_id === currentLevelId
             );
@@ -96,7 +96,7 @@ export function useExtraTimeActions(payrollId, editableRecords, hierarchy, emit)
                 record.incidence.approval_decisions = [];
             }
             const currentUserId = window.__inertia_page?.props?.auth?.user?.id || null;
-            const currentLevelId = hierarchy.currentUserLevel?.value?.id || null;
+            const currentLevelId = record.incidence.current_approval_level_id || null;
             const existingIdx = record.incidence.approval_decisions.findIndex(
                 d => d.approver?.id === currentUserId && d.level_id === currentLevelId
             );
