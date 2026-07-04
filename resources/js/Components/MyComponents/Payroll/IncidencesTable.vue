@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { useForm, router } from '@inertiajs/vue3';
+import { useForm, router, usePage } from '@inertiajs/vue3';
 import { format, isSameDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ElNotification } from 'element-plus';
@@ -11,21 +11,22 @@ const props = defineProps({
     payrollUser: { type: Object, required: true },
     payroll: { type: Object, required: true },
     canEdit: { type: Boolean, default: true },
-    approvalLevels: { type: Array, default: () => [] },
+    approvalGroups: { type: Array, default: () => [] },
     projects: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits(['edit-comment']);
 
+const page = usePage();
+
 // ─── Jerarquía ───
-const approval = useIncidencesApproval(computed(() => props.approvalLevels));
+const approval = useIncidencesApproval(computed(() => props.approvalGroups));
 
 // ─── Control de visibilidad de montos ───
-// Solo los aprobadores ven montos, y solo de empleados en su grupo
+// Solo los usuarios con rol "Super admin" pueden ver montos de dinero
 const canSeeMoney = computed(() => {
-    const hierarchy = approval.hierarchy;
-    if (!hierarchy.isCurrentUserApprover.value) return false;
-    return hierarchy.myEmployeeIds.value.has(Number(props.payrollUser.user.id));
+    const roles = page.props?.auth?.user?.roles || [];
+    return roles.includes('Super admin');
 });
 
 // ─── State ───
@@ -195,8 +196,8 @@ const submitRejectExtraTime = () => approveForm.put(route('payroll-users.reject-
             <div class="flex items-center gap-4 lg:gap-6 text-xs text-gray-600 w-full md:w-auto justify-end">
                 <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-gray-400 font-bold">Retardos</span><span :class="stats.late !== '0h 0m' ? 'text-red-500 font-bold' : ''">{{ stats.late }}</span></div>
                 <div v-if="stats.breakCount > 0" class="flex flex-col items-end"><span class="uppercase text-[10px] text-orange-400 font-bold">Comidas</span><span class="text-orange-600 font-bold">{{ stats.breakTime }}</span></div>
-                <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-gray-400 font-bold">T. E. (Pend)</span><span :class="stats.extraPending !== '0h 0m' ? 'text-amber-500 font-bold' : ''">{{ stats.extraPending }}</span><span v-if="canSeeMoney && stats.extraAmountPending > 0" class="text-[9px] text-amber-600 font-bold">${{ formatMoney(stats.extraAmountPending) }}</span></div>
-                <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-green-600 font-bold">T. E. (Aprob)</span><span :class="stats.extraApproved !== '0h 0m' ? 'text-green-600 font-bold' : ''">{{ stats.extraApproved }}</span><span v-if="canSeeMoney && stats.extraAmountApproved > 0" class="text-[9px] text-green-700 font-bold">${{ formatMoney(stats.extraAmountApproved) }}</span></div>
+                <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-gray-400 font-bold">T. E. (Pend)</span><span :class="stats.extraPending !== '0h 0m' ? 'text-amber-500 font-bold' : ''">{{ stats.extraPending }}</span><span v-if="canSeeMoney && stats.extraAmountPending > 0" class="text-[9px] text-amber-600 font-bold">${{ formatMoney(stats.extraAmountPending) }}</span><span v-else-if="canSeeMoney && stats.extraPending !== '0h 0m'" class="text-[8px] text-amber-400 italic">Sin costo</span></div>
+                <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-green-600 font-bold">T. E. (Aprob)</span><span :class="stats.extraApproved !== '0h 0m' ? 'text-green-600 font-bold' : ''">{{ stats.extraApproved }}</span><span v-if="canSeeMoney && stats.extraAmountApproved > 0" class="text-[9px] text-green-700 font-bold">${{ formatMoney(stats.extraAmountApproved) }}</span><span v-else-if="canSeeMoney && stats.extraApproved !== '0h 0m'" class="text-[8px] text-green-500 italic">Sin costo</span></div>
                 <i class="fa-solid fa-chevron-down text-gray-400 transition-transform duration-300 ml-2" :class="{'rotate-180': isOpen}"></i>
             </div>
         </div>

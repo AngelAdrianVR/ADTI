@@ -3,11 +3,11 @@ import { computed } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import { useApprovalHierarchy } from '@/Composables/payroll/useApprovalHierarchy.js';
 
-export function useIncidencesApproval(approvalLevels) {
+export function useIncidencesApproval(approvalGroups) {
     const page = usePage();
     const authUserId = computed(() => page.props?.auth?.user?.id || null);
-    const approvalLevelsRef = computed(() => approvalLevels.value || []);
-    const hierarchy = useApprovalHierarchy(approvalLevelsRef, authUserId);
+    const approvalGroupsRef = computed(() => approvalGroups.value || []);
+    const hierarchy = useApprovalHierarchy(approvalGroupsRef, authUserId);
 
     // ¿Puede el usuario actual gestionar esta incidencia?
     function canManageIncidence(incidence) {
@@ -22,26 +22,27 @@ export function useIncidencesApproval(approvalLevels) {
 
     // Resumen del pipeline de aprobación para un día
     function getDayApprovalSummary(day) {
-        if (!approvalLevels.value || approvalLevels.value.length === 0) return null;
+        if (!approvalGroups.value || approvalGroups.value.length === 0) return null;
 
-        // 🔑 Filtrar SOLO los niveles que corresponden al grupo de este empleado
-        const relevantLevels = approvalLevels.value.filter(level => {
-            if (!level.employee_ids || level.employee_ids.length === 0) return false;
-            return level.employee_ids.map(Number).includes(Number(day.user_id));
-        });
-
-        if (relevantLevels.length === 0) return null;
+        // Encontrar el grupo al que pertenece este empleado
+        const group = approvalGroups.value.find(g =>
+            (g.employee_ids || []).map(Number).includes(Number(day.user_id))
+        );
+        if (!group || !group.levels || group.levels.length === 0) return null;
 
         const decisions = day.approval_decisions || [];
 
-        const levels = relevantLevels.map(level => {
+        const levels = group.levels.map(level => {
             const levelDecisions = decisions.filter(d => d.level_id === level.id);
             const allApproved = levelDecisions.length > 0 && levelDecisions.every(d => d.status === 'approved');
             const hasRejection = levelDecisions.some(d => d.status === 'rejected');
             const hasAnyDecision = levelDecisions.length > 0;
 
             return {
-                ...level,
+                id: level.id,
+                level: level.level,
+                name: level.name,
+                approvers: level.approvers || [],
                 decisions: levelDecisions,
                 status: hasRejection ? 'rejected' : (allApproved ? 'approved' : (hasAnyDecision ? 'pending' : 'waiting')),
             };

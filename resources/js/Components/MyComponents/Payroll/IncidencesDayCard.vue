@@ -177,17 +177,20 @@ const handleCommand = (cmd) => emit('command', cmd);
                         T.E. Rechazado <i class="fa-solid fa-xmark ml-0.5"></i>
                         <div class="text-[8px] mt-0.5 font-normal text-red-700 border-t border-red-200 pt-0.5">Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}</div>
                         <span v-if="canSeeMoney && day.cost_per_hour" class="block text-[8px] text-red-500 mt-0.5">${{ formatMoney(day.cost_per_hour) }}/hr · $0.00</span>
+                        <span v-else-if="canSeeMoney" class="block text-[8px] text-red-400 mt-0.5 italic">Sin costo por hora</span>
                     </div>
                     <div v-else class="text-[10px] text-green-700 bg-green-100 px-1.5 py-0.5 rounded border border-green-300 font-semibold text-center leading-tight w-full mt-1">
                         T.E. Aprobado:<br>{{ day.approved_extra_hours }}h {{ day.approved_extra_minutes }}m <i class="fa-solid fa-check-circle ml-0.5"></i>
                         <div class="text-[8px] mt-0.5 font-normal text-green-700 border-t border-green-200 pt-0.5">Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}</div>
                         <span v-if="canSeeMoney && day.extra_amount" class="block text-[8px] text-green-600 font-bold mt-0.5">${{ formatMoney(day.extra_amount) }}</span>
+                        <span v-else-if="canSeeMoney" class="block text-[8px] text-green-500 mt-0.5 italic">Sin costo por hora</span>
                     </div>
                 </div>
                 <div v-else-if="day.extra_hours || day.extra_minutes" class="text-[10px] text-amber-600 bg-amber-50 px-1.5 rounded border border-amber-200 text-center leading-tight mt-1">
                     Extra:<br>{{ day.extra_hours }}h {{ day.extra_minutes }}m
                     <span v-if="canSeeMoney && day.cost_per_hour" class="block text-[8px] text-amber-500 mt-0.5">${{ formatMoney(day.cost_per_hour) }}/hr</span>
                     <span v-if="canSeeMoney && day.extra_amount" class="block text-[8px] text-amber-600 font-bold mt-0.5">${{ formatMoney(day.extra_amount) }}</span>
+                    <span v-if="canSeeMoney && !day.cost_per_hour && !day.extra_amount" class="block text-[8px] text-amber-500 mt-0.5 italic">Sin costo por hora</span>
                 </div>
 
                 <!-- Pipeline de aprobación -->

@@ -59,6 +59,7 @@ export function useExtraTimeRecords(payrollUsers, filters, employeeIds = null) {
             item.incidences.forEach(inc => {
                 if (!inc.approved_at && (inc.extra_hours > 0 || inc.extra_minutes > 0)) {
                     if (!filters.passesCommentFilter(inc)) return;
+                    if (!filters.passesDateFilter(inc)) return;
 
                     records.push({
                         user: item.user,
@@ -82,6 +83,7 @@ export function useExtraTimeRecords(payrollUsers, filters, employeeIds = null) {
             item.incidences.forEach(inc => {
                 if (inc.approved_at && (inc.extra_hours > 0 || inc.extra_minutes > 0 || inc.approved_extra_hours > 0)) {
                     if (!filters.passesCommentFilter(inc)) return;
+                    if (!filters.passesDateFilter(inc)) return;
 
                     records.push({
                         user: item.user,
@@ -145,6 +147,7 @@ export function useExtraTimeRecords(payrollUsers, filters, employeeIds = null) {
                 if (!(inc.extra_hours > 0 || inc.extra_minutes > 0)) return;
                 if (!filters.passesCommentFilter(inc)) return;
                 if (!filters.passesProjectFilter(inc)) return;
+                if (!filters.passesDateFilter(inc)) return;
 
                 records.push({
                     user: item.user,
