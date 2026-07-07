@@ -124,6 +124,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::delete('users/{user}/vacation-adjustments/{adjustment}', [UserController::class, 'destroyVacationAdjustment'])->name('users.vacation-adjustments.destroy');
 
     Route::resource('departments', DepartmentController::class);
+    Route::post('departments/{department}/reassign-and-delete', [DepartmentController::class, 'reassignAndDelete'])->name('departments.reassign-and-delete');
     Route::resource('features', FeatureController::class);
     Route::resource('job-positions', JobPositionController::class);
 
