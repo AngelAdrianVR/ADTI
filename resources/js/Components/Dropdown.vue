@@ -31,6 +31,7 @@ const widthClass = computed(() => {
     return {
         '48': 'w-48',
         '52': 'w-52',
+        '60': 'w-60',
     }[props.width.toString()];
 });
 

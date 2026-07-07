@@ -1,5 +1,6 @@
 <script setup>
-import { Link, router } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import ApplicationMark from '@/Components/ApplicationMark.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
@@ -14,6 +15,16 @@ defineProps({
 });
 
 defineEmits(['toggleMenu', 'setPause', 'setAttendance']);
+
+const page = usePage();
+
+const pendingExtraTimePayrolls = computed(() => {
+    return page.props.auth?.user?.pendingExtraTimePayrolls ?? [];
+});
+
+const pendingExtraTimeTotal = computed(() => {
+    return pendingExtraTimePayrolls.value.reduce((sum, p) => sum + p.pending_count, 0);
+});
 
 const logout = () => {
     router.post(route('logout'));
@@ -66,6 +77,49 @@ const logout = () => {
                                         <span class="font-bold" :class="pendingRequests > 0 ? 'text-red-500' : 'text-gray-400'">{{ pendingRequests }}</span>
                                     </div>
                                 </DropdownLink>
+                            </template>
+                        </Dropdown>
+                    </div>
+
+                    <!-- Notificaciones de Tiempo Extra Pendiente (solo aprobadores) -->
+                    <div v-if="pendingExtraTimePayrolls.length > 0" class="relative mx-1 sm:mx-2 flex items-center justify-center">
+                        <Dropdown align="right" width="48">
+                            <template #trigger>
+                                <button
+                                    class="relative p-2 text-gray-400 hover:text-amber-500 hover:bg-amber-50 rounded-full transition-colors focus:outline-none flex items-center justify-center"
+                                    title="Tiempo extra pendiente por aprobar"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                    </svg>
+                                    <!-- Badge con total de pendientes -->
+                                    <span class="absolute -top-0.5 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[9px] font-bold text-white border-2 border-white rounded-full bg-amber-500">
+                                        {{ pendingExtraTimeTotal > 99 ? '99+' : pendingExtraTimeTotal }}
+                                    </span>
+                                </button>
+                            </template>
+
+                            <template #content>
+                                <div class="block px-4 py-2 text-xs text-gray-400 border-b border-gray-100">
+                                    Tiempo extra por aprobar
+                                </div>
+                                <div class="max-h-64 overflow-y-auto">
+                                    <DropdownLink
+                                        v-for="payroll in pendingExtraTimePayrolls"
+                                        :key="payroll.id"
+                                        :href="route('payrolls.show', payroll.id)"
+                                    >
+                                        <div class="flex items-center justify-between gap-4 text-sm w-full">
+                                            <span class="font-medium text-gray-700">Catorcena {{ payroll.label }}</span>
+                                            <span class="shrink-0 inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 text-[11px] font-bold text-white bg-amber-500 rounded-full">
+                                                {{ payroll.pending_count > 99 ? '99+' : payroll.pending_count }}
+                                            </span>
+                                        </div>
+                                    </DropdownLink>
+                                </div>
+                                <div v-if="pendingExtraTimePayrolls.length === 0" class="px-4 py-3 text-sm text-gray-400 text-center">
+                                    No hay pendientes
+                                </div>
                             </template>
                         </Dropdown>
                     </div>

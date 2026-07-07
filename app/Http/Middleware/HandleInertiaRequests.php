@@ -2,10 +2,13 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\ExtraHourApprovalLevel;
+use App\Models\Payroll;
+use App\Models\PayrollUser;
+use App\Models\VacationRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Middleware;
-use Spatie\Permission\Models\Permission;
-use App\Models\VacationRequest; // <-- Importación necesaria
 
 class HandleInertiaRequests extends Middleware
 {
@@ -38,6 +41,9 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         return array_merge(parent::share($request), [
+            // Compartir datos flash de reasignación (para modal de eliminación de departamentos)
+            'reassignData' => fn () => $request->session()->get('reassignData'),
+
             'auth.user.permissions' => function () use ($request) {
                 if ($request->user()) {
                     return $request->user()->getAllPermissions()->pluck('name');
@@ -86,6 +92,50 @@ class HandleInertiaRequests extends Middleware
 
                 // 3. Si no cumple ninguna de las dos, devuelve 0
                 return 0;
+            },
+
+            // Contador de tiempo extra pendiente por aprobar (por catorcena)
+            // Solo muestra entradas donde es el TURNO del usuario (nivel actual = su nivel)
+            'auth.user.pendingExtraTimePayrolls' => function () use ($request) {
+                $user = $request->user();
+                if (!$user) return [];
+
+                $userId = $user->id;
+
+                // ¿Es aprobador en algún nivel?
+                $isApprover = ExtraHourApprovalLevel::whereHas('approvers', fn ($q) => $q->where('user_id', $userId))->exists();
+                if (!$isApprover) {
+                    return [];
+                }
+
+                // Solo pendientes cuyo nivel ACTUAL tiene a este usuario como aprobador
+                $results = PayrollUser::where('extra_hour_status', 'pending')
+                    ->whereNotNull('current_approval_level_id')
+                    ->whereHas('currentApprovalLevel', fn ($q) => $q->whereHas('approvers', fn ($q2) => $q2->where('user_id', $userId)))
+                    ->select('payroll_id', DB::raw('COUNT(*) as pending_count'))
+                    ->groupBy('payroll_id')
+                    ->orderBy('payroll_id', 'desc')
+                    ->get();
+
+                if ($results->isEmpty()) {
+                    return [];
+                }
+
+                // Cargar datos de las catorcenas
+                $payrollIds = $results->pluck('payroll_id');
+                $payrolls = Payroll::whereIn('id', $payrollIds)
+                    ->orderBy('id', 'desc')
+                    ->get()
+                    ->keyBy('id');
+
+                return $results->map(function ($row) use ($payrolls) {
+                    $payroll = $payrolls->get($row->payroll_id);
+                    return [
+                        'id' => $row->payroll_id,
+                        'label' => $payroll ? $payroll->biweekly : 'Catorcena #' . $row->payroll_id,
+                        'pending_count' => (int) $row->pending_count,
+                    ];
+                })->values()->toArray();
             },
         ]);
     }
