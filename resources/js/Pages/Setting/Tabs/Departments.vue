@@ -1,6 +1,6 @@
 <script setup>
-import { ref } from 'vue';
-import { useForm, router } from '@inertiajs/vue3';
+import { ref, watch } from 'vue';
+import { useForm, usePage, router } from '@inertiajs/vue3';
 import PrimaryButton from "@/Components/PrimaryButton.vue";
 import DialogModal from "@/Components/DialogModal.vue";
 import InputLabel from "@/Components/InputLabel.vue";
@@ -19,6 +19,23 @@ const currentItem = ref(null);
 const form = useForm({
     name: null,
 });
+
+// --- Lógica del modal de reasignación ---
+const page = usePage();
+const showReassignModal = ref(false);
+const reassignData = ref(null);
+const reassignForm = useForm({
+    new_department_id: null,
+});
+
+// Detectar cuando el backend devuelve datos de reasignación (flash)
+watch(() => page.props.reassignData, (data) => {
+    if (data) {
+        reassignData.value = data;
+        reassignForm.new_department_id = null;
+        showReassignModal.value = true;
+    }
+}, { immediate: true });
 
 // --- Métodos ---
 
@@ -59,9 +76,43 @@ const update = () => {
 const deleteItem = (item) => {
     router.delete(route('departments.destroy', item.id), {
         onSuccess: () => {
-            ElNotification.success({ title: 'Éxito', message: 'Departamento eliminado' });
+            // Si hay reassignData en los props, significa que el backend
+            // detectó tareas y no eliminó — el modal de reasignación se abrirá
+            // automáticamente gracias al watch(). Si no hay reassignData,
+            // la eliminación fue exitosa.
+            if (!page.props.reassignData) {
+                ElNotification.success({ title: 'Éxito', message: 'Departamento eliminado' });
+            }
+        },
+        onError: () => {
+            ElNotification.error({ title: 'Error', message: 'No se pudo eliminar el departamento.' });
         },
     });
+};
+
+const confirmReassign = () => {
+    if (!reassignForm.new_department_id) {
+        ElNotification.warning({ title: 'Atención', message: 'Debes seleccionar un departamento de destino.' });
+        return;
+    }
+
+    reassignForm.post(route('departments.reassign-and-delete', reassignData.value.departmentId), {
+        onSuccess: () => {
+            ElNotification.success({ title: 'Éxito', message: 'Departamento eliminado y tareas reasignadas correctamente.' });
+            showReassignModal.value = false;
+            reassignData.value = null;
+        },
+        onError: () => {
+            ElNotification.error({ title: 'Error', message: 'No se pudo completar la operación.' });
+        },
+    });
+};
+
+const cancelReassign = () => {
+    showReassignModal.value = false;
+    reassignData.value = null;
+    // Recargar la página para limpiar los datos flash
+    router.reload();
 };
 </script>
 
@@ -164,6 +215,62 @@ const deleteItem = (item) => {
                     class="bg-[#1676A2] hover:bg-[#125d80] border-transparent"
                 >
                     {{ editFlag ? 'Guardar Cambios' : 'Crear' }}
+                </PrimaryButton>
+            </template>
+        </DialogModal>
+
+        <!-- Modal de Reasignación (aparece si el departamento tiene tareas) -->
+        <DialogModal :show="showReassignModal" @close="cancelReassign" maxWidth="lg">
+            <template #title>
+                <span class="font-bold text-amber-600 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    No se puede eliminar el departamento
+                </span>
+            </template>
+            <template #content>
+                <div class="space-y-4">
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <p class="text-sm text-gray-700">
+                            El departamento <strong class="text-amber-700">"{{ reassignData?.departmentName }}"</strong> 
+                            tiene <strong class="text-amber-700">{{ reassignData?.taskCount }} tarea(s)</strong> asignada(s) 
+                            y no puede ser eliminado directamente.
+                        </p>
+                    </div>
+
+                    <p class="text-sm text-gray-600">
+                        Para continuar, selecciona otro departamento al que se reasignarán las tareas:
+                    </p>
+
+                    <div>
+                        <InputLabel value="Reasignar tareas a:" />
+                        <select
+                            v-model="reassignForm.new_department_id"
+                            class="w-full mt-1 rounded-md border-gray-300 shadow-sm focus:border-[#1676A2] focus:ring-[#1676A2] text-sm"
+                        >
+                            <option :value="null" disabled>Selecciona un departamento...</option>
+                            <option
+                                v-for="dept in reassignData?.otherDepartments"
+                                :key="dept.id"
+                                :value="dept.id"
+                            >
+                                {{ dept.name }}
+                            </option>
+                        </select>
+                        <InputError :message="reassignForm.errors.new_department_id" />
+                    </div>
+                </div>
+            </template>
+            <template #footer>
+                <SecondaryButton @click="cancelReassign" class="mr-2 border-gray-300 text-[#6D6E72] hover:text-gray-800">
+                    Cancelar eliminación
+                </SecondaryButton>
+                <PrimaryButton
+                    @click="confirmReassign"
+                    :disabled="reassignForm.processing || !reassignForm.new_department_id"
+                    class="bg-amber-600 hover:bg-amber-700 border-transparent"
+                >
+                    <i v-if="reassignForm.processing" class="fa-solid fa-circle-notch fa-spin mr-2"></i>
+                    Reasignar y eliminar
                 </PrimaryButton>
             </template>
         </DialogModal>
