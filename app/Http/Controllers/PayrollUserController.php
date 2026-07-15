@@ -243,7 +243,7 @@ class PayrollUserController extends Controller
     public function processBioTimeTransaction($time, $emp_code)
     {
         // Identificar si es entrada o salida
-        $employee = User::firstWhere('code', $emp_code);
+        $employee = User::where('code', $emp_code)->where('is_active', true)->first();
         if ($employee) {
 
             // --- INICIO DE CAMBIOS ---
@@ -384,7 +384,11 @@ class PayrollUserController extends Controller
                         $punchTotalMinutes = $punchHour * 60 + $punchMinute;
 
                         // Detectar si esta salida es para comida (entre 11:00 y 15:00)
-                        $isLunchTime = ($punchTotalMinutes >= 660 && $punchTotalMinutes <= 900); // 11:00-15:00
+                        // Solo aplica en días de semana (lunes a viernes). En fines de semana
+                        // los empleados suelen trabajar medias jornadas y su salida real
+                        // no debe confundirse con una pausa para comer.
+                        $isWeekend = Carbon::parse($punchDateStr)->isWeekend();
+                        $isLunchTime = !$isWeekend && ($punchTotalMinutes >= 660 && $punchTotalMinutes <= 900); // 11:00-15:00
                         
                         // Verificar que la entrada fue en la mañana (antes de las 12:00)
                         $checkInHour = (int) Carbon::parse($existingEntry->check_in)->format('H');
