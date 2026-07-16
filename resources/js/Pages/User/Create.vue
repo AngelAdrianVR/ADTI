@@ -1,7 +1,13 @@
 <template>
     <AppLayout title="Nuevo usuario">
         <div class="px-3 md:px-16 py-8">
-            <Back :to="route('users.index')" />
+            <el-button
+                @click="$inertia.visit(route('users.index'))"
+                circle
+                class="!border-gray-200 !text-gray-500 hover:!text-indigo-600 hover:!border-indigo-300 !shadow-sm"
+            >
+                <i class="fa-solid fa-angle-left text-base"></i>
+            </el-button>
 
             <UserForm 
                 :form="form" 
@@ -17,14 +23,12 @@
 
 <script>
 import AppLayout from '@/Layouts/AppLayout.vue';
-import Back from "@/Components/MyComponents/Back.vue";
 import UserForm from "./Partials/UserForm.vue";
 import { useForm } from "@inertiajs/vue3";
 
 export default {
     components: {
         AppLayout,
-        Back,
         UserForm,
     },
     props: {

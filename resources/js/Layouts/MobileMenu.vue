@@ -169,7 +169,7 @@ const logout = () => {
                     <div class="flex items-center justify-between w-full">
                         <div class="flex items-center space-x-3">
                             <VacationRequestIcon class="size-5 text-gray-500" />
-                            <span>Solicitudes</span>
+                            <span>Solicitudes de vacaciones</span>
                         </div>
                         <span class="text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors" 
                               :class="pendingRequests > 0 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'">

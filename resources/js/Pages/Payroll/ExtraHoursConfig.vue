@@ -1,8 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import Back from '@/Components/MyComponents/Back.vue';
 import { ElNotification as notify } from 'element-plus';
 
 const props = defineProps({
@@ -275,7 +274,13 @@ const setSectionRef = (sectionId) => (el) => {
                 <!-- Header -->
                 <div class="flex items-center justify-between mb-8">
                     <div class="flex items-center gap-4">
-                        <Back :route="route('payrolls.show', payroll.id)" />
+                        <el-button
+                            @click="router.visit(route('payrolls.show', payroll.id))"
+                            circle
+                            class="!border-gray-200 !text-gray-500 hover:!text-indigo-600 hover:!border-indigo-300 !shadow-sm"
+                        >
+                            <i class="fa-solid fa-angle-left text-base"></i>
+                        </el-button>
                         <div>
                             <h1 class="text-2xl font-bold text-gray-800">Configuración de horas extra</h1>
                             <p class="text-sm text-gray-500">

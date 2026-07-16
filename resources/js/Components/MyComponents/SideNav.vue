@@ -75,7 +75,7 @@ const menus = computed(() => [
         show: page.props.auth.user.permissions.includes('Ver incidencias') || (page.props.auth.user.employees_in_charge && page.props.auth.user.employees_in_charge.length > 0)
     },
     {
-        label: 'Solicitudes',
+        label: 'Solicitudes de vacaciones',
         icon: VacationRequestIcon,
         route: 'vacation-requests.index',
         active: route().current('vacation-requests.*'),

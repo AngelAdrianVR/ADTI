@@ -3,7 +3,6 @@ import { ref, onMounted } from 'vue';
 import { router, Head, Link } from '@inertiajs/vue3';
 import AppLayout from "@/Layouts/AppLayout.vue";
 import PrimaryButton from "@/Components/PrimaryButton.vue";
-import Back from "@/Components/MyComponents/Back.vue";
 import General from "./Tabs/General.vue";
 import DigitalDocuments from "./Tabs/DigitalDocuments.vue";
 import Performance from "./Tabs/Performance.vue";
@@ -88,7 +87,13 @@ onMounted(() => {
                 <!-- Encabezado y Navegación -->
                 <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                     <div class="flex items-center self-start md:self-auto">
-                        <Back :route="route('users.index')" class="mr-4" />
+                        <el-button
+                            @click="router.visit(route('users.index'))"
+                            circle
+                            class="!border-gray-200 !text-gray-500 hover:!text-indigo-600 hover:!border-indigo-300 !shadow-sm mr-4"
+                        >
+                            <i class="fa-solid fa-angle-left text-base"></i>
+                        </el-button>
                         <h1 class="text-2xl font-bold text-gray-800 hidden md:block">Expediente de Usuario</h1>
                     </div>
 
