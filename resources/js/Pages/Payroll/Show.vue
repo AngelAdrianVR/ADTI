@@ -2,7 +2,6 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, toRef } from 'vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import Back from '@/Components/MyComponents/Back.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import IncidencesTable from '@/Components/MyComponents/Payroll/IncidencesTable.vue';
 import ExtraTimeManagementModal from './Partials/ExtraTimeManagementModal.vue';
@@ -294,7 +293,13 @@ const saveComment = () => {
                 <!-- Header con Navegación -->
                 <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
                     <div class="flex items-center w-full md:w-auto">
-                        <Back :route="route('payrolls.index')" class="mr-4" />
+                        <el-button
+                            @click="router.visit(route('payrolls.index'))"
+                            circle
+                            class="!border-gray-200 !text-gray-500 hover:!text-indigo-600 hover:!border-indigo-300 !shadow-sm mr-4"
+                        >
+                            <i class="fa-solid fa-angle-left text-base"></i>
+                        </el-button>
                         <div class="flex items-center gap-4">
                             <Link 
                                 v-if="adjacentPayrolls.prev" 

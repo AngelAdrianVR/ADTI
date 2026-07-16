@@ -369,6 +369,11 @@ class PayrollExtraHoursController extends Controller
         try {
             $this->approvals->decide($payrollUser, $request->user(), $request->status, $request->validated());
         } catch (\RuntimeException $e) {
+            // Para peticiones AJAX (no Inertia), devolver JSON en lugar de redirect
+            if (!$request->header('X-Inertia')) {
+                return response()->json(['error' => $e->getMessage()], 422);
+            }
+
             return back()->withErrors(['error' => $e->getMessage()]);
         }
 

@@ -1,7 +1,13 @@
 <template>
     <AppLayout title="Editar usuario">
         <div class="px-3 md:px-16 py-8">
-            <Back />
+            <el-button
+                @click="$inertia.visit(route('users.index'))"
+                circle
+                class="!border-gray-200 !text-gray-500 hover:!text-indigo-600 hover:!border-indigo-300 !shadow-sm"
+            >
+                <i class="fa-solid fa-angle-left text-base"></i>
+            </el-button>
             <form @submit.prevent="update"
                 class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-2/3 xl:w-1/2 mx-auto mt-2 lg:grid lg:grid-cols-2 gap-x-3 gap-y-2">
                 <h1 class="font-bold ml-2 col-span-full">Reactivar usuario</h1>
@@ -161,7 +167,6 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import InputLabel from "@/Components/InputLabel.vue";
 import InputError from "@/Components/InputError.vue";
 import InputFilePreview from "@/Components/MyComponents/InputFilePreview.vue";
-import Back from "@/Components/MyComponents/Back.vue";
 import { useForm } from "@inertiajs/vue3";
 
 export default {
@@ -206,7 +211,6 @@ export default {
         PrimaryButton,
         InputLabel,
         InputError,
-        Back,
     },
     props: {
         roles: Array,
