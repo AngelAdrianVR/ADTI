@@ -41,7 +41,13 @@
             </div>
 
             <div class="mt-5 flex justify-between items-center lg:mr-28 mr-5">
-                <Back />
+                <el-button
+                    @click="$inertia.visit(route('products.index'))"
+                    circle
+                    class="!border-gray-200 !text-gray-500 hover:!text-indigo-600 hover:!border-indigo-300 !shadow-sm"
+                >
+                    <i class="fa-solid fa-angle-left text-base"></i>
+                </el-button>
                 <el-tooltip placement="top" content="Siguiente producto">
                     <button @click="nextProduct" class="flex items-center justify-center size-7 rounded-full hover:bg-gray-200 cursor-pointer">
                         <i class="fa-solid fa-angle-right"></i>
@@ -98,7 +104,6 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import Loading2 from '@/Components/MyComponents/Loading2.vue';
 import ProductInfo from './Tabs/ProductInfo.vue';
 import ThirthButton from '@/Components/MyComponents/ThirthButton.vue';
-import Back from "@/Components/MyComponents/Back.vue";
 import axios from 'axios';
 
 export default {
@@ -119,8 +124,7 @@ components:{
     PrimaryButton,
     ThirthButton,
     ProductInfo,
-    Loading2,
-    Back
+    Loading2
 },
 props:{
     product: Object

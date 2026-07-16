@@ -8,7 +8,6 @@ use App\Models\ExtraHourApprovalLevel;
 use App\Models\PayrollUser;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class ExtraHourApprovalService
 {
@@ -57,12 +56,25 @@ class ExtraHourApprovalService
             // Bloquear fila para evitar condición de carrera
             $payrollUser = PayrollUser::whereKey($payrollUser->id)->lockForUpdate()->firstOrFail();
 
-            // Validar que el flujo esté activo para este registro
-            if (!in_array($payrollUser->extra_hour_status, ['pending', 'none'])) {
+            // Validar que el flujo esté activo para este registro.
+            // Aceptamos null como equivalente a 'none' (registros creados antes de la migración de estados).
+            $effectiveStatus = $payrollUser->extra_hour_status ?? 'none';
+            if (!in_array($effectiveStatus, ['pending', 'none'])) {
                 throw new \RuntimeException('Este tiempo extra ya fue resuelto.');
             }
 
             $currentLevelId = $payrollUser->current_approval_level_id;
+
+            // Si está pendiente pero sin nivel asignado (modo directo), intentar
+            // re-inicializar el flujo por si se configuraron grupos después.
+            if (!$currentLevelId && $payrollUser->extra_hour_status === 'pending') {
+                // Re-ejecutar initializeWorkflow para encontrar el grupo ahora
+                $this->initializeWorkflow($payrollUser);
+                // Refrescar desde BD para obtener el nuevo current_approval_level_id
+                $payrollUser->refresh();
+                $currentLevelId = $payrollUser->current_approval_level_id;
+            }
+
             $currentLevel = $currentLevelId ? ExtraHourApprovalLevel::find($currentLevelId) : null;
 
             if ($currentLevel) {
@@ -84,19 +96,23 @@ class ExtraHourApprovalService
                 }
             }
 
-            // Registrar decisión
-            ExtraHourApprovalDecision::updateOrCreate(
-                [
-                    'payroll_user_id' => $payrollUser->id,
-                    'approval_level_id' => $currentLevelId,
-                    'approver_id' => $approver->id,
-                ],
-                [
-                    'status' => $status,
-                    'comments' => $data['comments'] ?? null,
-                    'decided_at' => now(),
-                ]
-            );
+            // Registrar decisión solo si hay un nivel formal asignado.
+            // En modo directo (current_approval_level_id = NULL), no se inserta
+            // en extra_hour_approval_decisions porque la columna approval_level_id es NOT NULL.
+            if ($currentLevelId) {
+                ExtraHourApprovalDecision::updateOrCreate(
+                    [
+                        'payroll_user_id' => $payrollUser->id,
+                        'approval_level_id' => $currentLevelId,
+                        'approver_id' => $approver->id,
+                    ],
+                    [
+                        'status' => $status,
+                        'comments' => $data['comments'] ?? null,
+                        'decided_at' => now(),
+                    ]
+                );
+            }
 
             // Avanzar o cerrar el flujo
             $this->advanceOrClose($payrollUser, $currentLevel, $approver, $status, $data);
