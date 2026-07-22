@@ -130,8 +130,11 @@ class PayrollUserController extends Controller
         // Ambos presentes: calcular la duración
         if (!empty($breakStart) && !empty($breakEnd)) {
             try {
-                $start = Carbon::createFromFormat('H:i', trim($breakStart));
-                $end = Carbon::createFromFormat('H:i', trim($breakEnd));
+                // Normalizar: MySQL TIME column devuelve "HH:MM:SS", extraer solo HH:MM
+                $startStr = substr(trim($breakStart), 0, 5);
+                $endStr = substr(trim($breakEnd), 0, 5);
+                $start = Carbon::createFromFormat('H:i', $startStr);
+                $end = Carbon::createFromFormat('H:i', $endStr);
 
                 // Si el fin es menor que el inicio (cruzó medianoche)
                 if ($end->lessThan($start)) {
@@ -387,6 +390,7 @@ class PayrollUserController extends Controller
                         // Solo aplica en días de semana (lunes a viernes). En fines de semana
                         // los empleados suelen trabajar medias jornadas y su salida real
                         // no debe confundirse con una pausa para comer.
+                        // El regreso de comida en fines de semana se maneja en el bloque else.
                         $isWeekend = Carbon::parse($punchDateStr)->isWeekend();
                         $isLunchTime = !$isWeekend && ($punchTotalMinutes >= 660 && $punchTotalMinutes <= 900); // 11:00-15:00
                         
@@ -407,17 +411,31 @@ class PayrollUserController extends Controller
                             $employee->update(['paused' => null]);
                         }
                     } else {
-                        // Lógica especial de pausa (protegida para que no afecte a turnos nocturnos)
-                        $shift = $employee->org_props['work_shift'] ?? 'Turno 3 (09:00 - 18:00)';
-                        // Solo pausa automática si es turno de día y antes de las 17:39
-                        $isDayShift = in_array($shift, ['Turno 1 (06:00 - 14:00)', 'Turno 3 (09:00 - 18:00)', 'Diurno']);
-                        if ($isDayShift && strtotime($punchTimeStr) <= strtotime('17:39')) {
-                            $employee->setPause();
-                        } else {
-                            $existingEntry->update([
-                                'check_out' => $punchTimeStr,
-                            ]);
+                        // Ambos check_in y check_out ya existen: posible regreso de comida
+                        // o nuevo registro de asistencia
+                        $isWeekend = Carbon::parse($punchDateStr)->isWeekend();
+                        
+                        if ($isWeekend) {
+                            // En fin de semana: reabrir el turno (limpiar check_out) para permitir
+                            // que el empleado registre su salida real más tarde.
+                            // Esto soluciona el caso de empleados que trabajan sábado,
+                            // salen a comer y regresan.
+                            $existingEntry->update(['check_out' => null]);
                             $employee->update(['paused' => null]);
+                            Log::info("BioTime Sync: Reapertura de turno en fin de semana para empleado {$emp_code} a las {$punchTimeStr}");
+                        } else {
+                            // Lógica especial de pausa (protegida para que no afecte a turnos nocturnos)
+                            $shift = $employee->org_props['work_shift'] ?? 'Turno 3 (09:00 - 18:00)';
+                            // Solo pausa automática si es turno de día y antes de las 17:39
+                            $isDayShift = in_array($shift, ['Turno 1 (06:00 - 14:00)', 'Turno 3 (09:00 - 18:00)', 'Diurno']);
+                            if ($isDayShift && strtotime($punchTimeStr) <= strtotime('17:39')) {
+                                $employee->setPause();
+                            } else {
+                                $existingEntry->update([
+                                    'check_out' => $punchTimeStr,
+                                ]);
+                                $employee->update(['paused' => null]);
+                            }
                         }
                     }
                 }
@@ -435,6 +453,18 @@ class PayrollUserController extends Controller
             // Calcular tiempo extra y retardo
             $existingEntry->calculateLate();
             $existingEntry->calculateExtraTime();
+            
+            // --- LOG DE DIAGNÓSTICO: Registrar SIEMPRE la acción realizada ---
+            $dayOfWeek = Carbon::parse($punchDateStr)->isoFormat('dddd');
+            $action = $existingEntry->wasRecentlyCreated 
+                ? 'CHECK-IN creado' 
+                : ($existingEntry->wasChanged('check_out') ? 'CHECK-OUT registrado' : 'Actualización de turno');
+            Log::info("BioTime Sync: {$action} | Empleado {$emp_code} | Fecha {$punchDateStr} ({$dayOfWeek}) | Hora {$punchTimeStr}", [
+                'payroll_user_id' => $existingEntry->id,
+                'check_in' => $existingEntry->check_in,
+                'check_out' => $existingEntry->check_out,
+                'is_weekend' => Carbon::parse($punchDateStr)->isWeekend(),
+            ]);
         } else {
             Log::info("No se encontró al empleado con código {$emp_code}");
         }
