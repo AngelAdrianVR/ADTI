@@ -98,8 +98,24 @@ For a given user within a payroll period:
 
 ### Break/Pause Tracking
 - `break_start` / `break_end` / `break_minutes` on `payroll_user`
-- Processed via `processBreakUpdate()` in `PayrollUserController`
+- Processed via `processBreakUpdate()` in `PayrollUserController` and `endBreak()` in `PayrollUser`
 - Break minutes are subtracted from total work time for accurate extra hour calculation
+- **⚠️ MySQL TIME column**: `break_start` is stored as MySQL `TIME` type which returns `HH:MM:SS`. 
+  The code normalizes to `HH:MM` via `substr($time, 0, 5)` before parsing with Carbon `createFromFormat('H:i', ...)`.
+  This fixes the "Trailing data" error that caused `break_minutes` to always be `0`.
+
+### Weekend / Saturday Attendance Handling
+- **Lunch detection**: On weekdays, mid-day check-outs (11:00-15:00) are detected as lunch breaks 
+  and `break_start` is set, allowing the return-from-lunch detection to reopen the shift.
+- **On weekends (Sat/Sun)**, lunch detection is intentionally DISABLED (`!$isWeekend` guard) 
+  because employees often work half-days and a mid-day exit should not be confused with lunch.
+- **Weekend re-entry**: When an employee has both `check_in` and `check_out` on a weekend and a 
+  new punch arrives (returning from a break), the code now **reopens the shift** by clearing 
+  `check_out` instead of calling `setPause()`. This is critical for the common scenario where the 
+  BioTime sync runs on Monday and processes all weekend punches in rapid succession.
+- **Diagnostic logging**: Every BioTime transaction processed now logs the action, employee code, 
+  date, day of week, and whether it's a weekend. Pattern:
+  `Log::info("BioTime Sync: {action} | Empleado {code} | Fecha {date} ({day}) | Hora {time}")`
 
 ---
 
@@ -132,3 +148,7 @@ Users with `org_props->position = 'Dirección'` or `'Soporte DTW'` are always ex
 4. **No bulk incidence assignment**: Incidences are set one user at a time via `set-incidence`. For company-wide holidays or events, this could be tedious.
 5. **GPS locations are raw strings**: `check_in_location` and `check_out_location` store whatever the client sends. No validation, geocoding, or reverse-geocoding.
 6. **The 18-hour night shift window**: The `getNextAttendance()` method's 18-hour heuristic is arbitrary and not configurable per shift type.
+7. **Sábados con pausa de comida**: Solucionado (Jul 2026). El `else` branch en `processBioTimeTransaction` 
+   ahora distingue fines de semana con `$isWeekend`. Si ambos `check_in` y `check_out` existen en sábado/domingo, 
+   el sistema reabre el turno (`check_out = null`) en vez de llamar a `setPause()`. Esto permite que los empleados 
+   que salen a comer en sábado y regresan no pierdan el registro de la tarde.

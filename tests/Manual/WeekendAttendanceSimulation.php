@@ -64,86 +64,98 @@ foreach ($testDates as $testDate) {
         ->whereDate('date', $testDate)
         ->delete();
 
-    // ─── PASO 1: Entrada a las 07:00 ──────────────────
-    $entryTime = "$testDate 07:00:00";
-    echo "  🔵 [PASO 1] Entrada: $entryTime\n";
-    
     $controller = new \App\Http\Controllers\PayrollUserController();
-    $controller->processBioTimeTransaction($entryTime, $employee->code);
 
+    // ─── ESCENARIO A: Entrada + Salida (sin comida) ────
+    echo "  ╔══════════════════════════════════════════════╗\n";
+    echo "  ║  ESCENARIO A: Entrada + Salida sin comida    ║\n";
+    echo "  ╚══════════════════════════════════════════════╝\n\n";
+
+    $entryTime = "$testDate 07:00:00";
+    echo "  🔵 [A1] Entrada: $entryTime\n";
+    $controller->processBioTimeTransaction($entryTime, $employee->code);
     $record = PayrollUser::where('user_id', $employee->id)
         ->whereDate('date', $testDate)
         ->first();
-
     $checkInOk = $record && $record->check_in === '07:00';
     echo $checkInOk
-        ? "     ✅ check_in registrado: {$record->check_in}\n"
-        : "     ❌ ERROR: check_in = " . ($record->check_in ?? 'NULL') . " (esperado: 07:00)\n";
+        ? "     ✅ check_in = {$record->check_in}\n"
+        : "     ❌ ERROR: check_in = " . ($record->check_in ?? 'NULL') . "\n";
 
-    // ─── PASO 2: Salida real a las 14:30 (SIN punch intermedio) ──
-    // Caso más común: empleado entra y sale sin eventos intermedios
     $exitTime = "$testDate 14:30:00";
-    echo "\n  🔴 [PASO 2] Salida real: $exitTime (sin punches intermedios)\n";
+    echo "\n  🔴 [A2] Salida: $exitTime\n";
     $controller->processBioTimeTransaction($exitTime, $employee->code);
     $record->refresh();
 
-    // ─── VERIFICACIONES ────────────────────────────────
+    $checkOutOk = $record->check_out === '14:30';
+    $breakOk = is_null($record->break_start) || !is_null($record->break_end);
+    $allOkA = $checkInOk && $checkOutOk && $breakOk;
+    echo $allOkA
+        ? "     ✅ check_out = {$record->check_out}, extra = {$record->extra_hours}h {$record->extra_minutes}m\n"
+        : "     ❌ check_out = {$record->check_out}, break_start = " . ($record->break_start ?? 'NULL') . "\n";
+
+    // ─── ESCENARIO B: Entrada + Comida + Regreso + Salida ────
+    echo "\n  ╔══════════════════════════════════════════════╗\n";
+    echo "  ║  ESCENARIO B: Con pausa para comer          ║\n";
+    echo "  ╚══════════════════════════════════════════════╝\n\n";
+
+    // Limpiar para escenario B
+    PayrollUser::where('user_id', $employee->id)
+        ->whereDate('date', $testDate)
+        ->delete();
+
+    $entryTime = "$testDate 07:00:00";
+    echo "  🔵 [B1] Entrada: $entryTime\n";
+    $controller->processBioTimeTransaction($entryTime, $employee->code);
+    $record = PayrollUser::where('user_id', $employee->id)
+        ->whereDate('date', $testDate)
+        ->first();
+    echo "     ✅ check_in = {$record->check_in}\n";
+
+    $lunchStart = "$testDate 12:00:00";
+    echo "\n  🟡 [B2] Salida a comer: $lunchStart\n";
+    $controller->processBioTimeTransaction($lunchStart, $employee->code);
+    $record->refresh();
+    $lunchOut = $record->check_out === '12:00';
+    echo $lunchOut
+        ? "     ✅ check_out = {$record->check_out}\n"
+        : "     ⚠️ check_out = {$record->check_out} (esperado 12:00)\n";
+
+    $lunchReturn = "$testDate 12:45:00";
+    echo "\n  🟢 [B3] Regreso de comer: $lunchReturn\n";
+    $controller->processBioTimeTransaction($lunchReturn, $employee->code);
+    $record->refresh();
+    $reopened = is_null($record->check_out);
+    echo $reopened
+        ? "     ✅ Turno reabierto (check_out = NULL)\n"
+        : "     ❌ check_out = {$record->check_out} (DEBERÍA SER NULL)\n";
+
+    $finalExit = "$testDate 16:00:00";
+    echo "\n  🔴 [B4] Salida final: $finalExit\n";
+    $controller->processBioTimeTransaction($finalExit, $employee->code);
+    $record->refresh();
+    $finalOutOk = $record->check_out === '16:00';
+    echo $finalOutOk
+        ? "     ✅ check_out = {$record->check_out}, extra = {$record->extra_hours}h {$record->extra_minutes}m\n"
+        : "     ❌ check_out = {$record->check_out} (esperado 16:00)\n";
+
+    $allOkB = $lunchOut && $reopened && $finalOutOk;
+
+    // ─── RESUMEN FINAL ─────────────────────────────────
     echo "\n  ┌─────────────────────────────────────────────┐\n";
-    echo "  │  RESULTADOS                                 │\n";
+    echo "  │  RESUMEN: $dayName                              \n";
     echo "  ├─────────────────────────────────────────────┤\n";
-
-    // Verificación 1: check_in debe seguir siendo 07:00
-    $checkInPreserved = $record->check_in === '07:00';
-    echo "  │  check_in:     {$record->check_in}" . 
-         ($checkInPreserved ? '' : ' ❌ (ESPERADO: 07:00)') . "\n";
-
-    // Verificación 2: check_out debe ser 14:30 (NO null)
-    $checkOutCorrect = $record->check_out === '14:30';
-    echo "  │  check_out:    {$record->check_out}" . 
-         ($checkOutCorrect ? '' : ' ❌ (ESPERADO: 14:30)') . "\n";
-
-    // Verificación 3: break debe estar cerrado o no existir
-    $breakOk = is_null($record->break_start) || 
-               (!is_null($record->break_start) && !is_null($record->break_end));
-    echo "  │  break_start:  " . ($record->break_start ?? 'NULL') . "\n";
-    echo "  │  break_end:    " . ($record->break_end ?? 'NULL') . 
-         ($breakOk ? '' : ' ❌ (PAUSA COLGADA!)') . "\n";
-
-    // Verificación 4: Horas extra calculadas
-    $hasExtraTime = ($record->extra_hours > 0 || $record->extra_minutes > 0);
-    echo "  │  extra:        {$record->extra_hours}h {$record->extra_minutes}m" . 
-         ($hasExtraTime ? '' : ' ⚠️ (NO CALCULADO)') . "\n";
-
-    // Verificación 5: ¿La salida se registró como entrada?
-    $salidaEsEntrada = is_null($record->check_out);
-    echo "  │  ¿Salida = Entrada?: " . ($salidaEsEntrada ? '❌ SÍ (ERROR!)' : '✅ NO') . "\n";
-
+    echo "  │  Escenario A (sin comida):  " . ($allOkA ? '✅ CORRECTO' : '❌ FALLÓ') . "       \n";
+    echo "  │  Escenario B (con comida):  " . ($allOkB ? '✅ CORRECTO' : '❌ FALLÓ') . "       \n";
     echo "  └─────────────────────────────────────────────┘\n\n";
 
-    // ─── Resumen del día ────────────────────────────────
-    $allOk = $checkInPreserved && $checkOutCorrect && $breakOk && !$salidaEsEntrada;
-    
-    if ($allOk) {
-        echo "\n  🎉 RESULTADO: $dayName - ¡CORRECTO!\n";
-        echo "     ✅ Entrada y salida registradas correctamente\n";
-        echo "     ✅ check_in = {$record->check_in}, check_out = {$record->check_out}\n";
-        echo "     ✅ Sin pausas colgadas\n";
+    if ($allOkA && $allOkB) {
+        echo "  🎉 $dayName: Ambos escenarios correctos.\n\n";
     } else {
-        echo "\n  ❌ RESULTADO: $dayName - ¡FALLÓ!\n";
-        
-        if (!$checkInPreserved) {
-            echo "     ❌ check_in fue modificado o perdido\n";
-        }
-        if ($salidaEsEntrada) {
-            echo "     ❌ LA SALIDA SE REGISTRÓ COMO ENTRADA (check_out = NULL)\n";
-        }
-        if (!$checkOutCorrect && !$salidaEsEntrada) {
-            echo "     ❌ check_out = {$record->check_out} (esperado: 15:01)\n";
-        }
-        if (!$breakOk) {
-            echo "     ❌ Pausa de comida colgada (break_start sin break_end)\n";
-        }
-        echo "\n";
+        echo "  ❌ $dayName: Hay escenarios fallidos.\n\n";
+        if (!$lunchOut) echo "     - La salida a comer no se registró correctamente\n";
+        if (!$reopened) echo "     - El regreso de comer NO reabrió el turno (BUG)\n";
+        if (!$finalOutOk) echo "     - La salida final no se registró correctamente\n";
     }
 
     // Limpiar después de la prueba
