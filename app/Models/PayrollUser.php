@@ -276,8 +276,13 @@ class PayrollUser extends Pivot
         $breakEnd = $time ?? now()->format('H:i');
         
         try {
-            $breakStartCarbon = Carbon::createFromFormat('H:i', trim($this->break_start));
-            $breakEndCarbon = Carbon::createFromFormat('H:i', trim($breakEnd));
+            // Normalizar: MySQL TIME column devuelve "HH:MM:SS", pero solo necesitamos HH:MM
+            // Extraemos solo HH:MM para evitar el error "Trailing data" de Carbon
+            $breakStartStr = substr(trim($this->break_start), 0, 5);
+            $breakEndStr = substr(trim($breakEnd), 0, 5);
+            
+            $breakStartCarbon = Carbon::createFromFormat('H:i', $breakStartStr);
+            $breakEndCarbon = Carbon::createFromFormat('H:i', $breakEndStr);
             
             // Si la hora de fin es menor que la de inicio (cruzó medianoche)
             if ($breakEndCarbon->lessThan($breakStartCarbon)) {
