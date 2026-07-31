@@ -18,12 +18,12 @@ export default defineConfig({
         }),
     ],
     // comentar los siguientes bloques si no se usa el dominio adti.test
-    server: {
-        detectTls: 'adti.test',
-        // 💡 Añade este bloque hmr para corregir el WebSocket de Vite:
-        hmr: {
-            host: 'adti.test',
-            protocol: 'wss',
-        },
-    },
+    // server: {
+    //     detectTls: 'adti.test',
+    //     // 💡 Añade este bloque hmr para corregir el WebSocket de Vite:
+    //     hmr: {
+    //         host: 'adti.test',
+    //         protocol: 'wss',
+    //     },
+    // },
 });

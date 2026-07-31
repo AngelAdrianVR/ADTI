@@ -21,6 +21,7 @@ const page = usePage();
 
 // ─── Jerarquía ───
 const approval = useIncidencesApproval(computed(() => props.approvalGroups));
+const payrollId = computed(() => props.payroll.id);
 
 // ─── Control de visibilidad de montos ───
 // Solo los usuarios con rol "Super admin" pueden ver montos de dinero
@@ -67,7 +68,7 @@ const onDragEnd = () => {
 };
 
 const form = useForm({ date: null, check_in: null, check_out: null, break_start: null, break_end: null, incidence: null, user_id: props.payrollUser.user.id, payroll_id: props.payroll.id });
-const approveForm = useForm({ date: null, user_id: props.payrollUser.user.id, payroll_id: props.payroll.id, approved_extra_hours: 0, approved_extra_minutes: 0, comments: '' });
+const approveForm = useForm({ payroll_user_id: null, status: 'approved', approved_extra_hours: 0, approved_extra_minutes: 0, comments: '' });
 const projectForm = useForm({ date: null, user_id: props.payrollUser.user.id, project_id: null });
 
 // ─── Formateador de dinero con separadores de miles ───
@@ -133,13 +134,16 @@ const handleCommand = (command) => {
         emit('edit-comment', { userId: props.payrollUser.user.id, userName: props.payrollUser.user.name, date: form.date, comments: r?.comment?.comments || '' });
     } else if (action === 'approve_extra_time') {
         const r = props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(date)));
-        approveForm.date = form.date;
+        approveForm.payroll_user_id = r?.id || null;
         approveForm.approved_extra_hours = r?.extra_hours || 0;
         approveForm.approved_extra_minutes = r?.extra_minutes || 0;
         approveForm.comments = r?.comment?.comments || '';
         showApproveModal.value = true;
     } else if (action === 'revert_extra_time') {
-        router.put(route('payroll-users.revert-extra-time'), { date: form.date, user_id: props.payrollUser.user.id }, { preserveScroll: true, onSuccess: () => ElNotification.success('Resolución revertida') });
+        const r = props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(date)));
+        if (r && r.id) {
+            router.delete(route('payrolls.extra-hours-revert'), { payroll_user_id: r.id }, { preserveScroll: true, onSuccess: () => ElNotification.success('Resolución revertida') });
+        }
     } else if (action === 'clear_extra_time') {
         router.put(route('payroll-users.clear-extra-time'), { date: form.date, user_id: props.payrollUser.user.id }, { preserveScroll: true, onSuccess: () => ElNotification.success('Tiempo extra eliminado') });
     } else if (action === 'link_project' || action === 'change_project') {
@@ -166,8 +170,14 @@ const submitProject = () => projectForm.put(route('payroll-users.set-project'), 
     onSuccess: () => { ElNotification.success('Proyecto vinculado'); showProjectModal.value = false; projectForm.reset(); },
     onError: () => ElNotification.error('Error al vincular proyecto')
 });
-const submitApproveExtraTime = () => approveForm.put(route('payroll-users.approve-extra-time'), { preserveScroll: true, onSuccess: () => { ElNotification.success('Tiempo extra aprobado'); showApproveModal.value = false; approveForm.reset(); } });
-const submitRejectExtraTime = () => approveForm.put(route('payroll-users.reject-extra-time'), { preserveScroll: true, onSuccess: () => { ElNotification.success('Tiempo extra rechazado'); showApproveModal.value = false; approveForm.reset(); } });
+const submitApproveExtraTime = () => {
+    approveForm.status = 'approved';
+    approveForm.post(route('payrolls.extra-hours-decide', { payroll: payrollId.value }), { preserveScroll: true, onSuccess: () => { ElNotification.success('Tiempo extra aprobado'); showApproveModal.value = false; approveForm.reset(); } });
+};
+const submitRejectExtraTime = () => {
+    approveForm.status = 'rejected';
+    approveForm.post(route('payrolls.extra-hours-decide', { payroll: payrollId.value }), { preserveScroll: true, onSuccess: () => { ElNotification.success('Tiempo extra rechazado'); showApproveModal.value = false; approveForm.reset(); } });
+};
 </script>
 
 <template>
@@ -217,6 +227,7 @@ const submitRejectExtraTime = () => approveForm.put(route('payroll-users.reject-
                         v-for="(day, index) in payrollUser.incidences" :key="index"
                         :day="day" :canEdit="canEdit" :incidences="incidences"
                         :canManageIncidence="approval.canManageIncidence"
+                        :canRevertIncidence="approval.canRevertIncidence"
                         :getIncidencePermission="approval.getIncidencePermission"
                         :getDayApprovalSummary="approval.getDayApprovalSummary"
                         :getApprovalStatusBadge="approval.getApprovalStatusBadge"
