@@ -15,6 +15,12 @@ export function useIncidencesApproval(approvalGroups) {
         return hierarchy.getActionPermission(incidence).canAct;
     }
 
+    // ¿Puede el usuario actual revertir una decisión de esta incidencia?
+    function canRevertIncidence(incidence) {
+        if (!page.props?.auth?.user?.permissions?.includes('Aprobar tiempo extra')) return false;
+        return hierarchy.canRevertDecision(incidence);
+    }
+
     // Detalle del permiso para mostrar razón
     function getIncidencePermission(incidence) {
         return hierarchy.getActionPermission(incidence);
@@ -66,5 +72,5 @@ export function useIncidencesApproval(approvalGroups) {
         }
     }
 
-    return { hierarchy, canManageIncidence, getIncidencePermission, getDayApprovalSummary, getApprovalStatusBadge };
+    return { hierarchy, canManageIncidence, canRevertIncidence, getIncidencePermission, getDayApprovalSummary, getApprovalStatusBadge };
 }
