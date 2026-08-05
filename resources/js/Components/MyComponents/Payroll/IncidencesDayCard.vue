@@ -6,6 +6,7 @@ const props = defineProps({
     day: { type: Object, required: true },
     canEdit: { type: Boolean, default: true },
     canManageIncidence: { type: Function, required: true },
+    canRevertIncidence: { type: Function, required: true },
     getIncidencePermission: { type: Function, required: true },
     getDayApprovalSummary: { type: Function, required: true },
     getApprovalStatusBadge: { type: Function, required: true },
@@ -71,18 +72,21 @@ const handleCommand = (cmd) => emit('command', cmd);
 
                             <!-- ACCIONES TIEMPO EXTRA -->
                             <template v-if="$page.props.auth.user.permissions.includes('Aprobar tiempo extra')">
+                                <!-- Gestionar: cuando hay TE pendiente y el usuario tiene permiso para decidir -->
                                 <el-dropdown-item
-                                    v-if="(day.extra_hours || day.extra_minutes) && !day.approved_at && canManageIncidence(day)"
+                                    v-if="(day.extra_hours || day.extra_minutes) && canManageIncidence(day)"
                                     :command="`approve_extra_time|${day.date}`">
                                     <i class="fa-solid fa-list-check mr-2 text-indigo-600"></i> Gestionar extra
                                 </el-dropdown-item>
+                                <!-- Bloqueado: cuando el estado es pendiente pero el usuario no puede actuar -->
                                 <el-dropdown-item
-                                    v-if="(day.extra_hours || day.extra_minutes) && !day.approved_at && !canManageIncidence(day)"
+                                    v-if="(day.extra_hours || day.extra_minutes) && (day.extra_hour_status === 'pending' || !day.extra_hour_status || day.extra_hour_status === 'none') && !canManageIncidence(day)"
                                     disabled>
                                     <i class="fa-solid fa-lock mr-2 text-gray-400"></i>
                                     {{ getIncidencePermission(day).reason || 'Sin permisos para gestionar' }}
                                 </el-dropdown-item>
-                                <el-dropdown-item v-if="day.approved_at && (day.extra_hours || day.extra_minutes) && canManageIncidence(day)" :command="`revert_extra_time|${day.date}`">
+                                <!-- Revertir: cuando el flujo ya está en estado final y el usuario es aprobador del grupo -->
+                                <el-dropdown-item v-if="(day.extra_hours || day.extra_minutes) && canRevertIncidence(day)" :command="`revert_extra_time|${day.date}`">
                                     <i class="fa-solid fa-rotate-left mr-2 text-red-600"></i> Revertir resolución
                                 </el-dropdown-item>
                                 <el-dropdown-item divided v-if="day.extra_hours || day.extra_minutes"></el-dropdown-item>
