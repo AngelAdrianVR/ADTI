@@ -234,6 +234,11 @@ Route::get('/backfill-status', function () {
     return 'Backfill completado.';
 });
 
+Route::get('/fix-approved-decisions', function () {
+    Artisan::call('extra-hours:fix-approved-decisions');
+    return 'Corrección de aprobadores completada.';
+});
+
 // --- OTROS / API ---
 Route::get('/api/process-transaction/{time}/{emp_code}', [PayrollUserController::class, 'processBioTimeTransaction']);
 Route::get('/api/get-total-processed-count/', [BioTimeTransactionsController::class, 'getTotalProcessedCount']);

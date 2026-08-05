@@ -176,7 +176,7 @@ const handleCommand = (cmd) => emit('command', cmd);
                 <div v-if="day.late" class="text-[10px] text-red-500 bg-red-50 px-1.5 rounded border border-red-100 mt-1">Retardo: {{ day.late }}m</div>
 
                 <!-- UI de Tiempo Extra -->
-                <div v-if="day.approved_at && (day.extra_hours || day.extra_minutes)">
+                <div v-if="day.approved_at && (day.extra_hours || day.extra_minutes) && ['approved', 'rejected'].includes(day.extra_hour_status)">
                     <div v-if="day.approved_extra_hours === 0 && day.approved_extra_minutes === 0" class="text-[10px] text-red-700 bg-red-100 px-1.5 py-0.5 rounded border border-red-300 font-semibold text-center leading-tight w-full mt-1">
                         T.E. Rechazado <i class="fa-solid fa-xmark ml-0.5"></i>
                         <div class="text-[8px] mt-0.5 font-normal text-red-700 border-t border-red-200 pt-0.5">Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}</div>
