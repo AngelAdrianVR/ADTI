@@ -195,6 +195,7 @@ watch(payrollUsersRef, () => {
                 :actionableCount="actionableCount"
                 @approve-single="actions.approveSingle"
                 @reject-single="actions.rejectSingle"
+                @revert-single="actions.revertSingle"
                 @approve-employee="actions.approveEmployee"
                 @reject-employee="actions.rejectEmployee"
             />

@@ -15,7 +15,7 @@ class ExtraHourApprovalService
      * Inicializa el flujo de aprobación cuando se detectan horas extra.
      * Se llama desde PayrollUser::calculateExtraTime() y desde importación BioTime.
      */
-    public function initializeWorkflow(PayrollUser $payrollUser): void
+    public function initializeWorkflow(PayrollUser $payrollUser, bool $force = false): void
     {
         if (!$payrollUser->extra_hours && !$payrollUser->extra_minutes) {
             $payrollUser->updateQuietly([
@@ -25,8 +25,9 @@ class ExtraHourApprovalService
             return;
         }
 
-        // Si ya tiene decisión final, no reiniciar
-        if (in_array($payrollUser->extra_hour_status, ['approved', 'rejected'])) {
+        // Si ya tiene decisión final, no reiniciar (a menos que se fuerce
+        // para reparar estados huérfanos tras reconfiguración de grupos)
+        if (!$force && in_array($payrollUser->extra_hour_status, ['approved', 'rejected'])) {
             return;
         }
 
@@ -155,11 +156,22 @@ class ExtraHourApprovalService
                 ->latest('decided_at')
                 ->first();
 
-            if (!$decision) {
-                throw new \RuntimeException('No hay decisión que revertir.');
-            }
+            if ($decision) {
+                $decision->delete();
+            } else {
+                // Sin decisión del actor: permitir revertir estados finales huérfanos
+                // (legacy o dañados por reconfiguración de grupos) si el actor es
+                // aprobador del grupo del empleado (o modo directo sin grupos).
+                $status = $payrollUser->extra_hour_status ?? 'none';
+                $isFinal = in_array($status, ['approved', 'rejected']) || $payrollUser->approved_at !== null;
+                if (!$isFinal) {
+                    throw new \RuntimeException('No hay decisión que revertir.');
+                }
 
-            $decision->delete();
+                if (!$this->isApproverForUser($payrollUser, $actor)) {
+                    throw new \RuntimeException('No eres aprobador del grupo de este empleado.');
+                }
+            }
 
             // Recalcular el estado desde cero
             if ($payrollUser->extra_hours || $payrollUser->extra_minutes) {
@@ -286,6 +298,23 @@ class ExtraHourApprovalService
         }
 
         $levels = $group->levels()->orderBy('level')->get();
+        $hasAnyDecision = ExtraHourApprovalDecision::where('payroll_user_id', $payrollUser->id)->exists();
+
+        // Sin decisiones → reiniciar flujo desde el primer nivel.
+        // Se usa $force=true para que el reinicio funcione también cuando el
+        // estado desnormalizado quedó como 'approved'/'rejected' (tras revertir
+        // la última decisión) y evitar registros huérfanos.
+        if (!$hasAnyDecision) {
+            $payrollUser->update([
+                'approved_extra_hours' => null,
+                'approved_extra_minutes' => null,
+                'approved_by' => null,
+                'approved_at' => null,
+            ]);
+            $this->initializeWorkflow($payrollUser, true);
+            return;
+        }
+
         $finalStatus = 'approved';
         $currentLevelId = null;
 
@@ -302,6 +331,8 @@ class ExtraHourApprovalService
                     'current_approval_level_id' => null,
                     'approved_extra_hours' => 0,
                     'approved_extra_minutes' => 0,
+                    'approved_by' => null,
+                    'approved_at' => null,
                 ]);
                 return;
             }
@@ -314,9 +345,32 @@ class ExtraHourApprovalService
             }
         }
 
+        $isFullyApproved = $finalStatus === 'approved';
         $payrollUser->update([
             'extra_hour_status' => $finalStatus,
-            'current_approval_level_id' => $finalStatus === 'approved' ? null : $currentLevelId,
+            'current_approval_level_id' => $isFullyApproved ? null : $currentLevelId,
+            // Al no estar totalmente aprobado, limpiar los campos legacy para evitar
+            // estados inconsistentes (p.ej. pending con approved_at viejo).
+            'approved_extra_hours' => $isFullyApproved ? $payrollUser->approved_extra_hours : null,
+            'approved_extra_minutes' => $isFullyApproved ? $payrollUser->approved_extra_minutes : null,
+            'approved_by' => $isFullyApproved ? $payrollUser->approved_by : null,
+            'approved_at' => $isFullyApproved ? $payrollUser->approved_at : null,
         ]);
+    }
+
+    /**
+     * Determina si el actor es aprobador de algún nivel del grupo del empleado.
+     * En modo directo (sin grupos configurados), cualquier aprobador puede.
+     */
+    private function isApproverForUser(PayrollUser $payrollUser, User $user): bool
+    {
+        $group = $this->findGroupForUser($payrollUser);
+        if (!$group) {
+            return true; // Modo directo
+        }
+
+        return ExtraHourApprovalLevel::where('approval_group_id', $group->id)
+            ->whereHas('approvers', fn ($q) => $q->where('user_id', $user->id))
+            ->exists();
     }
 }

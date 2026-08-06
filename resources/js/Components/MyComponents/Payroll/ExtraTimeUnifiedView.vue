@@ -19,7 +19,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits([
-    'approve-single', 'reject-single',
+    'approve-single', 'reject-single', 'revert-single',
     'approve-employee', 'reject-employee',
 ]);
 
@@ -52,12 +52,18 @@ function getGlobalStatus(record) {
     }
     const info = getMyDecisionInfo(record);
     const decisions = record.incidence.approval_decisions || [];
+    const status = record.incidence.extra_hour_status || 'none';
 
     // Rechazado global: algún nivel tiene rechazo
     if (decisions.some(d => d.status === 'rejected')) return 'rejected';
 
     // Ya decidí y el backend confirmó todo completo → Aprobado
     if (info.hasDecided && record.incidence.approved_at) return 'approved';
+
+    // Fallback: estado desnormalizado final sin decisiones locales
+    // (modo directo o datos legacy/huérfanos) → respetar el backend
+    if (status === 'approved') return 'approved';
+    if (status === 'rejected') return 'rejected';
 
     // Sin jerarquía aplicable → si backend marcó, aprobado; si no, en espera
     if (!info.isMyEmployee) {
@@ -79,12 +85,16 @@ function getGlobalStatusLabel(status) {
 
 // ─── MI DECISIÓN (del aprobador actual) ───
 function getMyDecisionInfo(record) {
-    if (!props.hierarchy) return { hasDecided: false, status: null, canAct: true };
+    if (!props.hierarchy) return { hasDecided: false, status: null, canAct: true, canRevert: false };
     const perm = props.hierarchy.getActionPermission(record.incidence);
+    // ¿Puedo revertir este registro? Un aprobador del grupo puede desbloquear
+    // estados finales (incluidos huérfanos sin mi decisión).
+    const canRevert = props.hierarchy.canRevertDecision(record.incidence);
     return {
         hasDecided: perm.alreadyDecided || false,
         status: perm.myDecision?.status || null,
         canAct: perm.canAct && !perm.alreadyDecided,
+        canRevert,
         reason: perm.reason || '',
         isMyEmployee: perm.isMyEmployee || false,
     };
@@ -163,6 +173,17 @@ async function confirmAndReject(record) {
             { confirmButtonText: 'Sí, rechazar', cancelButtonText: 'Cancelar', type: 'error' }
         );
         emit('reject-single', record);
+    } catch (e) { /* cancelado */ }
+}
+
+async function confirmAndRevert(record) {
+    try {
+        await ElMessageBox.confirm(
+            `¿REVERTIR tu decisión sobre el tiempo extra de ${record.user.name.split(' ')[0]} del ${formatDate(record.date)}? El registro volverá a tu turno para que puedas decidir de nuevo.`,
+            'Confirmar reversión',
+            { confirmButtonText: 'Sí, revertir', cancelButtonText: 'Cancelar', type: 'warning' }
+        );
+        emit('revert-single', record);
     } catch (e) { /* cancelado */ }
 }
 </script>
@@ -381,7 +402,7 @@ async function confirmAndReject(record) {
                                             <i v-else class="fa-solid fa-check"></i>
                                         </button>
                                     </div>
-                                    <!-- Ya decidí → ícono + texto -->
+                                    <!-- Ya decidí → ícono + texto + botón revertir mi decisión -->
                                     <div v-else-if="getMyDecisionInfo(record).hasDecided" class="flex flex-col items-center gap-1">
                                         <span class="w-9 h-9 rounded-full flex items-center justify-center text-sm"
                                             :class="getMyDecisionInfo(record).status === 'approved' 
@@ -395,6 +416,25 @@ async function confirmAndReject(record) {
                                                 ? 'text-green-600' : 'text-red-600'">
                                             {{ getMyDecisionInfo(record).status === 'approved' ? 'Aprobaste' : 'Rechazaste' }}
                                         </span>
+                                        <button @click="confirmAndRevert(record)" 
+                                            :disabled="isProcessing || processingRow === `${record.user.id}_${record.date}`"
+                                            class="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-gray-600 bg-gray-100 hover:bg-amber-50 hover:text-amber-700 border border-gray-200 hover:border-amber-300 rounded px-2 py-1 transition-colors disabled:opacity-50"
+                                            title="Revertir mi decisión para decidir de nuevo">
+                                            <i v-if="processingRow === `${record.user.id}_${record.date}` && processingType === 'revert'" class="fa-solid fa-spinner animate-spin"></i>
+                                            <i v-else class="fa-solid fa-rotate-left"></i>
+                                            Revertir mi decisión
+                                        </button>
+                                    </div>
+                                    <!-- Estado final sin mi decisión (huérfano) → botón revertir para desbloquear -->
+                                    <div v-else-if="getMyDecisionInfo(record).canRevert" class="flex flex-col items-center gap-1">
+                                        <button @click="confirmAndRevert(record)" 
+                                            :disabled="isProcessing || processingRow === `${record.user.id}_${record.date}`"
+                                            class="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-gray-600 bg-gray-100 hover:bg-amber-50 hover:text-amber-700 border border-gray-200 hover:border-amber-300 rounded px-2 py-1 transition-colors disabled:opacity-50"
+                                            title="Revertir resolución para volver a gestionar">
+                                            <i v-if="processingRow === `${record.user.id}_${record.date}` && processingType === 'revert'" class="fa-solid fa-spinner animate-spin"></i>
+                                            <i v-else class="fa-solid fa-rotate-left"></i>
+                                            Revertir resolución
+                                        </button>
                                     </div>
                                     <!-- Bloqueado / fuera de scope → razón -->
                                     <span v-else class="text-[11px] text-gray-400 italic">

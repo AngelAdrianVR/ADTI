@@ -71,26 +71,26 @@ const handleCommand = (cmd) => emit('command', cmd);
                         <el-dropdown-menu>
 
                             <!-- ACCIONES TIEMPO EXTRA -->
-                            <template v-if="$page.props.auth.user.permissions.includes('Aprobar tiempo extra')">
-                                <!-- Gestionar: cuando hay TE pendiente y el usuario tiene permiso para decidir -->
-                                <el-dropdown-item
-                                    v-if="(day.extra_hours || day.extra_minutes) && canManageIncidence(day)"
-                                    :command="`approve_extra_time|${day.date}`">
-                                    <i class="fa-solid fa-list-check mr-2 text-indigo-600"></i> Gestionar extra
-                                </el-dropdown-item>
-                                <!-- Bloqueado: cuando el estado es pendiente pero el usuario no puede actuar -->
-                                <el-dropdown-item
-                                    v-if="(day.extra_hours || day.extra_minutes) && (day.extra_hour_status === 'pending' || !day.extra_hour_status || day.extra_hour_status === 'none') && !canManageIncidence(day)"
-                                    disabled>
-                                    <i class="fa-solid fa-lock mr-2 text-gray-400"></i>
-                                    {{ getIncidencePermission(day).reason || 'Sin permisos para gestionar' }}
-                                </el-dropdown-item>
-                                <!-- Revertir: cuando el flujo ya está en estado final y el usuario es aprobador del grupo -->
-                                <el-dropdown-item v-if="(day.extra_hours || day.extra_minutes) && canRevertIncidence(day)" :command="`revert_extra_time|${day.date}`">
-                                    <i class="fa-solid fa-rotate-left mr-2 text-red-600"></i> Revertir resolución
-                                </el-dropdown-item>
-                                <el-dropdown-item divided v-if="day.extra_hours || day.extra_minutes"></el-dropdown-item>
-                            </template>
+                            <!-- No se exige permiso especial: basta con ser aprobador del nivel/grupo
+                                 (canManageIncidence) o aprobador del grupo con estado final (canRevertIncidence) -->
+                            <!-- Gestionar: cuando hay TE pendiente y el usuario tiene permiso para decidir -->
+                            <el-dropdown-item
+                                v-if="(day.extra_hours || day.extra_minutes) && canManageIncidence(day)"
+                                :command="`approve_extra_time|${day.date}`">
+                                <i class="fa-solid fa-list-check mr-2 text-indigo-600"></i> Gestionar extra
+                            </el-dropdown-item>
+                            <!-- Bloqueado: cuando el estado es pendiente pero el usuario no puede actuar -->
+                            <el-dropdown-item
+                                v-if="(day.extra_hours || day.extra_minutes) && (day.extra_hour_status === 'pending' || !day.extra_hour_status || day.extra_hour_status === 'none') && !canManageIncidence(day)"
+                                disabled>
+                                <i class="fa-solid fa-lock mr-2 text-gray-400"></i>
+                                {{ getIncidencePermission(day).reason || 'Sin permisos para gestionar' }}
+                            </el-dropdown-item>
+                            <!-- Revertir: cuando el flujo ya está en estado final y el usuario es aprobador del grupo -->
+                            <el-dropdown-item v-if="(day.extra_hours || day.extra_minutes) && canRevertIncidence(day)" :command="`revert_extra_time|${day.date}`">
+                                <i class="fa-solid fa-rotate-left mr-2 text-red-600"></i> Revertir resolución
+                            </el-dropdown-item>
+                            <el-dropdown-item divided v-if="day.extra_hours || day.extra_minutes"></el-dropdown-item>
 
                             <!-- OTRAS ACCIONES -->
                             <el-dropdown-item :command="`edit_time|${day.date}`">
@@ -176,15 +176,15 @@ const handleCommand = (cmd) => emit('command', cmd);
                 <div v-if="day.late" class="text-[10px] text-red-500 bg-red-50 px-1.5 rounded border border-red-100 mt-1">Retardo: {{ day.late }}m</div>
 
                 <!-- UI de Tiempo Extra -->
-                <div v-if="day.approved_at && (day.extra_hours || day.extra_minutes) && ['approved', 'rejected'].includes(day.extra_hour_status)">
-                    <div v-if="day.approved_extra_hours === 0 && day.approved_extra_minutes === 0" class="text-[10px] text-red-700 bg-red-100 px-1.5 py-0.5 rounded border border-red-300 font-semibold text-center leading-tight w-full mt-1">
+                <div v-if="(day.extra_hours || day.extra_minutes) && ['approved', 'rejected'].includes(day.extra_hour_status)">
+                    <div v-if="day.extra_hour_status === 'rejected'" class="text-[10px] text-red-700 bg-red-100 px-1.5 py-0.5 rounded border border-red-300 font-semibold text-center leading-tight w-full mt-1">
                         T.E. Rechazado <i class="fa-solid fa-xmark ml-0.5"></i>
                         <div class="text-[8px] mt-0.5 font-normal text-red-700 border-t border-red-200 pt-0.5">Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}</div>
                         <span v-if="canSeeMoney && day.cost_per_hour" class="block text-[8px] text-red-500 mt-0.5">${{ formatMoney(day.cost_per_hour) }}/hr · $0.00</span>
                         <span v-else-if="canSeeMoney" class="block text-[8px] text-red-400 mt-0.5 italic">Sin costo por hora</span>
                     </div>
                     <div v-else class="text-[10px] text-green-700 bg-green-100 px-1.5 py-0.5 rounded border border-green-300 font-semibold text-center leading-tight w-full mt-1">
-                        T.E. Aprobado:<br>{{ day.approved_extra_hours }}h {{ day.approved_extra_minutes }}m <i class="fa-solid fa-check-circle ml-0.5"></i>
+                        T.E. Aprobado:<br>{{ day.approved_extra_hours ?? day.extra_hours }}h {{ day.approved_extra_minutes ?? day.extra_minutes }}m <i class="fa-solid fa-check-circle ml-0.5"></i>
                         <div class="text-[8px] mt-0.5 font-normal text-green-700 border-t border-green-200 pt-0.5">Por: {{ day.approver?.name?.split(' ')[0] || 'Admin' }}</div>
                         <span v-if="canSeeMoney && day.extra_amount" class="block text-[8px] text-green-600 font-bold mt-0.5">${{ formatMoney(day.extra_amount) }}</span>
                         <span v-else-if="canSeeMoney" class="block text-[8px] text-green-500 mt-0.5 italic">Sin costo por hora</span>

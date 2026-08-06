@@ -239,6 +239,11 @@ Route::get('/fix-approved-decisions', function () {
     return 'Corrección de aprobadores completada.';
 });
 
+Route::get('/repair-orphan-extra-hours', function () {
+    Artisan::call('extra-hours:repair-orphan-states');
+    return 'Reparación de estados huérfanos completada.';
+});
+
 // --- OTROS / API ---
 Route::get('/api/process-transaction/{time}/{emp_code}', [PayrollUserController::class, 'processBioTimeTransaction']);
 Route::get('/api/get-total-processed-count/', [BioTimeTransactionsController::class, 'getTotalProcessedCount']);

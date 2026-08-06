@@ -21,8 +21,8 @@ class PayrollExtraHoursController extends Controller
         private ExtraHourApprovalService $approvals
     ) {}
     /**
-     * Muestra la vista de configuración de costos y niveles de autorización
-     * para una nómina específica.
+     * Muestra la vista de configuraciรณn de costos y niveles de autorizaciรณn
+     * para una nรณmina especรญfica.
      */
     public function config(Payroll $payroll)
     {
@@ -43,7 +43,7 @@ class PayrollExtraHoursController extends Controller
             })
             ->values();
 
-        // Cargar grupos de aprobación con sus niveles y aprobadores
+        // Cargar grupos de aprobaciรณn con sus niveles y aprobadores
         $approvalGroups = $payroll->approvalGroups()
             ->with(['employees', 'levels.approvers'])
             ->get()
@@ -95,7 +95,7 @@ class PayrollExtraHoursController extends Controller
 
         // Usuarios elegibles como empleados de un grupo
         $eligibleEmployees = User::where('is_active', true)
-            ->whereNotIn('org_props->position', ['Dirección', 'Soporte DTW'])
+            ->whereNotIn('org_props->position', ['Direcciรณn', 'Soporte DTW'])
             ->select('id', 'name', 'code', 'org_props', 'profile_photo_path')
             ->get()
             ->map(function ($user) {
@@ -108,7 +108,7 @@ class PayrollExtraHoursController extends Controller
                 ];
             });
 
-        // Usuarios que tienen tiempo extra en esta nómina (para asignarles niveles)
+        // Usuarios que tienen tiempo extra en esta nรณmina (para asignarles niveles)
         $usersWithExtraTime = PayrollUser::where('payroll_id', $payroll->id)
             ->where(function ($q) {
                 $q->where('extra_hours', '>', 0)
@@ -134,10 +134,10 @@ class PayrollExtraHoursController extends Controller
             })
             ->values();
 
-        // Verificar si hay una nómina anterior para copiar
+        // Verificar si hay una nรณmina anterior para copiar
         $hasPreviousPayroll = Payroll::where('id', '<', $payroll->id)->exists();
 
-        // Verificar si hay una nómina siguiente para copiar
+        // Verificar si hay una nรณmina siguiente para copiar
         $hasNextPayroll = Payroll::where('id', '>', $payroll->id)->exists();
 
         return Inertia::render('Payroll/ExtraHoursConfig', [
@@ -157,7 +157,7 @@ class PayrollExtraHoursController extends Controller
     }
 
     /**
-     * Guarda o actualiza los costos de hora extra para la nómina.
+     * Guarda o actualiza los costos de hora extra para la nรณmina.
      */
     public function saveCosts(Request $request, Payroll $payroll)
     {
@@ -170,7 +170,7 @@ class PayrollExtraHoursController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $payroll) {
-            // Eliminar costos existentes de esta nómina
+            // Eliminar costos existentes de esta nรณmina
             $payroll->extraHourCosts()->delete();
 
             // Insertar nuevos costos (generales y por usuario)
@@ -189,7 +189,7 @@ class PayrollExtraHoursController extends Controller
     }
 
     /**
-     * Guarda los grupos de aprobación con sus niveles para la nómina.
+     * Guarda los grupos de aprobaciรณn con sus niveles para la nรณmina.
      */
     public function saveApprovalGroups(Request $request, Payroll $payroll)
     {
@@ -204,12 +204,12 @@ class PayrollExtraHoursController extends Controller
             'groups.*.levels.*.approver_ids.*' => 'required|integer|exists:users,id',
         ]);
 
-        // Validar que un empleado no esté duplicado entre grupos
+        // Validar que un empleado no estรฉ duplicado entre grupos
         $allEmployeeIds = [];
         foreach ($request->groups as $gi => $groupData) {
             foreach ($groupData['employee_ids'] as $empId) {
                 if (in_array($empId, $allEmployeeIds)) {
-                    return back()->withErrors(['error' => "El empleado ID {$empId} no puede estar en más de un grupo de aprobación."]);
+                    return back()->withErrors(['error' => "El empleado ID {$empId} no puede estar en mรกs de un grupo de aprobaciรณn."]);
                 }
                 $allEmployeeIds[] = $empId;
             }
@@ -245,11 +245,41 @@ class PayrollExtraHoursController extends Controller
             }
         });
 
-        return back()->with('success', 'Grupos y niveles de autorización guardados correctamente.');
+        // Re-inicializar el flujo de aprobación de los registros con tiempo extra.
+        // Al reconfigurar grupos, las decisiones se borran por cascade, por lo que
+        // los registros que no tengan una aprobación final legítima (approved_at)
+        // deben volver a pending apuntando al primer nivel del grupo correcto.
+        $payrollUsers = PayrollUser::where('payroll_id', $payroll->id)
+            ->where(function ($q) {
+                $q->where('extra_hours', '>', 0)
+                  ->orWhere('extra_minutes', '>', 0);
+            })
+            ->get();
+
+        foreach ($payrollUsers as $pu) {
+            $status = $pu->extra_hour_status;
+
+            // No tocar aprobaciones finales legítimas (approved_at presente)
+            if (in_array($status, ['approved', 'rejected']) && $pu->approved_at !== null) {
+                continue;
+            }
+
+            // Limpiar campos legacy para evitar estados inconsistentes
+            $pu->updateQuietly([
+                'approved_extra_hours' => null,
+                'approved_extra_minutes' => null,
+                'approved_by' => null,
+                'approved_at' => null,
+            ]);
+
+            $this->approvals->initializeWorkflow($pu, true);
+        }
+
+        return back()->with('success', 'Grupos y niveles de autorizaciรณn guardados correctamente.');
     }
 
     /**
-     * Copia la configuración (costos + grupos) de la nómina anterior a la actual.
+     * Copia la configuraciรณn (costos + grupos) de la nรณmina anterior a la actual.
      */
     public function copyFromPrevious(Payroll $payroll)
     {
@@ -258,7 +288,7 @@ class PayrollExtraHoursController extends Controller
             ->first();
 
         if (!$previous) {
-            return back()->withErrors(['error' => 'No hay una nómina anterior para copiar.']);
+            return back()->withErrors(['error' => 'No hay una nรณmina anterior para copiar.']);
         }
 
         DB::transaction(function () use ($payroll, $previous) {
@@ -274,7 +304,7 @@ class PayrollExtraHoursController extends Controller
                 ]);
             }
 
-            // 2. Copiar grupos de aprobación con sus niveles y aprobadores
+            // 2. Copiar grupos de aprobaciรณn con sus niveles y aprobadores
             $payroll->approvalGroups()->each(function ($g) { $g->delete(); });
 
             foreach ($previous->approvalGroups()->with(['employees', 'levels.approvers'])->get() as $prevGroup) {
@@ -300,11 +330,11 @@ class PayrollExtraHoursController extends Controller
             }
         });
 
-        return back()->with('success', 'Configuración copiada de la nómina anterior correctamente.');
+        return back()->with('success', 'Configuraciรณn copiada de la nรณmina anterior correctamente.');
     }
 
     /**
-     * Copia la configuración (costos + grupos) de la nómina siguiente a la actual.
+     * Copia la configuraciรณn (costos + grupos) de la nรณmina siguiente a la actual.
      */
     public function copyFromNext(Payroll $payroll)
     {
@@ -313,7 +343,7 @@ class PayrollExtraHoursController extends Controller
             ->first();
 
         if (!$next) {
-            return back()->withErrors(['error' => 'No hay una nómina siguiente para copiar.']);
+            return back()->withErrors(['error' => 'No hay una nรณmina siguiente para copiar.']);
         }
 
         DB::transaction(function () use ($payroll, $next) {
@@ -329,7 +359,7 @@ class PayrollExtraHoursController extends Controller
                 ]);
             }
 
-            // 2. Copiar grupos de aprobación con sus niveles y aprobadores
+            // 2. Copiar grupos de aprobaciรณn con sus niveles y aprobadores
             $payroll->approvalGroups()->each(function ($g) { $g->delete(); });
 
             foreach ($next->approvalGroups()->with(['employees', 'levels.approvers'])->get() as $nextGroup) {
@@ -355,12 +385,12 @@ class PayrollExtraHoursController extends Controller
             }
         });
 
-        return back()->with('success', 'Configuración copiada de la nómina siguiente correctamente.');
+        return back()->with('success', 'Configuraciรณn copiada de la nรณmina siguiente correctamente.');
     }
 
     /**
-     * Procesa la decisión de un aprobador sobre una entrada de tiempo extra.
-     * Se llama desde el modal de gestión de tiempo extra.
+     * Procesa la decisiรณn de un aprobador sobre una entrada de tiempo extra.
+     * Se llama desde el modal de gestiรณn de tiempo extra.
      */
     public function decide(DecideExtraHourRequest $request)
     {
@@ -378,14 +408,14 @@ class PayrollExtraHoursController extends Controller
         }
 
         if ($request->header('X-Inertia')) {
-            return back()->with('success', 'Decisión registrada correctamente.');
+            return back()->with('success', 'Decisiรณn registrada correctamente.');
         }
 
-        return response()->json(['success' => true, 'message' => 'Decisión registrada correctamente.']);
+        return response()->json(['success' => true, 'message' => 'Decisiรณn registrada correctamente.']);
     }
 
     /**
-     * Aprueba o rechaza múltiples registros en lote.
+     * Aprueba o rechaza mรบltiples registros en lote.
      */
     public function decideBulk(BulkDecideExtraHourRequest $request)
     {
@@ -408,7 +438,7 @@ class PayrollExtraHoursController extends Controller
     }
 
     /**
-     * Revierte una decisión de aprobación (para correcciones).
+     * Revierte una decisiรณn de aprobaciรณn (para correcciones).
      */
     public function revertDecision(Request $request)
     {
@@ -418,11 +448,20 @@ class PayrollExtraHoursController extends Controller
 
         try {
             $payrollUser = PayrollUser::findOrFail($request->payroll_user_id);
+            // No se exige permiso especial: la protección la da ExtraHourApprovalService::revert(),
+            // que valida que el actor sea aprobador del grupo del empleado.
             $this->approvals->revert($payrollUser, $request->user());
         } catch (\RuntimeException $e) {
+            if (!$request->header('X-Inertia')) {
+                return response()->json(['error' => $e->getMessage()], 422);
+            }
             return back()->withErrors(['error' => $e->getMessage()]);
         }
 
-        return back()->with('success', 'Decisión revocada correctamente.');
+        if ($request->header('X-Inertia')) {
+            return back()->with('success', 'Decisiรณn revocada correctamente.');
+        }
+
+        return response()->json(['success' => true, 'message' => 'Decisiรณn revocada correctamente.']);
     }
 }

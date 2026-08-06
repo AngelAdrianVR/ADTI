@@ -133,14 +133,14 @@ export function useExtraTimeActions(payrollId, editableRecords, hierarchy, emit)
         processingRow.value = key;
         processingType.value = 'revert';
         try {
-            await axios.put(route('payroll-users.revert-extra-time'), {
-                date: record.date,
-                user_id: record.user.id,
+            await axios.delete(route('payrolls.extra-hours-revert'), {
+                data: { payroll_user_id: record.incidence.id },
             });
             ElNotification.success('Resolución revertida');
             emit('updated');
         } catch (e) {
-            ElNotification.error('Ocurrió un error al revertir');
+            const msg = e.response?.data?.error || e.response?.data?.message || 'Ocurrió un error al revertir';
+            ElNotification.error(msg);
         } finally {
             processingRow.value = null;
             processingType.value = null;

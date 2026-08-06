@@ -142,7 +142,12 @@ const handleCommand = (command) => {
     } else if (action === 'revert_extra_time') {
         const r = props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(date)));
         if (r && r.id) {
-            router.delete(route('payrolls.extra-hours-revert'), { payroll_user_id: r.id }, { preserveScroll: true, onSuccess: () => ElNotification.success('Resolución revertida') });
+            router.delete(route('payrolls.extra-hours-revert'), {
+                data: { payroll_user_id: r.id },
+                preserveScroll: true,
+                onSuccess: () => ElNotification.success('Resolución revertida'),
+                onError: (errors) => ElNotification.error(errors?.payroll_user_id || 'Error al revertir la resolución'),
+            });
         }
     } else if (action === 'clear_extra_time') {
         router.put(route('payroll-users.clear-extra-time'), { date: form.date, user_id: props.payrollUser.user.id }, { preserveScroll: true, onSuccess: () => ElNotification.success('Tiempo extra eliminado') });

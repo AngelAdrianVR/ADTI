@@ -130,19 +130,24 @@ export function useApprovalHierarchy(approvalGroups, currentUserId) {
     }
 
     /**
-     * Determina si el usuario actual puede revertir una decisión ya tomada.
+     * Determina si el usuario actual puede revertir una decisión ya tomada
+     * (o reparar un estado final huérfano).
      * Solo aplica cuando el estado es final (approved/rejected) y el usuario
-     * participó en la decisión.
+     * es aprobador de algún nivel del grupo al que pertenece el empleado.
+     * No exige que el usuario haya participado en la decisión: un aprobador
+     * del grupo con estado final (legítimo o huérfano) siempre puede
+     * reiniciar el flujo para corregir.
      * 
      * @param {Object} incidence - Debe tener extra_hour_status, user_id, approval_decisions
      * @returns {boolean}
      */
     function canRevertDecision(incidence) {
         const status = incidence.extra_hour_status || 'none';
-        
-        // Solo se puede revertir si está en estado final
+        const hasExtra = (incidence.extra_hours || 0) > 0 || (incidence.extra_minutes || 0) > 0;
+        if (!hasExtra) return false;
+
+        // Solo se puede revertir si está en estado final (o legacy con approved_at)
         if (status !== 'approved' && status !== 'rejected') {
-            // Fallback legacy: si no hay status jerárquico, verificar approved_at
             if (!incidence.approved_at) return false;
         }
 
@@ -151,28 +156,8 @@ export function useApprovalHierarchy(approvalGroups, currentUserId) {
             return true;
         }
 
-        // Verificar si el empleado está en mi scope
-        if (!myEmployeeIds.value.has(Number(incidence.user_id))) {
-            return false;
-        }
-
-        // Verificar si el usuario actual participó en alguna decisión
-        const decisions = incidence.approval_decisions || [];
-        const myDecision = decisions.find(d => Number(d.approver?.id) === Number(currentUserId.value));
-        
-        // Si el usuario fue uno de los aprobadores, puede revertir
-        if (myDecision) return true;
-
-        // Si el usuario es aprobador en algún nivel del grupo, puede revertir
-        if (myLevelIds.value.size > 0) {
-            // Verificar que el usuario está en algún nivel de aprobación para este empleado
-            const decisionsLevelIds = new Set(decisions.map(d => Number(d.level_id)));
-            for (const lid of myLevelIds.value) {
-                if (decisionsLevelIds.has(lid)) return true;
-            }
-        }
-
-        return false;
+        // Verificar si el empleado está en mi scope (soy aprobador en algún nivel de su grupo)
+        return myEmployeeIds.value.has(Number(incidence.user_id));
     }
 
     return {

@@ -10,14 +10,15 @@ export function useIncidencesApproval(approvalGroups) {
     const hierarchy = useApprovalHierarchy(approvalGroupsRef, authUserId);
 
     // ¿Puede el usuario actual gestionar esta incidencia?
+    // No se exige permiso especial: basta con ser aprobador del nivel/grupo
+    // (la jerarquía valida el scope del empleado y el turno en el nivel actual).
     function canManageIncidence(incidence) {
-        if (!page.props?.auth?.user?.permissions?.includes('Aprobar tiempo extra')) return false;
         return hierarchy.getActionPermission(incidence).canAct;
     }
 
     // ¿Puede el usuario actual revertir una decisión de esta incidencia?
+    // No se exige permiso especial: basta con ser aprobador del grupo del empleado.
     function canRevertIncidence(incidence) {
-        if (!page.props?.auth?.user?.permissions?.includes('Aprobar tiempo extra')) return false;
         return hierarchy.canRevertDecision(incidence);
     }
 
