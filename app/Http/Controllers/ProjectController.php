@@ -203,6 +203,27 @@ class ProjectController extends Controller
         return to_route('projects.index');
     }
 
+    public function updateStatus(Request $request, Project $project)
+    {
+        $request->validate([
+            'status' => 'required|in:active,finished',
+        ]);
+
+        $newStatus = $request->status;
+
+        // Si se marca como terminado, detener automáticamente todas las sesiones activas
+        if ($newStatus === 'finished') {
+            $activeEntries = $project->activeTimeEntries()->get();
+            foreach ($activeEntries as $entry) {
+                $this->stopCurrentWorkLogic($entry);
+            }
+        }
+
+        $project->update(['status' => $newStatus]);
+
+        return back()->with('message', "Estado del proyecto actualizado.");
+    }
+
     // --- TIME TRACKING LOGIC ---
 
     public function startWork(Request $request, Project $project)
