@@ -16,6 +16,11 @@ const props = defineProps({
     extraHourCosts: {
         type: Array,
         default: () => []
+    },
+    // Rango de fechas personalizado (recibos que combinan catorcenas)
+    range: {
+        type: Object,
+        default: null
     }
 });
 
@@ -66,14 +71,29 @@ const getEndPeriod = (start) => {
     }
 };
 
-// Generar los 14 días estrictos de la catorcena
-const get14DaysRecord = (userItem) => {
+// Construir el registro de días: si hay range, se itera día a día desde
+// range.start_date hasta range.end_date (soporta combinar 2 catorcenas);
+// si no hay range, se mantiene el comportamiento original de 14 días.
+const getDaysRecord = (userItem) => {
     if (!props.payroll || !props.payroll.start_date) return [];
 
-    const startDate = parseISO(props.payroll.start_date);
+    let startDate;
+    let totalDays;
+
+    if (props.range && props.range.start_date) {
+        startDate = parseISO(props.range.start_date);
+        const endDate = parseISO(props.range.end_date);
+        totalDays = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+    } else {
+        startDate = parseISO(props.payroll.start_date);
+        totalDays = 14;
+    }
+
+    if (!isValid(startDate) || totalDays <= 0) return [];
+
     const days = [];
 
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < totalDays; i++) {
         const currentDate = addDays(startDate, i);
         const dateStr = format(currentDate, 'yyyy-MM-dd'); 
 
@@ -108,6 +128,16 @@ const get14DaysRecord = (userItem) => {
     }
 
     return days;
+};
+
+// Agrupar los días en bloques de 7 para renderizar columnas dinámicas
+const getWeekBlocks = (userItem) => {
+    const days = getDaysRecord(userItem);
+    const blocks = [];
+    for (let i = 0; i < days.length; i += 7) {
+        blocks.push(days.slice(i, i + 7));
+    }
+    return blocks;
 };
 
 // --- Funciones de cálculo de montos y aprobadores ---
@@ -172,38 +202,42 @@ const getExtraTimeTotal = (payrollUser) => {
     };
 };
 
-// Obtener aprobadores únicos de todos los niveles (solo si todas las decisiones son "approved")
+// Obtener aprobadores únicos de todos los niveles a partir de las decisiones
+// de aprobación adjuntas a cada incidencia (approval_decisions).
+// Solo se muestran niveles con al menos una decisión "approved".
 const getApproversList = (payrollUser) => {
-    if (!props.approvalLevels || props.approvalLevels.length === 0) return null;
+    const approversByLevel = new Map();
 
-    const approversByLevel = [];
-    let hasApprovedEntries = false;
+    payrollUser.incidences.forEach(day => {
+        if (!day.approval_decisions) return;
 
-    props.approvalLevels.forEach(level => {
-        const levelApprovers = [];
-        
-        payrollUser.incidences.forEach(day => {
-            if (day.approval_decisions) {
-                day.approval_decisions.forEach(dec => {
-                    if (dec.level_id === level.id && dec.status === 'approved') {
-                        if (!levelApprovers.find(a => a.id === dec.approver.id)) {
-                            levelApprovers.push(dec.approver);
-                        }
-                        hasApprovedEntries = true;
-                    }
+        day.approval_decisions.forEach(dec => {
+            if (dec.status !== 'approved') return;
+            if (!dec.approver || !dec.approver.id) return;
+
+            const levelKey = dec.level_id ?? 'level';
+            const levelName = dec.level_name || (dec.level_id ? `Nivel ${dec.level_id}` : 'Nivel');
+
+            if (!approversByLevel.has(levelKey)) {
+                approversByLevel.set(levelKey, {
+                    name: levelName,
+                    approvers: new Map(),
                 });
             }
-        });
 
-        if (levelApprovers.length > 0) {
-            approversByLevel.push({
-                name: level.name || `Nivel ${level.level}`,
-                approvers: levelApprovers,
-            });
-        }
+            const level = approversByLevel.get(levelKey);
+            if (!level.approvers.has(dec.approver.id)) {
+                level.approvers.set(dec.approver.id, dec.approver);
+            }
+        });
     });
 
-    return hasApprovedEntries ? approversByLevel : null;
+    if (approversByLevel.size === 0) return null;
+
+    return Array.from(approversByLevel.values()).map(level => ({
+        name: level.name,
+        approvers: Array.from(level.approvers.values()),
+    }));
 };
 
 onMounted(() => {
@@ -235,8 +269,18 @@ onMounted(() => {
                 <!-- Encabezado del Recibo -->
                 <div class="flex justify-between items-end mb-2 print:mb-1 border-b border-gray-800 pb-1 print:pb-0.5">
                     <div>
-                        <h2 class="font-bold text-sm print:text-[10px] uppercase text-gray-800 tracking-wide leading-tight">Acuse de Catorcena {{ payroll.biweekly }}</h2>
-                        <p class="text-[10px] print:text-[8px] text-gray-500 font-mono mt-0.5">Periodo: {{ formatDate(payroll.start_date) }} al {{ getEndPeriod(payroll.start_date) }}</p>
+                        <h2 class="font-bold text-sm print:text-[10px] uppercase text-gray-800 tracking-wide leading-tight">
+                            <template v-if="range">{{ 'Acuse de Nomina' }}</template>
+                            <template v-else>{{ 'Acuse de Catorcena ' + payroll.biweekly }}</template>
+                        </h2>
+                        <p class="text-[10px] print:text-[8px] text-gray-500 font-mono mt-0.5">
+                            <template v-if="range">
+                                Periodo: {{ formatDate(range.start_date) }} al {{ formatDate(range.end_date) }}
+                            </template>
+                            <template v-else>
+                                Periodo: {{ formatDate(payroll.start_date) }} al {{ getEndPeriod(payroll.start_date) }}
+                            </template>
+                        </p>
                     </div>
                     <div class="text-right">
                         <h3 class="font-bold text-sm print:text-[10px] text-gray-800 leading-tight">{{ item.user.name }}</h3>
@@ -244,12 +288,13 @@ onMounted(() => {
                     </div>
                 </div>
 
-                <!-- División a Dos Columnas (Semana 1 y Semana 2) -->
-                <!-- Se agregó table-fixed para evitar que la columna se expanda de más al mostrar el comentario largo -->
+                <!-- Bloques de semana: 2 para una catorcena, más para rangos que combinan catorcenas -->
                 <div class="grid grid-cols-2 gap-4 print:gap-2">
-                    
-                    <!-- SEMANA 1 -->
-                    <table class="w-full text-left text-[9px] print:text-[7.5px] border border-gray-300 print:border-gray-400 table-fixed">
+                    <table
+                        v-for="block in getWeekBlocks(item)"
+                        :key="block[0]?.dateKey || 0"
+                        class="w-full text-left text-[9px] print:text-[7.5px] border border-gray-300 print:border-gray-400 table-fixed"
+                    >
                         <thead class="bg-gray-100 text-gray-700">
                             <tr>
                                 <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%]">Día</th>
@@ -260,51 +305,7 @@ onMounted(() => {
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="day in get14DaysRecord(item).slice(0, 7)" :key="day.dateObj" class="border-b border-gray-200 print:border-gray-300 last:border-0 hover:bg-gray-50">
-                                <td class="px-1 py-0.5 print:py-[1px] uppercase tracking-wide align-top" :class="{'text-red-600 font-bold': day.isAbsent}">{{ day.label }}</td>
-                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono border-l border-gray-200 print:border-gray-300 align-top" :class="{'text-red-600': day.isAbsent}">{{ day.checkIn }}</td>
-                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono border-l border-gray-200 print:border-gray-300 align-top" :class="{'text-red-600': day.isAbsent}">{{ day.checkOut }}</td>
-                                
-                                <!-- COLUMNA INCIDENCIA + COMENTARIOS -->
-                                <td class="px-1 py-0.5 print:py-[1px] text-gray-700 border-l border-gray-200 print:border-gray-300 align-top" :class="{'text-red-600 font-bold': day.isAbsent}">
-                                    <div class="flex justify-between items-start gap-1">
-                                        <span class="truncate leading-tight mt-[1px]">{{ day.incidenceText }}</span>
-                                        <button 
-                                            v-if="day.commentText"
-                                            @click="toggleComment(item.user.id, day.dateKey)"
-                                            class="print:hidden flex-shrink-0 text-indigo-400 hover:text-indigo-600 transition-colors focus:outline-none"
-                                            :title="isCommentVisible(item.user.id, day.dateKey) ? 'Ocultar comentario' : 'Mostrar comentario en la impresión'"
-                                        >
-                                            <i class="fa-solid" :class="isCommentVisible(item.user.id, day.dateKey) ? 'fa-comment-slash text-red-400' : 'fa-comment-dots'"></i>
-                                        </button>
-                                    </div>
-                                    <!-- Comentario expandido -->
-                                    <div v-if="isCommentVisible(item.user.id, day.dateKey)" class="text-[7.5px] print:text-[6.5px] leading-tight italic text-gray-500 mt-1 whitespace-normal break-words border-t border-gray-100 print:border-gray-200 pt-0.5">
-                                        "{{ day.commentText }}"
-                                    </div>
-                                </td>
-
-                                <td class="px-1 py-0.5 print:py-[1px] text-center font-mono text-gray-800 border-l border-gray-200 print:border-gray-300 align-top">
-                                    {{ day.extraTime }}
-                                    <span v-if="day.extraAmount" class="block text-[7px] text-green-600 font-semibold">{{ day.extraAmount }}</span>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-
-                    <!-- SEMANA 2 -->
-                    <table class="w-full text-left text-[9px] print:text-[7.5px] border border-gray-300 print:border-gray-400 table-fixed">
-                        <thead class="bg-gray-100 text-gray-700">
-                            <tr>
-                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%]">Día</th>
-                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%] text-center border-l">Ent</th>
-                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[15%] text-center border-l">Sal</th>
-                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[35%] border-l">Incidencia</th>
-                                <th class="px-1 py-0.5 print:py-[1px] border-b border-gray-300 print:border-gray-400 w-[20%] text-center border-l">Extra</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="day in get14DaysRecord(item).slice(7, 14)" :key="day.dateObj" class="border-b border-gray-200 print:border-gray-300 last:border-0 hover:bg-gray-50">
+                            <tr v-for="day in block" :key="day.dateKey" class="border-b border-gray-200 print:border-gray-300 last:border-0 hover:bg-gray-50">
                                 <td class="px-1 py-0.5 print:py-[1px] uppercase tracking-wide align-top" :class="{'text-red-600 font-bold': day.isAbsent}">{{ day.label }}</td>
                                 <td class="px-1 py-0.5 print:py-[1px] text-center font-mono border-l border-gray-200 print:border-gray-300 align-top" :class="{'text-red-600': day.isAbsent}">{{ day.checkIn }}</td>
                                 <td class="px-1 py-0.5 print:py-[1px] text-center font-mono border-l border-gray-200 print:border-gray-300 align-top" :class="{'text-red-600': day.isAbsent}">{{ day.checkOut }}</td>
