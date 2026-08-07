@@ -9,6 +9,7 @@ import {
     CircleCheck,
     OfficeBuilding,
     List,
+    RefreshLeft,
 } from '@element-plus/icons-vue';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -24,7 +25,7 @@ const props = defineProps({
 });
 
 const page = usePage();
-const emit = defineEmits(['edit', 'delete', 'view', 'start', 'stop']);
+const emit = defineEmits(['edit', 'delete', 'view', 'start', 'stop', 'change-status']);
 
 // --- Permisos ---
 const canToggleTask = computed(() => page.props.auth.user?.permissions?.includes('Terminar tareas de proyectos'));
@@ -375,6 +376,12 @@ const stopUserWork = (projectId, userId, userName) => {
                                     </el-dropdown-item>
                                     <el-dropdown-item v-if="canEdit" @click="emit('edit', scope.row)">
                                         <el-icon><EditPen /></el-icon> Editar
+                                    </el-dropdown-item>
+                                    <el-dropdown-item v-if="canEdit && scope.row.status === 'active'" @click="emit('change-status', scope.row)">
+                                        <el-icon><CircleCheck /></el-icon> Marcar como Terminado
+                                    </el-dropdown-item>
+                                    <el-dropdown-item v-if="canEdit && scope.row.status === 'finished'" @click="emit('change-status', scope.row)">
+                                        <el-icon><RefreshLeft /></el-icon> Reactivar (En curso)
                                     </el-dropdown-item>
                                     <el-dropdown-item v-if="canDelete" divided class="text-red-500" @click="emit('delete', scope.row)">
                                         <el-icon><Delete /></el-icon> Eliminar

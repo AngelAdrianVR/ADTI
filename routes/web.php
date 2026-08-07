@@ -191,6 +191,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::post('projects/{project}/pause', [ProjectController::class, 'togglePause'])->name('projects.pause');
     Route::post('projects/{project}/stop', [ProjectController::class, 'stopWork'])->name('projects.stop');
     Route::post('projects/add-time-entry', [ProjectController::class, 'addTimeEntry'])->name('projects.add-time-entry');
+    Route::put('projects/{project}/status', [ProjectController::class, 'updateStatus'])->name('projects.update-status');
 
     // marcar tarea como terminada/pendiente
     Route::put('tasks/{task}/toggle-status', [ProjectController::class, 'toggleTaskStatus'])->name('tasks.toggle-status');
