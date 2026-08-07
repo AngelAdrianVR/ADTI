@@ -4,7 +4,7 @@ import { router, usePage, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import ProjectList from './Partials/ProjectList.vue';
 import ProjectCalendar from './Partials/ProjectCalendar.vue';
-import { ElNotification } from "element-plus";
+import { ElNotification, ElMessageBox } from "element-plus";
 import { 
     Search, 
     Plus, 
@@ -102,6 +102,40 @@ const handleDelete = (project) => {
     router.delete(route('projects.destroy', project.id), {
         onSuccess: () => ElNotification.success('Proyecto eliminado correctamente'),
         onError: () => ElNotification.error('No se pudo eliminar el proyecto')
+    });
+};
+
+const handleChangeStatus = (project) => {
+    const isActive = project.status === 'active';
+    const newStatus = isActive ? 'finished' : 'active';
+    const actionLabel = isActive ? 'terminar' : 'reactivar';
+    const statusLabel = isActive ? 'Terminado' : 'En curso';
+
+    ElMessageBox.confirm(
+        isActive
+            ? 'Al marcar el proyecto como Terminado, las sesiones de trabajo activas se detendrán automáticamente. ¿Deseas continuar?'
+            : '¿Deseas reactivar este proyecto y pasarlo a En curso?',
+        `¿${isActive ? 'Terminar' : 'Reactivar'} proyecto?`,
+        {
+            confirmButtonText: `Sí, ${actionLabel}`,
+            cancelButtonText: 'Cancelar',
+            type: 'warning',
+        }
+    ).then(() => {
+        router.put(route('projects.update-status', project.id), {
+            status: newStatus,
+        }, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                ElNotification.success(`El proyecto ha sido marcado como ${statusLabel}.`);
+            },
+            onError: () => {
+                ElNotification.error('No se pudo actualizar el estado del proyecto.');
+            },
+        });
+    }).catch(() => {
+        // Usuario canceló
     });
 };
 
@@ -257,6 +291,7 @@ watch(() => adminAssignForm.project_id, () => {
                         @view="handleView"
                         @start="handleStartWork"
                         @stop="handleStopWork"
+                        @change-status="handleChangeStatus"
                     />
 
                     <!-- COMPONENTE: CALENDARIO -->

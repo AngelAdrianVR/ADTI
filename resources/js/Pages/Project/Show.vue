@@ -14,6 +14,7 @@ import {
     ChatLineSquare,
     Right
 } from '@element-plus/icons-vue';
+import { ElNotification } from "element-plus";
 
 const props = defineProps({
     project: Object,
@@ -127,6 +128,23 @@ const formatTime = (dateString) => {
 const editProject = () => {
     router.visit(route('projects.edit', props.project.id));
 };
+
+const handleStatusChange = (status) => {
+    router.put(route('projects.update-status', props.project.id), {
+        status: status,
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            ElNotification.success(status === 'finished'
+                ? 'Proyecto marcado como Terminado. Las sesiones activas se detuvieron.'
+                : 'Proyecto reactivado a En curso.');
+        },
+        onError: () => {
+            ElNotification.error('No se pudo actualizar el estado del proyecto.');
+        },
+    });
+};
 </script>
 
 <template>
@@ -146,7 +164,26 @@ const editProject = () => {
                                 <el-icon><OfficeBuilding /></el-icon>
                                 <span>{{ project.client }}</span>
                                 <span class="text-gray-300">|</span>
-                                <el-tag v-if="project.status === 'active'" type="success" size="small" effect="dark" round>En Curso</el-tag>
+                                <!-- Selector rápido de estado (Solo con permiso de edición) -->
+                                <el-select
+                                    v-if="canEdit"
+                                    :model-value="project.status"
+                                    @update:model-value="handleStatusChange"
+                                    size="small"
+                                    class="!w-32 status-select"
+                                >
+                                    <el-option label="En Curso" value="active">
+                                        <span class="flex items-center gap-2">
+                                            <span class="w-2 h-2 rounded-full bg-green-500"></span> En Curso
+                                        </span>
+                                    </el-option>
+                                    <el-option label="Terminado" value="finished">
+                                        <span class="flex items-center gap-2">
+                                            <span class="w-2 h-2 rounded-full bg-gray-400"></span> Terminado
+                                        </span>
+                                    </el-option>
+                                </el-select>
+                                <el-tag v-else-if="project.status === 'active'" type="success" size="small" effect="dark" round>En Curso</el-tag>
                                 <el-tag v-else type="info" size="small" effect="dark" round>Terminado</el-tag>
                             </div>
                         </div>
