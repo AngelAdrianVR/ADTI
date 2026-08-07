@@ -130,6 +130,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
 
     // --- NÓMINAS (PAYROLLS) ---
     // Rutas personalizadas DEBEN ir antes del resource para evitar conflicto
+    Route::get('payrolls/receipts-by-range', [PayrollController::class, 'receiptsByRange'])->name('payrolls.receipts-by-range');
     Route::get('payrolls/{payroll}/pre-payroll', [PayrollController::class, 'prePayrollTemplate'])->name('payrolls.pre-payroll');
     Route::get('payrolls/{payroll}/receipts', [PayrollController::class, 'receiptsTemplate'])->name('payrolls.receipts');
     Route::get('payrolls/{payroll}/extra-hours-config', [PayrollExtraHoursController::class, 'config'])->name('payrolls.extra-hours-config');
