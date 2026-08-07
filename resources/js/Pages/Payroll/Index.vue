@@ -5,9 +5,14 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import { format, addDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { ElMessage } from 'element-plus';
 
 const props = defineProps({
-    payrolls: Array
+    payrolls: Array,
+    users: {
+        type: Array,
+        default: () => []
+    }
 });
 
 // State
@@ -54,10 +59,118 @@ const handlePageChange = (val) => {
     currentPage.value = val;
 };
 
-// Crear nueva nómina (Opcional, si tienes la ruta)
-const createPayroll = () => {
-    // Lógica para crear nómina si existe
-    // router.visit(route('payrolls.create'));
+// ─── MODAL: Generar Recibos por Rango ───
+const showReceiptsModal = ref(false);
+const dateRange = ref(null);
+const userSearch = ref('');
+const selectedUsers = ref([]);
+
+// Computed: departamentos y usuarios agrupados
+const groupedDepartments = computed(() => {
+    const depts = {};
+    props.users.forEach(u => {
+        const dept = u.department || 'General';
+        if (!depts[dept]) depts[dept] = [];
+        depts[dept].push(u);
+    });
+    return Object.entries(depts)
+        .map(([name, users]) => ({
+            name,
+            users: users.sort((a, b) => a.name.localeCompare(b.name)),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+});
+
+// Filtro por búsqueda dentro del modal
+const filteredUsers = computed(() => {
+    if (!userSearch.value) return props.users;
+    const term = userSearch.value.toLowerCase();
+    return props.users.filter(u =>
+        u.name.toLowerCase().includes(term) || (u.code || '').toLowerCase().includes(term)
+    );
+});
+
+// Usuarios visibles de un departamento según búsqueda (para contadores y checkboxes maestros)
+const getDeptVisibleUsers = (deptName) => {
+    const deptUsers = groupedDepartments.value.find(d => d.name === deptName)?.users || [];
+    if (!userSearch.value) return deptUsers;
+    const term = userSearch.value.toLowerCase();
+    return deptUsers.filter(u =>
+        u.name.toLowerCase().includes(term) || (u.code || '').toLowerCase().includes(term)
+    );
+};
+
+// Checar si un departamento está completamente seleccionado (de los visibles)
+const isDeptSelected = (deptName) => {
+    const visible = getDeptVisibleUsers(deptName);
+    return visible.length > 0 && visible.every(u => selectedUsers.value.includes(u.id));
+};
+
+// Checar si un departamento está parcialmente seleccionado
+const isDeptIndeterminate = (deptName) => {
+    const visible = getDeptVisibleUsers(deptName);
+    const count = visible.filter(u => selectedUsers.value.includes(u.id)).length;
+    return count > 0 && count < visible.length;
+};
+
+// Atajo: seleccionar / deseleccionar todo el departamento
+const toggleDept = (deptName) => {
+    const visible = getDeptVisibleUsers(deptName);
+    const allSelected = isDeptSelected(deptName);
+    if (allSelected) {
+        selectedUsers.value = selectedUsers.value.filter(id => !visible.some(u => u.id === id));
+    } else {
+        const ids = visible.map(u => u.id);
+        selectedUsers.value = [...new Set([...selectedUsers.value, ...ids])];
+    }
+};
+
+// Atajo global: seleccionar / limpiar todo (según búsqueda)
+const toggleSelectAllFiltered = () => {
+    const visibleIds = filteredUsers.value.map(u => u.id);
+    const allSelected = visibleIds.every(id => selectedUsers.value.includes(id));
+    if (allSelected) {
+        selectedUsers.value = selectedUsers.value.filter(id => !visibleIds.includes(id));
+    } else {
+        selectedUsers.value = [...new Set([...selectedUsers.value, ...visibleIds])];
+    }
+};
+
+const allFilteredSelected = computed(() => {
+    return filteredUsers.value.length > 0 && filteredUsers.value.every(u => selectedUsers.value.includes(u.id));
+});
+
+// Abrir modal y resetear estado
+const openReceiptsModal = () => {
+    userSearch.value = '';
+    dateRange.value = null;
+    selectedUsers.value = [];
+    showReceiptsModal.value = true;
+};
+
+// Generar recibos por rango
+const generateRangeReceipts = () => {
+    if (!dateRange.value || !dateRange.value[0] || !dateRange.value[1]) {
+        ElMessage.warning('Selecciona un rango de fechas válido.');
+        return;
+    }
+    if (selectedUsers.value.length === 0) {
+        ElMessage.warning('Selecciona al menos un usuario.');
+        return;
+    }
+    const [start, end] = dateRange.value;
+    // Validar rango máximo de 31 días (equivalente al backend)
+    const daysDiff = Math.round((parseISO(end) - parseISO(start)) / (1000 * 60 * 60 * 24)) + 1;
+    if (daysDiff > 31) {
+        ElMessage.warning('El rango máximo permitido es de 31 días.');
+        return;
+    }
+    const url = route('payrolls.receipts-by-range', {
+        start_date: start,
+        end_date: end,
+        user_ids: selectedUsers.value,
+    });
+    window.open(url, '_blank');
 };
 </script>
 
@@ -84,6 +197,15 @@ const createPayroll = () => {
                             >
                             <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-sm"></i>
                         </div>
+                        <!-- Botón Generar Recibos por Rango -->
+                        <PrimaryButton 
+                            v-if="$page.props.auth.user.permissions.includes('Ver pre-nominas')"
+                            @click="openReceiptsModal"
+                            class="!bg-teal-600 hover:!bg-teal-700 whitespace-nowrap"
+                        >
+                            <i class="fa-solid fa-file-signature mr-2"></i> 
+                            Generar Recibos
+                        </PrimaryButton>
                     </div>
                 </div>
 
@@ -213,6 +335,120 @@ const createPayroll = () => {
                 </div>
 
             </div>
+
+            <!-- Modal: Generar Recibos por Rango -->
+            <el-dialog
+                v-model="showReceiptsModal"
+                title="Generar Recibos por Rango de Fechas"
+                width="680px"
+                class="!rounded-xl"
+            >
+                <div class="space-y-5">
+                    <!-- Rango de fechas -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                            <i class="fa-regular fa-calendar mr-1 text-teal-600"></i>
+                            Rango de fechas
+                        </label>
+                        <el-date-picker
+                            v-model="dateRange"
+                            type="daterange"
+                            range-separator="al"
+                            start-placeholder="Fecha inicial"
+                            end-placeholder="Fecha final"
+                            value-format="YYYY-MM-DD"
+                            format="DD MMM YYYY"
+                            class="w-full"
+                            :clearable="true"
+                        />
+                        <p class="text-xs text-gray-400 mt-1">Máximo 31 días. Puede combinar dos catorcenas.</p>
+                    </div>
+
+                    <!-- Selector de usuarios -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label class="block text-sm font-medium text-gray-700">
+                                <i class="fa-solid fa-users mr-1 text-teal-600"></i>
+                                Colaboradores
+                            </label>
+                            <span class="text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded-full">
+                                {{ selectedUsers.length }} seleccionados
+                            </span>
+                        </div>
+
+                        <!-- Búsqueda + atajos -->
+                        <div class="flex items-center gap-2 mb-2">
+                            <el-input
+                                v-model="userSearch"
+                                placeholder="Buscar por nombre o código..."
+                                clearable
+                                size="small"
+                                class="flex-1"
+                            >
+                                <template #prefix><i class="fa-solid fa-magnifying-glass text-gray-400"></i></template>
+                            </el-input>
+                            <el-button size="small" @click="toggleSelectAllFiltered">
+                                <i class="fa-solid" :class="allFilteredSelected ? 'fa-square-check text-teal-600' : 'fa-square'"></i>
+                                {{ allFilteredSelected ? 'Quitar todos' : 'Seleccionar todos' }}
+                            </el-button>
+                        </div>
+
+                        <!-- Listado agrupado por departamento -->
+                        <div class="max-h-80 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                            <div v-for="dept in groupedDepartments" :key="dept.name">
+                                <!-- Header del departamento -->
+                                <div class="flex items-center justify-between px-3 py-2 bg-gray-50 sticky top-0 z-10">
+                                    <div class="flex items-center gap-2">
+                                        <el-checkbox
+                                            :model-value="isDeptSelected(dept.name)"
+                                            :indeterminate="isDeptIndeterminate(dept.name)"
+                                            @change="toggleDept(dept.name)"
+                                        />
+                                        <span class="font-semibold text-sm text-gray-700">{{ dept.name }}</span>
+                                    </div>
+                                    <span class="text-[10px] text-gray-500 font-bold bg-white border border-gray-200 px-1.5 py-0.5 rounded-full">
+                                        {{ getDeptVisibleUsers(dept.name).filter(u => selectedUsers.includes(u.id)).length }}/{{ getDeptVisibleUsers(dept.name).length }}
+                                    </span>
+                                </div>
+                                <!-- Usuarios del departamento -->
+                                <div class="px-3 py-1.5">
+                                    <label
+                                        v-for="u in getDeptVisibleUsers(dept.name)"
+                                        :key="u.id"
+                                        class="flex items-center gap-2.5 py-1.5 px-1 rounded hover:bg-gray-50 cursor-pointer transition-colors"
+                                    >
+                                        <el-checkbox
+                                            :model-value="selectedUsers.includes(u.id)"
+                                            @change="
+                                                selectedUsers.includes(u.id)
+                                                    ? selectedUsers = selectedUsers.filter(id => id !== u.id)
+                                                    : selectedUsers = [...selectedUsers, u.id]
+                                            "
+                                        />
+                                        <span class="w-6 text-center text-[10px] font-mono text-gray-400">{{ u.id }}</span>
+                                        <span class="text-sm text-gray-800 truncate">{{ u.name }}</span>
+                                        <span v-if="u.code" class="text-[10px] text-gray-400 font-mono ml-auto">{{ u.code }}</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <template #footer>
+                    <div class="flex justify-end gap-2">
+                        <el-button @click="showReceiptsModal = false">Cancelar</el-button>
+                        <el-button
+                            type="primary"
+                            @click="generateRangeReceipts"
+                            class="!bg-teal-600 !border-teal-600 hover:!bg-teal-700"
+                        >
+                            <i class="fa-solid fa-file-signature mr-2"></i>
+                            Generar Recibos
+                        </el-button>
+                    </div>
+                </template>
+            </el-dialog>
         </main>
     </AppLayout>
 </template>
@@ -228,5 +464,10 @@ const createPayroll = () => {
     font-weight: 600;
     text-transform: uppercase;
     font-size: 0.75rem;
+}
+
+/* Formato del selector de rango: capitalizar mes para mostrar "28 Jul 2026" */
+:deep(.el-date-editor--daterange .el-range-input) {
+    text-transform: capitalize;
 }
 </style>
