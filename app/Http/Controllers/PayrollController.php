@@ -320,6 +320,65 @@ class PayrollController extends Controller
         return inertia('Payroll/PayrollReceiptTemplate',  $processedData);
     }
 
+    /**
+     * Lista ligera de catorcenas por año para el selector del panel de tiempo extra.
+     * Solo se devuelve id, biweekly, start_date e is_active para no saturar la respuesta.
+     */
+    public function catorcenas(Request $request)
+    {
+        $year = $request->integer('year');
+
+        // Años que tienen al menos una nómina (para el selector de año)
+        $years = Payroll::query()
+            ->selectRaw('YEAR(start_date) as year')
+            ->groupBy('year')
+            ->orderByDesc('year')
+            ->pluck('year')
+            ->map(fn ($y) => (int) $y)
+            ->values();
+
+        // Catorcenas del año seleccionado (solo datos ligeros)
+        $payrollsQuery = Payroll::query()->select('id', 'biweekly', 'start_date', 'is_active');
+        if ($year) {
+            $payrollsQuery->whereYear('start_date', $year);
+        }
+
+        $payrolls = $payrollsQuery
+            ->orderBy('start_date')
+            ->get()
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'biweekly' => $p->biweekly,
+                'start_date' => $p->start_date->toDateString(),
+                'is_active' => (bool) $p->is_active,
+            ]);
+
+        // Catorcena "en curso": la activa o, si no hay ninguna, la más reciente
+        $currentPayroll = Payroll::query()
+            ->orderByRaw('is_active DESC, start_date DESC')
+            ->first(['id', 'biweekly', 'start_date', 'is_active']);
+
+        return response()->json([
+            'years' => $years,
+            'payrolls' => $payrolls,
+            'current_payroll' => $currentPayroll ? [
+                'id' => $currentPayroll->id,
+                'biweekly' => $currentPayroll->biweekly,
+                'start_date' => $currentPayroll->start_date->toDateString(),
+                'is_active' => (bool) $currentPayroll->is_active,
+            ] : null,
+        ]);
+    }
+
+    /**
+     * Información completa de una catorcena para el panel de tiempo extra.
+     * Se carga únicamente cuando el usuario selecciona una catorcena distinta.
+     */
+    public function extraTimeData(Payroll $payroll)
+    {
+        return response()->json($this->getUserProcessedInfo($payroll));
+    }
+
     private function getEligibleUsersForSelector()
     {
         $currentUser = auth()->user();

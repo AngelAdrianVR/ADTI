@@ -131,6 +131,9 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     // --- NÓMINAS (PAYROLLS) ---
     // Rutas personalizadas DEBEN ir antes del resource para evitar conflicto
     Route::get('payrolls/receipts-by-range', [PayrollController::class, 'receiptsByRange'])->name('payrolls.receipts-by-range');
+    // Lista ligera de catorcenas por año y datos completos por catorcena (panel de tiempo extra)
+    Route::get('payrolls/catorcenas', [PayrollController::class, 'catorcenas'])->name('payrolls.catorcenas');
+    Route::get('payrolls/{payroll}/extra-time-data', [PayrollController::class, 'extraTimeData'])->name('payrolls.extra-time-data');
     Route::get('payrolls/{payroll}/pre-payroll', [PayrollController::class, 'prePayrollTemplate'])->name('payrolls.pre-payroll');
     Route::get('payrolls/{payroll}/receipts', [PayrollController::class, 'receiptsTemplate'])->name('payrolls.receipts');
     Route::get('payrolls/{payroll}/extra-hours-config', [PayrollExtraHoursController::class, 'config'])->name('payrolls.extra-hours-config');
