@@ -6,7 +6,7 @@ import { ElMessage } from 'element-plus';
 import { useExtraTimeFilters } from '@/Composables/payroll/useExtraTimeFilters.js';
 import { useExtraTimeRecords } from '@/Composables/payroll/useExtraTimeRecords.js';
 import { useExtraTimeActions } from '@/Composables/payroll/useExtraTimeActions.js';
-import { useApprovalHierarchy } from '@/Composables/payroll/useApprovalHierarchy.js';
+import { useApprovalHierarchy, computeActionPermission, computeCanRevert } from '@/Composables/payroll/useApprovalHierarchy.js';
 import ExtraTimeUnifiedView from '@/Components/MyComponents/Payroll/ExtraTimeUnifiedView.vue';
 
 const props = defineProps({
@@ -45,24 +45,77 @@ const payrollDateRange = computed(() => {
     };
 });
 
-// ─── Composables (siempre basados en la catorcena ACTIVA) ───
-const filters = useExtraTimeFilters(localPayrollUsers, payrollDateRange);
+// ─── Modo RANGO: filtrado por fechas a través de catorcenas ───
+const isRangeMode = ref(false);
+const rangeRecords = ref([]);
+const rangePayrolls = ref([]);
+const loadingRangeData = ref(false);
+let rangeRequestId = 0;
+
+// Fuente de datos: la catorcena seleccionada o, en modo rango, los registros combinados
+const recordsSource = computed(() => {
+    if (isRangeMode.value) {
+        const map = {};
+        (rangeRecords.value || []).forEach(r => {
+            if (!map[r.user.id]) map[r.user.id] = { user: r.user, incidences: [] };
+            map[r.user.id].incidences.push(r.incidence);
+        });
+        return Object.values(map);
+    }
+    return localPayrollUsers.value;
+});
+
+// ─── Composables (siempre basados en la catorcena ACTIVA o en el rango) ───
+const filters = useExtraTimeFilters(recordsSource, payrollDateRange);
 const hierarchy = useApprovalHierarchy(localApprovalGroups, authUserId);
 
-// IDs de empleados en scope: null = sin jerarquía configurada (se ven todos)
+// Rango de fechas personalizado (distinto al de la catorcena actual) → modo rango
+const appliedRange = computed(() => {
+    const from = filters.dateFrom.value;
+    const to = filters.dateTo.value;
+    if (!from || !to) return null;
+    const defStart = payrollDateRange.value?.start || '';
+    const defEnd = payrollDateRange.value?.end || '';
+    // Si coincide con la catorcena actual, no es un rango personalizado
+    if (from === defStart && to === defEnd) return null;
+    return { start: from, end: to };
+});
+
+// Jerarquía por registro (cada catorcena puede tener sus propios grupos de autorización)
+const rangeHierarchy = computed(() => {
+    const groupsByPayroll = new Map(
+        (rangePayrolls.value || []).map(p => [Number(p.id), p.approval_groups || []])
+    );
+    const cid = Number(authUserId.value) || null;
+    return {
+        isCurrentUserApprover: true,
+        myLevelIds: new Set(),
+        myEmployeeIds: new Set(),
+        getActionPermission: (incidence) =>
+            computeActionPermission(incidence, groupsByPayroll.get(Number(incidence.payroll_id)) || [], cid),
+        canRevertDecision: (incidence) =>
+            computeCanRevert(incidence, groupsByPayroll.get(Number(incidence.payroll_id)) || [], cid),
+    };
+});
+
+// Jerarquía activa según el modo
+const activeHierarchy = computed(() => (isRangeMode.value ? rangeHierarchy.value : hierarchy));
+
+// IDs de empleados en scope: null = sin jerarquía o modo rango (el backend ya filtra por catorcena)
 const scopedEmployeeIds = computed(() => {
+    if (isRangeMode.value) return null;
     if (!localApprovalGroups.value || localApprovalGroups.value.length === 0) return null;
     return hierarchy.myEmployeeIds.value;
 });
 
-const records = useExtraTimeRecords(localPayrollUsers, filters, scopedEmployeeIds);
+const records = useExtraTimeRecords(recordsSource, filters, scopedEmployeeIds);
 
 // Contar cuántos registros son accionables por el usuario actual
 const actionableCount = computed(() => {
-    if (!hierarchy.isCurrentUserApprover.value) return 0;
+    if (!activeHierarchy.value.isCurrentUserApprover) return 0;
     let count = 0;
     records.unifiedRecords.value.forEach(record => {
-        const perm = hierarchy.getActionPermission(record.incidence);
+        const perm = activeHierarchy.value.getActionPermission(record.incidence);
         if (perm.canAct && perm.isMyEmployee) count++;
     });
     return count;
@@ -71,7 +124,7 @@ const actionableCount = computed(() => {
 // ¿Se deben mostrar los botones de acción masiva?
 const canDoMassActions = computed(() => {
     if (!localApprovalGroups.value || localApprovalGroups.value.length === 0) return true;
-    if (!hierarchy.isCurrentUserApprover.value) return false;
+    if (!activeHierarchy.value.isCurrentUserApprover) return false;
     return actionableCount.value > 0;
 });
 
@@ -105,20 +158,97 @@ async function refreshActivePayroll() {
     }
 }
 
-// Interceptar 'updated' para refrescar la catorcena activa y propagarlo al padre
+// Interceptar 'updated' para refrescar la fuente activa y propagarlo al padre
 function actionsEmit(event, ...args) {
     if (event === 'updated') {
-        refreshActivePayroll();
+        if (isRangeMode.value) {
+            refreshRangeData();
+        } else {
+            refreshActivePayroll();
+        }
     }
     emit(event, ...args);
+}
+
+// Refrescar los registros del rango activo tras una acción (sin tocar las fechas)
+async function refreshRangeData() {
+    const range = appliedRange.value;
+    if (!range) return;
+    const requestId = ++rangeRequestId;
+    loadingRangeData.value = true;
+    records.isLoadingData.value = true;
+    try {
+        const { data } = await axios.get(route('payrolls.extra-time-by-range'), {
+            params: { start_date: range.start, end_date: range.end },
+        });
+        if (requestId !== rangeRequestId) return; // ignorar respuestas obsoletas
+        rangeRecords.value = data.records || [];
+        rangePayrolls.value = data.payrolls || [];
+        records.clearEditableRecords();
+        records.initializeEditableRecords();
+    } catch (e) {
+        if (requestId === rangeRequestId) {
+            ElMessage.error('No se pudo actualizar la información del rango');
+            records.isLoadingData.value = false;
+        }
+    } finally {
+        if (requestId === rangeRequestId) {
+            records.isLoadingData.value = false;
+        }
+        loadingRangeData.value = false;
+    }
 }
 
 const actions = useExtraTimeActions(
     localPayrollId,
     records.editableRecords,
-    hierarchy,
+    activeHierarchy,
     actionsEmit
 );
+
+// ─── Modo rango: cargar / limpiar registros a través de catorcenas ───
+async function enterRangeMode(range) {
+    isRangeMode.value = true;
+    const requestId = ++rangeRequestId;
+    loadingRangeData.value = true;
+    records.isLoadingData.value = true;
+    try {
+        const { data } = await axios.get(route('payrolls.extra-time-by-range'), {
+            params: { start_date: range.start, end_date: range.end },
+        });
+        if (requestId !== rangeRequestId) return; // ignorar respuestas obsoletas
+        rangeRecords.value = data.records || [];
+        rangePayrolls.value = data.payrolls || [];
+        records.clearEditableRecords();
+        records.initializeEditableRecords();
+    } catch (e) {
+        const msg = e.response?.data?.error || 'No se pudieron cargar los registros del rango';
+        ElMessage.error(msg);
+        if (requestId === rangeRequestId) {
+            isRangeMode.value = false;
+            filters.dateFrom.value = '';
+            filters.dateTo.value = '';
+        }
+    } finally {
+        if (requestId === rangeRequestId) {
+            records.isLoadingData.value = false;
+        }
+        loadingRangeData.value = false;
+    }
+}
+
+function exitRangeMode() {
+    isRangeMode.value = false;
+    rangeRecords.value = [];
+    rangePayrolls.value = [];
+    records.clearEditableRecords();
+    records.initializeEditableRecords();
+}
+
+function clearRangeFilter() {
+    filters.dateFrom.value = '';
+    filters.dateTo.value = '';
+}
 
 // ─── Navegación entre catorcenas (lista ligera: solo id, biweekly y fecha) ───
 const availableYears = ref([]);
@@ -262,6 +392,22 @@ function handleYearChange() {
     loadCatorcenas();
 }
 
+// Al cambiar el rango de fechas → cargar registros a través de catorcenas
+watch(appliedRange, async (range) => {
+    if (!range) {
+        if (isRangeMode.value) exitRangeMode();
+        return;
+    }
+    // Rango invertido (Desde > Hasta) → avisar y limpiar
+    if (range.start > range.end) {
+        ElMessage.warning('La fecha inicial debe ser anterior a la final.');
+        filters.dateFrom.value = '';
+        filters.dateTo.value = '';
+        return;
+    }
+    await enterRangeMode(range);
+});
+
 // ─── v-model ───
 const isVisible = computed({
     get: () => props.modelValue,
@@ -316,8 +462,11 @@ watch(() => props.payrollUsers, () => {
             localApprovalGroups.value = props.approvalGroups || [];
             localPayrollStartDate.value = props.payrollStartDate;
             localPayrollId.value = props.payrollId;
-            records.initializeEditableRecords();
-            filters.resetFilters();
+            // En modo rango no se tocan las fechas ni los registros del rango
+            if (!isRangeMode.value) {
+                records.initializeEditableRecords();
+                filters.resetFilters();
+            }
         }
     }
 }, { deep: true });
@@ -346,7 +495,7 @@ watch(() => props.payrollUsers, () => {
                 v-model="selectedYear"
                 placeholder="Año"
                 class="!w-28"
-                :disabled="loadingPayrollData || actions.isProcessing.value"
+                :disabled="loadingPayrollData || actions.isProcessing.value || isRangeMode"
                 @change="handleYearChange"
             >
                 <el-option v-for="y in availableYears" :key="y" :label="String(y)" :value="y" />
@@ -359,7 +508,7 @@ watch(() => props.payrollUsers, () => {
                 class="!w-80"
                 filterable
                 :loading="loadingCatorcenas"
-                :disabled="loadingPayrollData || actions.isProcessing.value"
+                :disabled="loadingPayrollData || actions.isProcessing.value || isRangeMode"
                 @change="handlePayrollChange"
             >
                 <el-option
@@ -371,8 +520,11 @@ watch(() => props.payrollUsers, () => {
             </el-select>
 
             <!-- Indicadores de estado -->
-            <span v-if="loadingPayrollData" class="flex items-center gap-2 text-xs text-indigo-600 font-semibold">
-                <i class="fa-solid fa-circle-notch animate-spin"></i> Cargando catorcena...
+            <span v-if="loadingPayrollData || (isRangeMode && loadingRangeData)" class="flex items-center gap-2 text-xs text-indigo-600 font-semibold">
+                <i class="fa-solid fa-circle-notch animate-spin"></i> Cargando...
+            </span>
+            <span v-else-if="isRangeMode" class="text-[11px] bg-teal-100 text-teal-700 px-2 py-1 rounded-full font-bold border border-teal-200">
+                <i class="fa-solid fa-calendar-range mr-1"></i> Rango de fechas
             </span>
             <span v-else-if="isViewingOtherPayroll" class="text-[11px] bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-bold border border-amber-200">
                 <i class="fa-solid fa-clock-rotate-left mr-1"></i> Viendo otra catorcena
@@ -380,6 +532,28 @@ watch(() => props.payrollUsers, () => {
             <span v-else class="text-[11px] bg-green-100 text-green-700 px-2 py-1 rounded-full font-bold border border-green-200">
                 <i class="fa-solid fa-check mr-1"></i> Catorcena actual
             </span>
+        </div>
+
+        <!-- Aviso de modo rango (filtrando por fechas a través de catorcenas) -->
+        <div v-if="isRangeMode" class="mb-4 flex flex-wrap items-center justify-between gap-2 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
+            <div class="flex items-center gap-2 text-sm text-teal-800">
+                <i class="fa-solid fa-calendar-range text-teal-600"></i>
+                <span>
+                    Mostrando tiempo extra pendiente del
+                    <strong>{{ filters.dateFrom.value }}</strong> al <strong>{{ filters.dateTo.value }}</strong>
+                    <template v-if="rangePayrolls.length > 1"> · {{ rangePayrolls.length }} catorcenas</template>
+                </span>
+                <span v-if="loadingRangeData" class="flex items-center gap-1 text-xs text-teal-600 font-semibold">
+                    <i class="fa-solid fa-circle-notch animate-spin"></i> Actualizando...
+                </span>
+            </div>
+            <button
+                @click="clearRangeFilter"
+                class="inline-flex items-center gap-1.5 text-xs font-bold text-teal-700 bg-white border border-teal-300 hover:bg-teal-100 rounded px-2.5 py-1 transition-colors"
+                :disabled="actions.isProcessing.value"
+            >
+                <i class="fa-solid fa-xmark"></i> Limpiar fechas
+            </button>
         </div>
 
         <!-- Filtros -->
@@ -460,7 +634,7 @@ watch(() => props.payrollUsers, () => {
                     :processingGroup="actions.processingGroup.value"
                     :processingType="actions.processingType.value"
                     :activeFiltersLabel="filters.activeFiltersLabel.value"
-                    :hierarchy="hierarchy"
+                    :hierarchy="activeHierarchy"
                     :approvalGroups="localApprovalGroups"
                     :actionableCount="actionableCount"
                     @approve-single="actions.approveSingle"

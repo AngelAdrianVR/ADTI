@@ -133,6 +133,8 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::get('payrolls/receipts-by-range', [PayrollController::class, 'receiptsByRange'])->name('payrolls.receipts-by-range');
     // Lista ligera de catorcenas por año y datos completos por catorcena (panel de tiempo extra)
     Route::get('payrolls/catorcenas', [PayrollController::class, 'catorcenas'])->name('payrolls.catorcenas');
+    // Registros de tiempo extra pendiente por rango de fechas (a través de catorcenas)
+    Route::get('payrolls/extra-time-by-range', [PayrollController::class, 'extraTimeByRange'])->name('payrolls.extra-time-by-range');
     Route::get('payrolls/{payroll}/extra-time-data', [PayrollController::class, 'extraTimeData'])->name('payrolls.extra-time-data');
     Route::get('payrolls/{payroll}/pre-payroll', [PayrollController::class, 'prePayrollTemplate'])->name('payrolls.pre-payroll');
     Route::get('payrolls/{payroll}/receipts', [PayrollController::class, 'receiptsTemplate'])->name('payrolls.receipts');

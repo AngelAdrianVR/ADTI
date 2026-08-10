@@ -1,9 +1,10 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, router, Link } from '@inertiajs/vue3';
+import { Head, router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import ExtraTimeManagementModal from './Partials/ExtraTimeManagementModal.vue';
+import { useApprovalHierarchy } from '@/Composables/payroll/useApprovalHierarchy.js';
 import { format, addDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ElMessage } from 'element-plus';
@@ -13,7 +14,27 @@ const props = defineProps({
     users: {
         type: Array,
         default: () => []
+    },
+    // Grupos de autorización de la catorcena en curso (para saber si el usuario es aprobador)
+    currentPayrollApprovalGroups: {
+        type: Array,
+        default: () => []
     }
+});
+
+// ─── ¿El usuario actual es aprobador de tiempo extra? ───
+const page = usePage();
+const authUserId = computed(() => page.props?.auth?.user?.id || null);
+const approvalGroupsRef = computed(() => props.currentPayrollApprovalGroups || []);
+const hierarchy = useApprovalHierarchy(approvalGroupsRef, authUserId);
+
+// El botón de "Gestionar horas extra" solo aparece para aprobadores.
+// Con jerarquía configurada: solo quienes son aprobadores en algún nivel.
+// Sin jerarquía (modo directo): quienes tengan el permiso pueden aprobar directamente.
+const canManageExtraTime = computed(() => {
+    if (!page.props?.auth?.user?.permissions?.includes('Aprobar tiempo extra')) return false;
+    if (approvalGroupsRef.value.length === 0) return true; // modo directo (sin grupos)
+    return hierarchy.isCurrentUserApprover.value;
 });
 
 // State
@@ -194,9 +215,9 @@ const generateRangeReceipts = () => {
                     </div>
                     
                     <div class="flex items-center gap-2 w-full sm:w-auto">
-                        <!-- Botón: Gestionar horas extra (sin entrar a una catorcena) -->
+                        <!-- Botón: Gestionar horas extra (solo aprobadores) -->
                         <PrimaryButton 
-                            v-if="$page.props.auth.user.permissions.includes('Aprobar tiempo extra')"
+                            v-if="canManageExtraTime"
                             @click="openExtraTimeManager"
                             class="!bg-indigo-600 hover:!bg-indigo-700 whitespace-nowrap"
                         >
