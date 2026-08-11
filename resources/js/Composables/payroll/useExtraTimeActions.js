@@ -11,9 +11,17 @@ export function useExtraTimeActions(payrollId, editableRecords, hierarchy, emit)
     const bulkProgress = ref(0);
     const bulkActionType = ref(null);
 
-    // Ruta a usar: POST con parámetro de nómina (unref desenvuelve el Ref de Vue)
-    function getApproveRoute() {
-        return route('payrolls.extra-hours-decide', unref(payrollId));
+    // Jerarquía activa: acepta el objeto del composable o un ref/computed
+    // (en modo rango se evalúa por registro con los grupos de cada catorcena).
+    function getActiveHierarchy() {
+        return hierarchy && typeof hierarchy.value !== 'undefined' ? hierarchy.value : hierarchy;
+    }
+
+    // Ruta a usar: POST con parámetro de nómina (unref desenvuelve el Ref de Vue).
+    // En modo rango, cada registro puede pertenecer a una catorcena distinta.
+    function getApproveRoute(record) {
+        const pid = record?.incidence?.payroll_id ?? unref(payrollId);
+        return route('payrolls.extra-hours-decide', pid);
     }
 
     // ─── Individual ───
@@ -24,7 +32,7 @@ export function useExtraTimeActions(payrollId, editableRecords, hierarchy, emit)
         processingRow.value = key;
         processingType.value = 'approve';
         try {
-            await axios.post(getApproveRoute(), {
+            await axios.post(getApproveRoute(record), {
                 payroll_user_id: record.incidence.id,
                 status: 'approved',
                 approved_extra_hours: data?.hours ?? record.incidence.extra_hours,
@@ -85,7 +93,7 @@ export function useExtraTimeActions(payrollId, editableRecords, hierarchy, emit)
         processingRow.value = key;
         processingType.value = 'reject';
         try {
-            await axios.post(getApproveRoute(), {
+            await axios.post(getApproveRoute(record), {
                 payroll_user_id: record.incidence.id,
                 status: 'rejected',
                 comments: '',
@@ -150,8 +158,9 @@ export function useExtraTimeActions(payrollId, editableRecords, hierarchy, emit)
     // ─── Por empleado ───
     async function approveEmployee(group) {
         // Filtrar solo los accionables (no decididos aún)
+        const activeHierarchy = getActiveHierarchy();
         const actionable = group.records.filter(r => {
-            const perm = hierarchy.getActionPermission(r.incidence);
+            const perm = activeHierarchy.getActionPermission(r.incidence);
             return perm.canAct && !perm.alreadyDecided;
         });
         if (actionable.length === 0) {
@@ -172,7 +181,7 @@ export function useExtraTimeActions(payrollId, editableRecords, hierarchy, emit)
 
             await Promise.all(actionable.map(record => {
                 const data = editableRecords.value[`${record.user.id}_${record.date}`];
-                return axios.post(getApproveRoute(), {
+                return axios.post(getApproveRoute(record), {
                     payroll_user_id: record.incidence.id,
                     status: 'approved',
                     approved_extra_hours: data?.hours ?? record.incidence.extra_hours,
@@ -193,8 +202,9 @@ export function useExtraTimeActions(payrollId, editableRecords, hierarchy, emit)
     }
 
     async function rejectEmployee(group) {
+        const activeHierarchy = getActiveHierarchy();
         const actionable = group.records.filter(r => {
-            const perm = hierarchy.getActionPermission(r.incidence);
+            const perm = activeHierarchy.getActionPermission(r.incidence);
             return perm.canAct && !perm.alreadyDecided;
         });
         if (actionable.length === 0) {
@@ -215,7 +225,7 @@ export function useExtraTimeActions(payrollId, editableRecords, hierarchy, emit)
 
             await Promise.all(actionable.map(record => {
                 const data = editableRecords.value[`${record.user.id}_${record.date}`];
-                return axios.post(getApproveRoute(), {
+                return axios.post(getApproveRoute(record), {
                     payroll_user_id: record.incidence.id,
                     status: 'rejected',
                     comments: '',
@@ -255,7 +265,7 @@ export function useExtraTimeActions(payrollId, editableRecords, hierarchy, emit)
                 const chunk = records.slice(i, i + chunkSize);
                 await Promise.all(chunk.map(record => {
                     const data = editableRecords.value[`${record.user.id}_${record.date}`];
-                    return axios.post(getApproveRoute(), {
+                    return axios.post(getApproveRoute(record), {
                         payroll_user_id: record.incidence.id,
                         status: 'approved',
                         approved_extra_hours: data?.hours ?? record.incidence.extra_hours,
@@ -300,7 +310,7 @@ export function useExtraTimeActions(payrollId, editableRecords, hierarchy, emit)
                 const chunk = records.slice(i, i + chunkSize);
                 await Promise.all(chunk.map(record => {
                     const data = editableRecords.value[`${record.user.id}_${record.date}`];
-                    return axios.post(getApproveRoute(), {
+                    return axios.post(getApproveRoute(record), {
                         payroll_user_id: record.incidence.id,
                         status: 'rejected',
                         comments: data?.comments ?? '',

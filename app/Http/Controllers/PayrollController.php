@@ -23,7 +23,20 @@ class PayrollController extends Controller
         // Usuarios elegibles para el selector de recibos por rango
         $users = $this->getEligibleUsersForSelector();
 
-        return inertia('Payroll/Index', compact('payrolls', 'users'));
+        // Grupos de autorización de la catorcena en curso (para saber si el
+        // usuario actual es aprobador y mostrarle el botón de horas extra)
+        $currentPayroll = Payroll::query()
+            ->orderByRaw('is_active DESC, start_date DESC')
+            ->first();
+
+        $currentPayrollApprovalGroups = [];
+        if ($currentPayroll) {
+            $currentPayrollApprovalGroups = $this->formatApprovalGroups(
+                $currentPayroll->approvalGroups()->with(['employees', 'levels.approvers'])->get()
+            );
+        }
+
+        return inertia('Payroll/Index', compact('payrolls', 'users', 'currentPayrollApprovalGroups'));
     }
 
     /**
@@ -318,6 +331,257 @@ class PayrollController extends Controller
         $processedData = $this->getUserProcessedInfo($payroll, $userIds);
 
         return inertia('Payroll/PayrollReceiptTemplate',  $processedData);
+    }
+
+    /**
+     * Lista ligera de catorcenas por año para el selector del panel de tiempo extra.
+     * Solo se devuelve id, biweekly, start_date e is_active para no saturar la respuesta.
+     */
+    public function catorcenas(Request $request)
+    {
+        $year = $request->integer('year');
+
+        // Años que tienen al menos una nómina (para el selector de año)
+        $years = Payroll::query()
+            ->selectRaw('YEAR(start_date) as year')
+            ->groupBy('year')
+            ->orderByDesc('year')
+            ->pluck('year')
+            ->map(fn ($y) => (int) $y)
+            ->values();
+
+        // Catorcenas del año seleccionado (solo datos ligeros)
+        $payrollsQuery = Payroll::query()->select('id', 'biweekly', 'start_date', 'is_active');
+        if ($year) {
+            $payrollsQuery->whereYear('start_date', $year);
+        }
+
+        $payrolls = $payrollsQuery
+            ->orderBy('start_date')
+            ->get()
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'biweekly' => $p->biweekly,
+                'start_date' => $p->start_date->toDateString(),
+                'is_active' => (bool) $p->is_active,
+            ]);
+
+        // Catorcena "en curso": la activa o, si no hay ninguna, la más reciente
+        $currentPayroll = Payroll::query()
+            ->orderByRaw('is_active DESC, start_date DESC')
+            ->first(['id', 'biweekly', 'start_date', 'is_active']);
+
+        return response()->json([
+            'years' => $years,
+            'payrolls' => $payrolls,
+            'current_payroll' => $currentPayroll ? [
+                'id' => $currentPayroll->id,
+                'biweekly' => $currentPayroll->biweekly,
+                'start_date' => $currentPayroll->start_date->toDateString(),
+                'is_active' => (bool) $currentPayroll->is_active,
+            ] : null,
+        ]);
+    }
+
+    /**
+     * Información completa de una catorcena para el panel de tiempo extra.
+     * Se carga únicamente cuando el usuario selecciona una catorcena distinta.
+     */
+    public function extraTimeData(Payroll $payroll)
+    {
+        return response()->json($this->getUserProcessedInfo($payroll));
+    }
+
+    /**
+     * Registros de tiempo extra PENDIENTE dentro de un rango de fechas,
+     * sin importar a qué catorcena pertenezcan.
+     * Se usa desde el filtro de fechas del panel de tiempo extra.
+     */
+    public function extraTimeByRange(Request $request)
+    {
+        $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $startDate = Carbon::parse($request->start_date)->startOfDay();
+        $endDate = Carbon::parse($request->end_date)->endOfDay();
+
+        // Rango razonable para evitar consultas excesivas
+        if ($startDate->diffInDays($endDate) + 1 > 120) {
+            return response()->json(['error' => 'El rango máximo permitido es de 120 días.'], 422);
+        }
+
+        $currentUser = auth()->user();
+
+        // 1. Usuarios visibles según permisos y jerarquía organizacional
+        $query = User::whereNotIn('org_props->position', ['Dirección', 'Soporte DTW'])
+            ->where('is_active', true);
+        if (!$currentUser->can('Ver incidencias')) {
+            if (!empty($currentUser->employees_in_charge)) {
+                $employeesIds = $currentUser->employees_in_charge;
+                if (!in_array($currentUser->id, $employeesIds)) {
+                    $employeesIds[] = $currentUser->id;
+                }
+                $query->whereIn('id', $employeesIds);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+        $visibleUserIds = $query->pluck('id');
+
+        // 2. Catorcenas que se solapan con el rango
+        $payrolls = Payroll::where('start_date', '<=', $endDate->toDateString())
+            ->where('start_date', '>=', $startDate->copy()->subDays(13)->toDateString())
+            ->orderBy('start_date')
+            ->get();
+
+        // 3. Scope de aprobación por catorcena
+        //    (null = sin jerarquía configurada → todos los visibles; [] = aprobador sin empleados)
+        $scopeByPayroll = [];
+        $payrollsData = [];
+        foreach ($payrolls as $payroll) {
+            $groups = $payroll->approvalGroups()->with(['employees', 'levels.approvers'])->get();
+            $scopedIds = null;
+            if ($groups->isNotEmpty()) {
+                $ids = collect();
+                foreach ($groups as $group) {
+                    $isMyGroup = $group->levels->contains(function ($level) use ($currentUser) {
+                        return $level->approvers->contains(function ($approver) use ($currentUser) {
+                            return $approver->id === $currentUser->id;
+                        });
+                    });
+                    if ($isMyGroup) {
+                        $ids = $ids->merge($group->employees->pluck('id'));
+                    }
+                }
+                $scopedIds = $ids->map(fn ($id) => (int) $id)->unique()->values();
+            }
+            $scopeByPayroll[$payroll->id] = $scopedIds;
+            $payrollsData[] = [
+                'id' => $payroll->id,
+                'biweekly' => $payroll->biweekly,
+                'start_date' => $payroll->start_date->toDateString(),
+                'approval_groups' => $this->formatApprovalGroups($groups),
+            ];
+        }
+
+        // 4. Registros con tiempo extra PENDIENTE dentro del rango (por catorcena, con su scope)
+        $records = collect();
+        foreach ($payrolls as $payroll) {
+            $scopedIds = $scopeByPayroll[$payroll->id] ?? null;
+            $payrollUserQuery = PayrollUser::with(['approver', 'project'])
+                ->where('payroll_id', $payroll->id)
+                ->whereIn('user_id', $visibleUserIds)
+                ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->where(function ($q) {
+                    $q->where('extra_hours', '>', 0)->orWhere('extra_minutes', '>', 0);
+                })
+                ->whereNull('approved_at');
+            if ($scopedIds !== null) {
+                $payrollUserQuery->whereIn('user_id', $scopedIds);
+            }
+            $records = $records->merge($payrollUserQuery->get());
+        }
+
+        if ($records->isEmpty()) {
+            return response()->json(['payrolls' => $payrollsData, 'records' => []]);
+        }
+
+        // 5. Decisiones de aprobación para estos registros
+        $allDecisions = ExtraHourApprovalDecision::whereIn('payroll_user_id', $records->pluck('id'))
+            ->with(['approver', 'approvalLevel'])
+            ->get()
+            ->groupBy('payroll_user_id');
+
+        // 6. Comentarios dentro del rango
+        $allComments = PayrollComment::whereIn('payroll_id', $payrolls->pluck('id'))
+            ->whereIn('user_id', $records->pluck('user_id')->unique())
+            ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->get()
+            ->groupBy(fn ($c) => $c->user_id . '_' . $c->date->toDateString());
+
+        // 7. Datos de los usuarios para el encabezado de cada grupo
+        $usersMap = User::whereIn('id', $records->pluck('user_id')->unique())
+            ->get()
+            ->keyBy('id');
+
+        // 8. Formatear registros (misma forma que espera la vista unificada)
+        $formatted = $records->map(function ($inc) use ($allDecisions, $allComments, $usersMap) {
+            $user = $usersMap->get($inc->user_id);
+
+            $decisions = $allDecisions->get($inc->id) ?? collect([]);
+            $inc->approval_decisions = $decisions->map(function ($dec) {
+                return [
+                    'id' => $dec->id,
+                    'level_id' => $dec->approval_level_id,
+                    'level_name' => $dec->approvalLevel->name ?? null,
+                    'approver' => [
+                        'id' => $dec->approver->id,
+                        'name' => $dec->approver->name,
+                        'profile_photo_url' => $dec->approver->profile_photo_url,
+                    ],
+                    'status' => $dec->status,
+                    'comments' => $dec->comments,
+                    'decided_at' => $dec->decided_at,
+                ];
+            })->values();
+
+            // Columnas desnormalizadas del flujo
+            $inc->extra_hour_status = $inc->extra_hour_status ?? 'none';
+            $inc->current_approval_level_id = $inc->current_approval_level_id ?? null;
+
+            // Comentario del día
+            $inc->comment = $allComments->get($inc->user_id . '_' . $inc->date->toDateString())?->first();
+
+            return [
+                'payroll_id' => $inc->payroll_id,
+                'user' => [
+                    'id' => $user->id,
+                    'code' => $user->code,
+                    'name' => $user->name,
+                    'org_props' => $user->org_props,
+                    'profile_photo_url' => $user->profile_photo_url,
+                ],
+                'incidence' => $inc,
+                'date' => $inc->date->toDateString(),
+                'requestedStr' => ($inc->extra_hours ?? 0) . 'h ' . ($inc->extra_minutes ?? 0) . 'm',
+            ];
+        })->values();
+
+        return response()->json([
+            'payrolls' => $payrollsData,
+            'records' => $formatted,
+        ]);
+    }
+
+    /**
+     * Formatea grupos de autorización al formato anidado que consume el frontend:
+     * [{id, name, employee_ids, levels: [{id, level, name, approvers}]}]
+     */
+    private function formatApprovalGroups($groups)
+    {
+        return $groups->map(function ($group) {
+            return [
+                'id' => $group->id,
+                'name' => $group->name,
+                'employee_ids' => $group->employees->pluck('id')->values()->toArray(),
+                'levels' => $group->levels->map(function ($level) {
+                    return [
+                        'id' => $level->id,
+                        'level' => $level->level,
+                        'name' => $level->name,
+                        'approvers' => $level->approvers->map(function ($approver) {
+                            return [
+                                'id' => $approver->id,
+                                'name' => $approver->name,
+                                'profile_photo_url' => $approver->profile_photo_url,
+                            ];
+                        })->values()->toArray(),
+                    ];
+                })->values()->toArray(),
+            ];
+        })->values()->toArray();
     }
 
     private function getEligibleUsersForSelector()
