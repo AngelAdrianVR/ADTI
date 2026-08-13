@@ -191,7 +191,16 @@ const handleCommand = (cmd) => emit('command', cmd);
                     </div>
                 </div>
                 <div v-else-if="day.extra_hours || day.extra_minutes" class="text-[10px] text-amber-600 bg-amber-50 px-1.5 rounded border border-amber-200 text-center leading-tight mt-1">
-                    Extra:<br>{{ day.extra_hours }}h {{ day.extra_minutes }}m
+                    <!-- Mostrar el "acuerdo" ajustado por niveles anteriores si existe -->
+                    <el-tooltip
+                        v-if="(day.proposed_extra_hours ?? null) !== null && `${day.proposed_extra_hours ?? 0}h ${day.proposed_extra_minutes ?? 0}m` !== `${day.extra_hours}h ${day.extra_minutes}m`"
+                        :content="`Original: ${day.extra_hours}h ${day.extra_minutes}m → Ajustado a ${day.proposed_extra_hours ?? 0}h ${day.proposed_extra_minutes ?? 0}m`"
+                        placement="top">
+                        <span>Extra:<br>{{ day.proposed_extra_hours ?? day.extra_hours }}h {{ day.proposed_extra_minutes ?? day.extra_minutes }}m <i class="fa-solid fa-pen-to-square text-[8px]"></i></span>
+                    </el-tooltip>
+                    <template v-else>
+                        Extra:<br>{{ day.extra_hours }}h {{ day.extra_minutes }}m
+                    </template>
                     <span v-if="canSeeMoney && day.cost_per_hour" class="block text-[8px] text-amber-500 mt-0.5">${{ formatMoney(day.cost_per_hour) }}/hr</span>
                     <span v-if="canSeeMoney && day.extra_amount" class="block text-[8px] text-amber-600 font-bold mt-0.5">${{ formatMoney(day.extra_amount) }}</span>
                     <span v-if="canSeeMoney && !day.cost_per_hour && !day.extra_amount" class="block text-[8px] text-amber-500 mt-0.5 italic">Sin costo por hora</span>

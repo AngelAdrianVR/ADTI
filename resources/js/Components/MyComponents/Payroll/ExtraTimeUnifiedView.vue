@@ -137,6 +137,9 @@ function getAllLevelsSummary(record) {
             name: d.approver?.name || '?',
             profile_photo_url: d.approver?.profile_photo_url || '',
             decision: { status: d.status },
+            // Auditoría del ajuste propuesto por este aprobador
+            proposedHours: d.proposed_extra_hours ?? null,
+            proposedMinutes: d.proposed_extra_minutes ?? null,
         });
     });
 
@@ -292,7 +295,16 @@ async function confirmAndRevert(record) {
                                 </td>
                                 <!-- Solicitado -->
                                 <td class="px-4 py-2.5 text-center">
-                                    <span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-mono text-xs font-bold border border-amber-200">{{ record.requestedStr }}</span>
+                                    <el-tooltip
+                                        v-if="record.originalStr && record.originalStr !== record.requestedStr"
+                                        :content="`Original: ${record.originalStr} → Ajustado a ${record.requestedStr}`"
+                                        placement="top">
+                                        <span class="inline-flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-mono text-xs font-bold border border-amber-200">
+                                            {{ record.requestedStr }}
+                                            <i class="fa-solid fa-pen-to-square text-[9px]"></i>
+                                        </span>
+                                    </el-tooltip>
+                                    <span v-else class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-mono text-xs font-bold border border-amber-200">{{ record.requestedStr }}</span>
                                 </td>
                                 <!-- Estatus (GLOBAL) -->
                                 <td class="px-4 py-2.5 text-center">
@@ -329,24 +341,34 @@ async function confirmAndRevert(record) {
                                             <!-- Avatares en fila -->
                                             <div class="flex flex-wrap items-end gap-3">
                                                 <div v-for="approver in lvl.approvers" :key="approver.id" class="flex flex-col items-center gap-1">
-                                                    <div class="relative">
-                                                        <img :src="approver.profile_photo_url" 
-                                                            class="w-8 h-8 rounded-full border-2 object-cover"
-                                                            :class="approver.decision?.status === 'approved' 
-                                                                ? 'border-green-400 ring-2 ring-green-200' 
-                                                                : approver.decision?.status === 'rejected'
-                                                                ? 'border-red-400 ring-2 ring-red-200' 
-                                                                : 'border-gray-200'">
-                                                        <span v-if="approver.decision"
-                                                            class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[7px] border-2 border-white"
-                                                            :class="approver.decision.status === 'approved' 
-                                                                ? 'bg-green-500 text-white' 
-                                                                : 'bg-red-500 text-white'">
-                                                            <i :class="approver.decision.status === 'approved' 
-                                                                ? 'fa-solid fa-check' : 'fa-solid fa-xmark'"></i>
-                                                        </span>
-                                                    </div>
+                                                    <el-tooltip
+                                                        :content="`${approver.name}${approver.proposedHours !== null ? ` · dejó ${approver.proposedHours}h ${approver.proposedMinutes ?? 0}m` : ''}`"
+                                                        placement="top">
+                                                        <div class="relative">
+                                                            <img :src="approver.profile_photo_url" 
+                                                                class="w-8 h-8 rounded-full border-2 object-cover"
+                                                                :class="approver.decision?.status === 'approved' 
+                                                                    ? 'border-green-400 ring-2 ring-green-200' 
+                                                                    : approver.decision?.status === 'rejected'
+                                                                    ? 'border-red-400 ring-2 ring-red-200' 
+                                                                    : 'border-gray-200'">
+                                                            <span v-if="approver.decision"
+                                                                class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[7px] border-2 border-white"
+                                                                :class="approver.decision.status === 'approved' 
+                                                                    ? 'bg-green-500 text-white' 
+                                                                    : 'bg-red-500 text-white'">
+                                                                <i :class="approver.decision.status === 'approved' 
+                                                                    ? 'fa-solid fa-check' : 'fa-solid fa-xmark'"></i>
+                                                            </span>
+                                                        </div>
+                                                    </el-tooltip>
                                                     <span class="text-[10px] text-gray-600 max-w-[60px] truncate text-center leading-tight">{{ approver.name.split(' ')[0] }}</span>
+                                                    <!-- Auditoría visible: qué valor dejó este aprobador -->
+                                                    <span v-if="approver.proposedHours !== null && approver.decision?.status === 'approved'"
+                                                        class="text-[8px] font-mono font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 py-0.5 leading-none"
+                                                        :title="`Ajuste propuesto por ${approver.name}`">
+                                                        {{ approver.proposedHours }}h {{ approver.proposedMinutes ?? 0 }}m
+                                                    </span>
                                                 </div>
                                                 <span v-if="lvl.approvers.length === 0" class="text-[10px] text-gray-400 italic">Sin aprobadores asignados</span>
                                             </div>

@@ -97,6 +97,11 @@ class ExtraHourApprovalService
                 }
             }
 
+            // Valor efectivo del acuerdo hasta este punto: el ajuste que envía el
+            // aprobador, o el que ya venía perseguido de niveles anteriores.
+            $proposedHours = $data['approved_extra_hours'] ?? $payrollUser->proposed_extra_hours ?? $payrollUser->extra_hours;
+            $proposedMinutes = $data['approved_extra_minutes'] ?? $payrollUser->proposed_extra_minutes ?? $payrollUser->extra_minutes;
+
             // Registrar decisión solo si hay un nivel formal asignado.
             // En modo directo (current_approval_level_id = NULL), no se inserta
             // en extra_hour_approval_decisions porque la columna approval_level_id es NOT NULL.
@@ -109,6 +114,8 @@ class ExtraHourApprovalService
                     ],
                     [
                         'status' => $status,
+                        'proposed_extra_hours' => $proposedHours,
+                        'proposed_extra_minutes' => $proposedMinutes,
                         'comments' => $data['comments'] ?? null,
                         'decided_at' => now(),
                     ]
@@ -184,6 +191,8 @@ class ExtraHourApprovalService
                     'approved_extra_minutes' => null,
                     'approved_by' => null,
                     'approved_at' => null,
+                    'proposed_extra_hours' => null,
+                    'proposed_extra_minutes' => null,
                 ]);
             }
         });
@@ -213,6 +222,11 @@ class ExtraHourApprovalService
 
     private function advanceOrClose(PayrollUser $payrollUser, ?ExtraHourApprovalLevel $currentLevel, User $approver, string $status, array $data): void
     {
+        // Valor efectivo del acuerdo hasta este punto: el ajuste enviado por el
+        // aprobador actual, o el que ya venía perseguido de niveles anteriores.
+        $proposedHours = $data['approved_extra_hours'] ?? $payrollUser->proposed_extra_hours ?? $payrollUser->extra_hours;
+        $proposedMinutes = $data['approved_extra_minutes'] ?? $payrollUser->proposed_extra_minutes ?? $payrollUser->extra_minutes;
+
         if ($status === 'rejected') {
             // Rechazo → cierre global
             $payrollUser->update([
@@ -222,6 +236,8 @@ class ExtraHourApprovalService
                 'approved_extra_minutes' => 0,
                 'approved_by' => $approver->id,
                 'approved_at' => now(),
+                'proposed_extra_hours' => null,
+                'proposed_extra_minutes' => null,
             ]);
             return;
         }
@@ -232,10 +248,12 @@ class ExtraHourApprovalService
             $payrollUser->update([
                 'extra_hour_status' => 'approved',
                 'current_approval_level_id' => null,
-                'approved_extra_hours' => $data['approved_extra_hours'] ?? $payrollUser->extra_hours,
-                'approved_extra_minutes' => $data['approved_extra_minutes'] ?? $payrollUser->extra_minutes,
+                'approved_extra_hours' => $proposedHours,
+                'approved_extra_minutes' => $proposedMinutes,
                 'approved_by' => $approver->id,
                 'approved_at' => now(),
+                'proposed_extra_hours' => null,
+                'proposed_extra_minutes' => null,
             ]);
             return;
         }
@@ -248,20 +266,25 @@ class ExtraHourApprovalService
             ->first();
 
         if ($nextLevel) {
-            // Avanzar al siguiente nivel
+            // Avanzar al siguiente nivel persistiendo el acuerdo ajustado
+            // para que los niveles siguientes lo vean pre-cargado.
             $payrollUser->update([
                 'extra_hour_status' => 'pending',
                 'current_approval_level_id' => $nextLevel->id,
+                'proposed_extra_hours' => $proposedHours,
+                'proposed_extra_minutes' => $proposedMinutes,
             ]);
         } else {
-            // Último nivel → cierre final
+            // Último nivel → cierre final (hereda el ajuste de niveles anteriores)
             $payrollUser->update([
                 'extra_hour_status' => 'approved',
                 'current_approval_level_id' => null,
-                'approved_extra_hours' => $data['approved_extra_hours'] ?? $payrollUser->extra_hours,
-                'approved_extra_minutes' => $data['approved_extra_minutes'] ?? $payrollUser->extra_minutes,
+                'approved_extra_hours' => $proposedHours,
+                'approved_extra_minutes' => $proposedMinutes,
                 'approved_by' => $approver->id,
                 'approved_at' => now(),
+                'proposed_extra_hours' => null,
+                'proposed_extra_minutes' => null,
             ]);
         }
     }
@@ -293,6 +316,8 @@ class ExtraHourApprovalService
                 'approved_extra_minutes' => null,
                 'approved_by' => null,
                 'approved_at' => null,
+                'proposed_extra_hours' => null,
+                'proposed_extra_minutes' => null,
             ]);
             return;
         }
@@ -310,6 +335,8 @@ class ExtraHourApprovalService
                 'approved_extra_minutes' => null,
                 'approved_by' => null,
                 'approved_at' => null,
+                'proposed_extra_hours' => null,
+                'proposed_extra_minutes' => null,
             ]);
             $this->initializeWorkflow($payrollUser, true);
             return;
@@ -333,6 +360,8 @@ class ExtraHourApprovalService
                     'approved_extra_minutes' => 0,
                     'approved_by' => null,
                     'approved_at' => null,
+                    'proposed_extra_hours' => null,
+                    'proposed_extra_minutes' => null,
                 ]);
                 return;
             }
@@ -346,6 +375,18 @@ class ExtraHourApprovalService
         }
 
         $isFullyApproved = $finalStatus === 'approved';
+
+        // Reconstruir el valor propuesto a partir de la última decisión aprobada
+        // (para que el nivel que retoma el flujo tras un revert vea el acuerdo
+        // de los niveles anteriores, no el valor original).
+        $lastApprovedDecision = null;
+        if (!$isFullyApproved) {
+            $lastApprovedDecision = ExtraHourApprovalDecision::where('payroll_user_id', $payrollUser->id)
+                ->where('status', 'approved')
+                ->orderByDesc('decided_at')
+                ->first();
+        }
+
         $payrollUser->update([
             'extra_hour_status' => $finalStatus,
             'current_approval_level_id' => $isFullyApproved ? null : $currentLevelId,
@@ -355,6 +396,14 @@ class ExtraHourApprovalService
             'approved_extra_minutes' => $isFullyApproved ? $payrollUser->approved_extra_minutes : null,
             'approved_by' => $isFullyApproved ? $payrollUser->approved_by : null,
             'approved_at' => $isFullyApproved ? $payrollUser->approved_at : null,
+            // Propuesto: se limpia al aprobar todo; si queda pendiente, se hereda
+            // el último acuerdo aprobado (o null si nadie ha aprobado aún).
+            'proposed_extra_hours' => $isFullyApproved
+                ? null
+                : ($lastApprovedDecision?->proposed_extra_hours ?? $payrollUser->extra_hours),
+            'proposed_extra_minutes' => $isFullyApproved
+                ? null
+                : ($lastApprovedDecision?->proposed_extra_minutes ?? $payrollUser->extra_minutes),
         ]);
     }
 

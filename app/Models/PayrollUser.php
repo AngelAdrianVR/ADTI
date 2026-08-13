@@ -34,6 +34,9 @@ class PayrollUser extends Pivot
         'approved_extra_minutes',
         'approved_by',
         'approved_at',
+        // Valor ajustado "acordado" perseguido a través del pipeline de aprobación
+        'proposed_extra_hours',
+        'proposed_extra_minutes',
         // Campos de pausa/comida
         'break_start',
         'break_end',

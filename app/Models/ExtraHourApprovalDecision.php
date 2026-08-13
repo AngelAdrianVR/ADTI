@@ -15,6 +15,8 @@ class ExtraHourApprovalDecision extends Model
         'approval_level_id',
         'approver_id',
         'status',
+        'proposed_extra_hours',
+        'proposed_extra_minutes',
         'comments',
         'decided_at',
     ];

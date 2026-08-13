@@ -33,11 +33,22 @@ export function useExtraTimeRecords(payrollUsers, filters, employeeIds = null) {
                     if (!editableRecords.value[key]) {
                         // Si ya fue aprobado, usar los valores aprobados como base
                         const useApproved = inc.approved_at && (inc.approved_extra_hours > 0 || inc.approved_extra_minutes > 0);
-                        editableRecords.value[key] = {
-                            hours: useApproved ? (inc.approved_extra_hours || 0) : (inc.extra_hours || 0),
-                            minutes: useApproved ? (inc.approved_extra_minutes || 0) : (inc.extra_minutes || 0),
-                            comments: inc.comment?.comments || '',
-                        };
+                        if (useApproved) {
+                            editableRecords.value[key] = {
+                                hours: (inc.approved_extra_hours || 0),
+                                minutes: (inc.approved_extra_minutes || 0),
+                                comments: inc.comment?.comments || '',
+                            };
+                        } else {
+                            // Si está pendiente, usar el "acuerdo" perseguido de
+                            // niveles anteriores (el ajuste que hizo el nivel que aprobó)
+                            // para que los siguientes niveles lo vean pre-cargado.
+                            editableRecords.value[key] = {
+                                hours: (inc.proposed_extra_hours ?? inc.extra_hours) || 0,
+                                minutes: (inc.proposed_extra_minutes ?? inc.extra_minutes) || 0,
+                                comments: inc.comment?.comments || '',
+                            };
+                        }
                     }
                 }
             });
@@ -136,6 +147,11 @@ export function useExtraTimeRecords(payrollUsers, filters, employeeIds = null) {
         return Object.values(groups).sort((a, b) => a.user.name.localeCompare(b.user.name));
     });
 
+    // Helper: valor efectivo del "acuerdo" de tiempo extra (propuesto por niveles anteriores si existe)
+    const effectiveHours = (inc) => (inc.proposed_extra_hours ?? inc.extra_hours) || 0;
+    const effectiveMinutes = (inc) => (inc.proposed_extra_minutes ?? inc.extra_minutes) || 0;
+    const effectiveStr = (inc) => `${effectiveHours(inc)}h ${effectiveMinutes(inc)}m`;
+
     // ─── VISTA UNIFICADA: Todos los registros con tiempo extra ───
     const unifiedRecords = computed(() => {
         const records = [];
@@ -153,7 +169,9 @@ export function useExtraTimeRecords(payrollUsers, filters, employeeIds = null) {
                     user: item.user,
                     incidence: inc,
                     date: inc.date.split('T')[0],
-                    requestedStr: `${inc.extra_hours || 0}h ${inc.extra_minutes || 0}m`,
+                    // Mostrar el acuerdo ajustado (si lo hay) como valor principal
+                    requestedStr: effectiveStr(inc),
+                    originalStr: `${inc.extra_hours || 0}h ${inc.extra_minutes || 0}m`,
                 });
             });
         });
@@ -173,7 +191,7 @@ export function useExtraTimeRecords(payrollUsers, filters, employeeIds = null) {
             }
             groups[record.user.id].records.push(record);
             groups[record.user.id].totalMinutes +=
-                (record.incidence.extra_hours || 0) * 60 + (record.incidence.extra_minutes || 0);
+                effectiveHours(record.incidence) * 60 + effectiveMinutes(record.incidence);
         });
         return Object.values(groups).sort((a, b) => a.user.name.localeCompare(b.user.name));
     });

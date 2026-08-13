@@ -245,6 +245,9 @@ class PayrollController extends Controller
                             'profile_photo_url' => $dec->approver->profile_photo_url,
                         ],
                         'status' => $dec->status,
+                        // Auditoría del ajuste propuesto por este aprobador
+                        'proposed_extra_hours' => $dec->proposed_extra_hours ?? null,
+                        'proposed_extra_minutes' => $dec->proposed_extra_minutes ?? null,
                         'comments' => $dec->comments,
                         'decided_at' => $dec->decided_at,
                     ];
@@ -253,6 +256,9 @@ class PayrollController extends Controller
                 // Columnas desnormalizadas del flujo
                 $incidence->extra_hour_status = $incidence->extra_hour_status ?? 'none';
                 $incidence->current_approval_level_id = $incidence->current_approval_level_id ?? null;
+                // Acuerdo de tiempo extra perseguido a través de niveles
+                $incidence->proposed_extra_hours = $incidence->proposed_extra_hours ?? null;
+                $incidence->proposed_extra_minutes = $incidence->proposed_extra_minutes ?? null;
             }
 
             return [
@@ -522,6 +528,9 @@ class PayrollController extends Controller
                         'profile_photo_url' => $dec->approver->profile_photo_url,
                     ],
                     'status' => $dec->status,
+                    // Auditoría del ajuste propuesto por este aprobador
+                    'proposed_extra_hours' => $dec->proposed_extra_hours ?? null,
+                    'proposed_extra_minutes' => $dec->proposed_extra_minutes ?? null,
                     'comments' => $dec->comments,
                     'decided_at' => $dec->decided_at,
                 ];
@@ -530,6 +539,9 @@ class PayrollController extends Controller
             // Columnas desnormalizadas del flujo
             $inc->extra_hour_status = $inc->extra_hour_status ?? 'none';
             $inc->current_approval_level_id = $inc->current_approval_level_id ?? null;
+            // Acuerdo de tiempo extra perseguido a través de niveles
+            $inc->proposed_extra_hours = $inc->proposed_extra_hours ?? null;
+            $inc->proposed_extra_minutes = $inc->proposed_extra_minutes ?? null;
 
             // Comentario del día
             $inc->comment = $allComments->get($inc->user_id . '_' . $inc->date->toDateString())?->first();
@@ -835,6 +847,9 @@ class PayrollController extends Controller
                             'profile_photo_url' => $dec->approver->profile_photo_url,
                         ],
                         'status' => $dec->status,
+                        // Auditoría del ajuste propuesto por este aprobador
+                        'proposed_extra_hours' => $dec->proposed_extra_hours ?? null,
+                        'proposed_extra_minutes' => $dec->proposed_extra_minutes ?? null,
                         'comments' => $dec->comments,
                         'decided_at' => $dec->decided_at,
                     ];
@@ -843,6 +858,9 @@ class PayrollController extends Controller
                 // Columnas desnormalizadas del flujo (vienen directo de payroll_user)
                 $incidence->extra_hour_status = $incidence->extra_hour_status ?? 'none';
                 $incidence->current_approval_level_id = $incidence->current_approval_level_id ?? null;
+                // Acuerdo de tiempo extra perseguido a través de niveles
+                $incidence->proposed_extra_hours = $incidence->proposed_extra_hours ?? null;
+                $incidence->proposed_extra_minutes = $incidence->proposed_extra_minutes ?? null;
             }
 
             return [

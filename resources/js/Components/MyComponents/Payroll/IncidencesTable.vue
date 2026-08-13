@@ -89,7 +89,10 @@ const stats = computed(() => {
                 extraAmountApproved += (day.extra_amount || 0);
             }
         } else if (day.extra_hours || day.extra_minutes) {
-            extraMinutesPending += (day.extra_hours || 0) * 60 + (day.extra_minutes || 0);
+            // Usar el "acuerdo" ajustado por niveles anteriores si existe
+            const effectiveHours = day.proposed_extra_hours ?? day.extra_hours;
+            const effectiveMinutes = day.proposed_extra_minutes ?? day.extra_minutes;
+            extraMinutesPending += (effectiveHours || 0) * 60 + (effectiveMinutes || 0);
             extraAmountPending += (day.extra_amount || 0);
         }
         if (day.late) lateMinutes += day.late;
@@ -135,8 +138,10 @@ const handleCommand = (command) => {
     } else if (action === 'approve_extra_time') {
         const r = props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(date)));
         approveForm.payroll_user_id = r?.id || null;
-        approveForm.approved_extra_hours = r?.extra_hours || 0;
-        approveForm.approved_extra_minutes = r?.extra_minutes || 0;
+        const proposedHours = (r?.proposed_extra_hours ?? r?.extra_hours) || 0;
+        const proposedMinutes = (r?.proposed_extra_minutes ?? r?.extra_minutes) || 0;
+        approveForm.approved_extra_hours = proposedHours;
+        approveForm.approved_extra_minutes = proposedMinutes;
         approveForm.comments = r?.comment?.comments || '';
         showApproveModal.value = true;
     } else if (action === 'revert_extra_time') {
