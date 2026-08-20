@@ -191,12 +191,16 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     });
 
     // --- PROYECTOS & TIME TRACKING ---
+    // Métricas globales (debe ir ANTES del resource para no chocar con projects/{project})
+    Route::get('projects/extra-time/global-metrics', [ProjectController::class, 'globalExtraTimeMetrics'])->name('projects.extra-time.global-metrics');
     Route::resource('projects', ProjectController::class);
     Route::post('projects/{project}/start', [ProjectController::class, 'startWork'])->name('projects.start');
     Route::post('projects/{project}/pause', [ProjectController::class, 'togglePause'])->name('projects.pause');
     Route::post('projects/{project}/stop', [ProjectController::class, 'stopWork'])->name('projects.stop');
     Route::post('projects/add-time-entry', [ProjectController::class, 'addTimeEntry'])->name('projects.add-time-entry');
     Route::put('projects/{project}/status', [ProjectController::class, 'updateStatus'])->name('projects.update-status');
+    // Métricas de costos y horas extra por proyecto
+    Route::get('projects/{project}/extra-time-metrics', [ProjectController::class, 'extraTimeMetrics'])->name('projects.extra-time-metrics');
 
     // marcar tarea como terminada/pendiente
     Route::put('tasks/{task}/toggle-status', [ProjectController::class, 'toggleTaskStatus'])->name('tasks.toggle-status');

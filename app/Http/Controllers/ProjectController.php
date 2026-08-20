@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\DefaultTask;
 use App\Models\Department;
+use App\Models\PayrollUser;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\ProjectExtraTimeMetricsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -266,6 +268,9 @@ class ProjectController extends Controller
             'start_time' => now(),
         ]);
 
+        // Sincronización simple: vincular el proyecto a la asistencia del día si existe
+        $this->linkPayrollProjectToDate($user->id, $project->id);
+
         return back()->with('message', "Trabajo iniciado para {$user->name}.");
     }
 
@@ -304,6 +309,9 @@ class ProjectController extends Controller
             'total_duration_seconds' => $duration - $entry->total_pause_seconds,
             'is_paused' => false,
         ]);
+
+        // Sincronización simple: vincular el proyecto a la asistencia del día si existe
+        $this->linkPayrollProjectToDate($entry->user_id, $entry->project_id, $now);
     }
 
     public function addTimeEntry(Request $request)
@@ -329,6 +337,9 @@ class ProjectController extends Controller
             'total_duration_seconds' => $durationSeconds,
             'is_paused' => false,
         ]);
+
+        // Sincronización simple: vincular el proyecto a la asistencia del día indicado
+        $this->linkPayrollProjectToDate($request->user_id, $request->project_id, Carbon::parse($request->date));
 
         return back()->with('message', 'Tiempo agregado correctamente.');
     }
@@ -362,5 +373,62 @@ class ProjectController extends Controller
         }
 
         return back()->with('message', $message);
+    }
+
+    // --- MÉTRICAS DE COSTOS Y HORAS EXTRA ---
+
+    /**
+     * Métricas de costos y horas extra de un proyecto (KPIs, desglose por empleado
+     * e histórico diario). Usado por la pestaña "Costos y horas extra".
+     */
+    public function extraTimeMetrics(Request $request, Project $project)
+    {
+        $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+        ]);
+
+        $startDate = $request->start_date ? Carbon::parse($request->start_date)->startOfDay() : null;
+        $endDate = $request->end_date ? Carbon::parse($request->end_date)->endOfDay() : null;
+
+        $metrics = app(ProjectExtraTimeMetricsService::class)->forProject($project, $startDate, $endDate);
+
+        return response()->json($metrics);
+    }
+
+    /**
+     * Métricas globales: ranking de proyectos con mayor impacto financiero por
+     * tiempo extra y ranking de empleados con más horas extra acumuladas.
+     * Usado por el panel "Métricas globales" de la lista de proyectos.
+     */
+    public function globalExtraTimeMetrics(Request $request)
+    {
+        $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+        ]);
+
+        $startDate = $request->start_date ? Carbon::parse($request->start_date)->startOfDay() : null;
+        $endDate = $request->end_date ? Carbon::parse($request->end_date)->endOfDay() : null;
+
+        $metrics = app(ProjectExtraTimeMetricsService::class)->globalMetrics($startDate, $endDate);
+
+        return response()->json($metrics);
+    }
+
+    /**
+     * Sincronización simple (mejor esfuerzo): al registrar tiempo en un proyecto,
+     * si existe una asistencia (PayrollUser) para ese usuario/fecha y aún no tiene
+     * proyecto vinculado, se le asigna. Así el tiempo extra aprobado de incidencias
+     * se refleja automáticamente en el tiempo invertido del proyecto.
+     */
+    private function linkPayrollProjectToDate(int $userId, int $projectId, ?Carbon $date = null)
+    {
+        $date = $date ?? Carbon::now();
+
+        PayrollUser::where('user_id', $userId)
+            ->whereDate('date', $date->toDateString())
+            ->whereNull('project_id')
+            ->update(['project_id' => $projectId]);
     }
 }

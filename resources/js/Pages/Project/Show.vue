@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import ExtraTimeMetricsPanel from './Partials/ExtraTimeMetricsPanel.vue';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
@@ -382,6 +383,11 @@ const handleStatusChange = (status) => {
                                     </el-table-column>
                                 </el-table>
                             </div>
+                        </el-tab-pane>
+
+                        <!-- TAB 3: Costos y horas extra -->
+                        <el-tab-pane name="extra-time" label="Costos y horas extra">
+                            <ExtraTimeMetricsPanel :project-id="project.id" />
                         </el-tab-pane>
 
                     </el-tabs>

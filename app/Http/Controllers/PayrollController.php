@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ExtraHourApprovalDecision;
+use App\Services\ExtraHourCostResolver;
 use App\Models\Holiday;
 use App\Models\Payroll;
 use App\Models\PayrollComment;
@@ -630,36 +631,7 @@ class PayrollController extends Controller
 
     private function resolveCostPerHour($dateObj, $userId, $extraHourCosts)
     {
-        if ($extraHourCosts->isEmpty()) return 0;
-
-        $dayOfWeek = $dateObj->dayOfWeek; // 0=Dom, 6=Sáb
-        $isWeekend = ($dayOfWeek === 0 || $dayOfWeek === 6);
-        $rangeType = $isWeekend ? 'weekend' : 'weekday';
-
-        // 1. Costo específico para ESTE usuario + día
-        $cost = $extraHourCosts->first(fn($c) =>
-            $c->user_id === $userId && $c->range_type === 'specific' && $c->day_of_week === $dayOfWeek
-        );
-        // 2. Costo por rango para ESTE usuario
-        if (!$cost) {
-            $cost = $extraHourCosts->first(fn($c) =>
-                $c->user_id === $userId && $c->range_type === $rangeType
-            );
-        }
-        // 3. Costo general específico del día
-        if (!$cost) {
-            $cost = $extraHourCosts->first(fn($c) =>
-                $c->user_id === null && $c->range_type === 'specific' && $c->day_of_week === $dayOfWeek
-            );
-        }
-        // 4. Costo general por rango
-        if (!$cost) {
-            $cost = $extraHourCosts->first(fn($c) =>
-                $c->user_id === null && $c->range_type === $rangeType
-            );
-        }
-
-        return $cost ? (float) $cost->cost_per_hour : 0;
+        return app(ExtraHourCostResolver::class)->resolve($dateObj, $userId, $extraHourCosts);
     }
 
     private function getUserProcessedInfo(Payroll $payroll, $userIds = null)

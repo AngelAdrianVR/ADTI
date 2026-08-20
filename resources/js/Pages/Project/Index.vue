@@ -4,12 +4,14 @@ import { router, usePage, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import ProjectList from './Partials/ProjectList.vue';
 import ProjectCalendar from './Partials/ProjectCalendar.vue';
+import GlobalMetricsPanel from './Partials/GlobalMetricsPanel.vue';
 import { ElNotification, ElMessageBox } from "element-plus";
 import { 
     Search, 
     Plus, 
     List,
     Calendar,
+    DataAnalysis,
     Connection,
     User,
     VideoPlay,
@@ -241,10 +243,14 @@ watch(() => adminAssignForm.project_id, () => {
                             <button @click="viewMode = 'calendar'" class="px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2" :class="viewMode === 'calendar' ? 'bg-gray-100 text-[#1676A2]' : 'text-gray-500 hover:bg-gray-50'">
                                 <el-icon><Calendar /></el-icon> Calendario
                             </button>
+                            <div class="w-px h-4 bg-gray-200 mx-1"></div>
+                            <button @click="viewMode = 'metrics'" class="px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2" :class="viewMode === 'metrics' ? 'bg-gray-100 text-[#1676A2]' : 'text-gray-500 hover:bg-gray-50'">
+                                <el-icon><DataAnalysis /></el-icon> Métricas
+                            </button>
                         </div>
 
                         <!-- Buscador -->
-                        <div class="w-full sm:w-64">
+                        <div v-if="viewMode !== 'metrics'" class="w-full sm:w-64">
                             <el-input v-model="search" placeholder="Buscar proyecto..." clearable>
                                 <template #prefix><el-icon><Search /></el-icon></template>
                             </el-input>
@@ -252,7 +258,7 @@ watch(() => adminAssignForm.project_id, () => {
                         
                         <!-- Botón Asignar Tarea (Solo Admin) -->
                         <el-button 
-                            v-if="canManageTime" 
+                            v-if="viewMode !== 'metrics' && canManageTime" 
                             type="warning" 
                             plain
                             @click="openAdminAssignModal" 
@@ -262,14 +268,14 @@ watch(() => adminAssignForm.project_id, () => {
                         </el-button>
 
                         <!-- Botón Crear -->
-                        <el-button v-if="canCreate" type="primary" @click="createProject" color="#1676A2" class="!rounded-lg w-full sm:w-auto">
+                        <el-button v-if="viewMode !== 'metrics' && canCreate" type="primary" @click="createProject" color="#1676A2" class="!rounded-lg w-full sm:w-auto">
                             <el-icon class="mr-2"><Plus /></el-icon> Nuevo
                         </el-button>
                     </div>
                 </div>
 
-                <!-- CONTENIDO PRINCIPAL -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden min-h-[600px] animate-fade-in">
+                <!-- CONTENIDO PRINCIPAL (Lista / Calendario) -->
+                <div v-if="viewMode !== 'metrics'" class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden min-h-[600px] animate-fade-in">
                     
                     <!-- Tabs -->
                      <el-tabs v-if="viewMode === 'list'" v-model="activeTab" class="px-6 pt-4 project-tabs">
@@ -296,7 +302,7 @@ watch(() => adminAssignForm.project_id, () => {
 
                     <!-- COMPONENTE: CALENDARIO -->
                     <ProjectCalendar 
-                        v-else
+                        v-else-if="viewMode === 'calendar'"
                         :projects="filteredProjects"
                         :active-entry="activeEntry"
                         @view="handleView"
@@ -304,6 +310,11 @@ watch(() => adminAssignForm.project_id, () => {
                         @stop="handleStopWork"
                     />
 
+                </div>
+
+                <!-- VISTA: MÉTRICAS GLOBALES DE TIEMPO EXTRA -->
+                <div v-else class="animate-fade-in">
+                    <GlobalMetricsPanel />
                 </div>
             </div>
         </main>
