@@ -34,6 +34,8 @@ class ProjectExtraTimeMetricsService
      *     total_cost: float,
      *     employees: Collection,
      *     daily: Collection,
+     *     monthly_series: array,
+     *     work_type_breakdown: array,
      * }
      */
     public function forProject(Project $project, ?CarbonInterface $startDate = null, ?CarbonInterface $endDate = null): array
@@ -44,7 +46,15 @@ class ProjectExtraTimeMetricsService
 
         $costsByPayroll = $this->loadCostsByPayroll($links->pluck('payrollUser.payroll_id'));
 
-        $daily = $links->map(function ($link) use ($costsByPayroll) {
+        $monthly = [];
+        $workTypeBreakdown = [
+            'internal_hours' => 0.0,
+            'internal_cost' => 0.0,
+            'external_hours' => 0.0,
+            'external_cost' => 0.0,
+        ];
+
+        $daily = $links->map(function ($link) use ($costsByPayroll, &$monthly, &$workTypeBreakdown) {
             $pu = $link->payrollUser;
             $hours = $link->hours;
             if ($hours <= 0 || !$pu) {
@@ -56,6 +66,29 @@ class ProjectExtraTimeMetricsService
                 (int) $pu->user_id,
                 $costsByPayroll->get($pu->payroll_id, collect())
             );
+            $amount = round($hours * $costPerHour, 2);
+
+            // Serie mensual y desglose interno/externo (solo este proyecto)
+            $monthKey = $pu->date->format('Y-m');
+            $monthly[$monthKey] ??= [
+                'month' => $monthKey,
+                'internal_hours' => 0.0,
+                'internal_cost' => 0.0,
+                'external_hours' => 0.0,
+                'external_cost' => 0.0,
+            ];
+
+            if ($link->work_type === 'external') {
+                $monthly[$monthKey]['external_hours'] += $hours;
+                $monthly[$monthKey]['external_cost'] += $amount;
+                $workTypeBreakdown['external_hours'] += $hours;
+                $workTypeBreakdown['external_cost'] += $amount;
+            } else {
+                $monthly[$monthKey]['internal_hours'] += $hours;
+                $monthly[$monthKey]['internal_cost'] += $amount;
+                $workTypeBreakdown['internal_hours'] += $hours;
+                $workTypeBreakdown['internal_cost'] += $amount;
+            }
 
             return [
                 'user' => [
@@ -66,7 +99,7 @@ class ProjectExtraTimeMetricsService
                 'date' => $pu->date->toDateString(),
                 'cost_per_hour' => $costPerHour,
                 'hours' => $hours,
-                'amount' => round($hours * $costPerHour, 2),
+                'amount' => $amount,
             ];
         })
             ->filter()
@@ -90,6 +123,21 @@ class ProjectExtraTimeMetricsService
             'total_cost' => round($daily->sum('amount'), 2),
             'employees' => $employees,
             'daily' => $daily->groupBy('user.id'),
+            'monthly_series' => $this->buildMonthlySeries($monthly, $startDate, $endDate),
+            'work_type_breakdown' => [
+                'internal_hours' => round($workTypeBreakdown['internal_hours'], 2),
+                'internal_cost' => round($workTypeBreakdown['internal_cost'], 2),
+                'external_hours' => round($workTypeBreakdown['external_hours'], 2),
+                'external_cost' => round($workTypeBreakdown['external_cost'], 2),
+                'total_hours' => round(
+                    $workTypeBreakdown['internal_hours'] + $workTypeBreakdown['external_hours'],
+                    2
+                ),
+                'total_cost' => round(
+                    $workTypeBreakdown['internal_cost'] + $workTypeBreakdown['external_cost'],
+                    2
+                ),
+            ],
         ];
     }
 

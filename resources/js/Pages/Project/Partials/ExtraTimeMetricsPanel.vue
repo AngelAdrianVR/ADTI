@@ -1,8 +1,12 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { ElNotification } from 'element-plus';
-import { Refresh, Clock, Coin, Calendar, ArrowRight } from '@element-plus/icons-vue';
+import { Refresh, Clock, Coin, Calendar, ArrowRight, TrendCharts } from '@element-plus/icons-vue';
+import VueApexCharts from 'vue3-apexcharts';
 import axios from 'axios';
+
+// Registro local del componente ApexCharts para usarlo como <apexchart> en el template.
+const apexchart = VueApexCharts;
 
 const props = defineProps({
     projectId: {
@@ -17,6 +21,15 @@ const metrics = ref({
     total_cost: 0,
     employees: [],
     daily: {},
+    monthly_series: [],
+    work_type_breakdown: {
+        internal_hours: 0,
+        internal_cost: 0,
+        external_hours: 0,
+        external_cost: 0,
+        total_hours: 0,
+        total_cost: 0,
+    },
 });
 const dateRange = ref(null);
 const selectedEmployee = ref(null); // { user, rows }
@@ -38,6 +51,77 @@ const formatDate = (dateString) => {
     const [y, m, d] = dateString.split('-');
     return `${d}/${m}/${y}`;
 };
+
+// ─── Gráfica mensual de tiempo extra (interno vs externo) ───
+const monthlySeries = computed(() => metrics.value.monthly_series || []);
+
+const chartLabels = computed(() => monthlySeries.value.map((m) => {
+    if (!m.month) return '';
+    const [y, mo] = m.month.split('-').map(Number);
+    const name = new Date(y, mo - 1, 1).toLocaleString('es-MX', { month: 'short' }).replace('.', '');
+    const cap = `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+    return `${cap} '${String(y).slice(2)}`;
+}));
+
+const chartSeries = computed(() => {
+    const months = monthlySeries.value;
+    return [
+        { name: 'Trabajo interno', data: months.map(m => m.internal_hours) },
+        { name: 'Trabajo externo', data: months.map(m => m.external_hours) },
+        { name: 'Total', data: months.map(m => Math.round(((m.internal_hours || 0) + (m.external_hours || 0)) * 100) / 100) },
+    ];
+});
+
+const chartOptions = computed(() => ({
+    chart: {
+        type: 'line',
+        height: 320,
+        toolbar: { show: true, tools: { download: true }, export: { csv: { filename: 'tiempo-extra-mensual-proyecto' } } },
+        zoom: { enabled: false },
+        fontFamily: 'inherit',
+        foreColor: '#64748b',
+        animations: { enabled: true, easing: 'easeinout', speed: 500 },
+    },
+    colors: ['#1676A2', '#F97316', '#9CA3AF'],
+    stroke: { curve: 'smooth', width: [3, 3, 2], dashArray: [0, 0, 6] },
+    fill: { opacity: 1, type: 'solid' },
+    dataLabels: { enabled: false },
+    markers: { size: 3.5, strokeWidth: 0, hover: { size: 5 } },
+    legend: { position: 'bottom', horizontalAlign: 'center', fontSize: '12px' },
+    grid: { borderColor: '#e5e7eb', strokeDashArray: 4, padding: { left: 10, right: 10 } },
+    xaxis: {
+        categories: chartLabels.value,
+        axisBorder: { show: false },
+        axisTicks: { show: false },
+        labels: { style: { fontSize: '11px', fontWeight: 500 } },
+        tooltip: { enabled: false },
+    },
+    yaxis: {
+        labels: { formatter: (value) => `${Number(value).toFixed(1)}`, style: { fontSize: '11px' } },
+        title: { text: 'Horas extra', style: { fontSize: '10px', fontWeight: 600, color: '#94a3b8' } },
+    },
+    tooltip: {
+        shared: true,
+        intersect: false,
+        y: {
+            formatter: (value) => (value === undefined || value === null ? '' : `${Number(value).toFixed(2)} h`),
+        },
+    },
+    noData: { text: 'Sin datos para mostrar', align: 'center', verticalAlign: 'middle' },
+}));
+
+// ─── Desglose interno / externo ───
+const workType = computed(() => metrics.value.work_type_breakdown || {});
+
+const workTypeBars = computed(() => {
+    const total = Number(workType.value.total_hours) || 0;
+    if (total <= 0) return { internal: 0, external: 0 };
+    const internal = ((Number(workType.value.internal_hours) || 0) / total) * 100;
+    return {
+        internal,
+        external: Math.max(0, 100 - internal),
+    };
+});
 
 const loadMetrics = async () => {
     loading.value = true;
@@ -123,6 +207,65 @@ onMounted(loadMetrics);
                     <p class="text-2xl font-bold text-gray-800 mt-1">{{ formatCurrency(metrics.total_cost) }}</p>
                     <p class="text-xs text-gray-500 mt-1">Por tiempo extra aprobado</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- Carga mensual de tiempo extra (gráfica interno vs externo) -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="px-5 pt-4">
+                <h3 class="text-base font-bold text-gray-800">Carga de tiempo extra en el proyecto</h3>
+                <p class="text-xs text-gray-500 mt-0.5">Horas extra mensuales por tipo de trabajo en este proyecto (días con tiempo extra aprobado).</p>
+            </div>
+            <div v-if="monthlySeries.length > 0" class="px-2 sm:px-5 pt-1 pb-2">
+                <apexchart type="line" height="320" :options="chartOptions" :series="chartSeries" />
+            </div>
+            <div v-else class="flex flex-col items-center justify-center py-12 text-gray-400">
+                <el-icon class="text-3xl mb-2 opacity-60"><TrendCharts /></el-icon>
+                <p class="text-sm">Sin datos de tiempo extra aprobado para este proyecto en el rango seleccionado.</p>
+            </div>
+        </div>
+
+        <!-- Desglose interno vs externo -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="px-5 pt-4">
+                <h3 class="text-base font-bold text-gray-800">Desglose interno vs externo</h3>
+                <p class="text-xs text-gray-500 mt-0.5">Distribución del tiempo extra aprobado de este proyecto según el tipo de trabajo del día vinculado.</p>
+            </div>
+            <div class="p-5 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="rounded-xl border border-teal-200 bg-teal-50/60 p-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2 text-teal-700">
+                                <i class="fa-solid fa-building"></i>
+                                <span class="font-bold text-sm">Trabajo interno</span>
+                            </div>
+                            <span class="text-[10px] font-bold uppercase text-teal-600 bg-white border border-teal-200 rounded-full px-2 py-0.5">{{ workTypeBars.internal.toFixed(1) }}%</span>
+                        </div>
+                        <p class="text-2xl font-bold text-teal-700 mt-2">{{ formatHours(workType.internal_hours) }}</p>
+                        <p class="text-xs text-teal-600 mt-0.5">Costo: {{ formatCurrency(workType.internal_cost) }}</p>
+                    </div>
+
+                    <div class="rounded-xl border border-orange-200 bg-orange-50/60 p-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2 text-orange-700">
+                                <i class="fa-solid fa-earth-americas"></i>
+                                <span class="font-bold text-sm">Trabajo externo</span>
+                            </div>
+                            <span class="text-[10px] font-bold uppercase text-orange-600 bg-white border border-orange-200 rounded-full px-2 py-0.5">{{ workTypeBars.external.toFixed(1) }}%</span>
+                        </div>
+                        <p class="text-2xl font-bold text-orange-600 mt-2">{{ formatHours(workType.external_hours) }}</p>
+                        <p class="text-xs text-orange-600 mt-0.5">Costo: {{ formatCurrency(workType.external_cost) }}</p>
+                    </div>
+                </div>
+
+                <!-- Barra proporcional -->
+                <div class="h-2.5 w-full rounded-full overflow-hidden flex bg-gray-100">
+                    <div class="h-full bg-teal-500" :style="{ width: workTypeBars.internal + '%' }"></div>
+                    <div class="h-full bg-orange-500" :style="{ width: workTypeBars.external + '%' }"></div>
+                </div>
+                <p class="text-xs text-gray-400">
+                    Total en este proyecto: {{ formatHours(workType.total_hours) }} · {{ formatCurrency(workType.total_cost) }}
+                </p>
             </div>
         </div>
 

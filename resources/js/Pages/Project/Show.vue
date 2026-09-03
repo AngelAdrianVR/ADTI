@@ -265,7 +265,7 @@ const handleStatusChange = (status) => {
                     <el-tabs v-model="activeTab" class="px-6 pt-4 project-tabs">
                         
                         <!-- TAB 1: Descripción y Tareas -->
-                        <el-tab-pane name="tasks" label="Detalle de Tareas">
+                        <el-tab-pane name="tasks" label="Detalle de tareas">
                             <div class="py-4">
                                 <div v-if="project.description" class="mb-8 bg-gray-50 p-4 rounded-lg border border-gray-100">
                                     <h3 class="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
@@ -338,7 +338,7 @@ const handleStatusChange = (status) => {
                         </el-tab-pane>
 
                         <!-- TAB 2: Registro de Tiempos -->
-                        <el-tab-pane name="times" label="Historial Detallado">
+                        <el-tab-pane name="times" label="Historial detallado">
                             <div class="py-4">
                                 <el-table :data="project.time_entries" style="width: 100%" empty-text="No hay registros de tiempo aún">
                                     <el-table-column label="Colaborador" min-width="200">

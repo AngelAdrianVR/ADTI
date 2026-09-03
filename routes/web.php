@@ -23,6 +23,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\Subcategory;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -258,6 +259,69 @@ Route::get('/fix-approved-decisions', function () {
 Route::get('/repair-orphan-extra-hours', function () {
     Artisan::call('extra-hours:repair-orphan-states');
     return 'Reparación de estados huérfanos completada.';
+});
+
+// Backfill: migra las vinculaciones existentes (payroll_user.project_id) hacia la
+// tabla pivote payroll_user_project (cuando la tabla se crea a mano en producción vía SQL).
+// Lógica equivalente al backfill de la migración 2026_09_02_000001_create_payroll_user_project_table.
+Route::get('/backfill-payroll-user-project', function () {
+    // Mapa de departamentos (nombre -> id) para resolver el departamento del empleado.
+    $deptMap = DB::table('departments')->pluck('id', 'name');
+
+    // Filas "legacy": registros de payroll_user que aún tienen un solo proyecto vinculado.
+    $legacy = DB::table('payroll_user as pu')
+        ->join('users as u', 'u.id', '=', 'pu.user_id')
+        ->select([
+            'pu.id as payroll_user_id',
+            'pu.project_id',
+            'pu.approved_extra_hours',
+            'pu.approved_extra_minutes',
+            'pu.extra_hours',
+            'pu.extra_minutes',
+            'u.org_props',
+        ])
+        ->whereNotNull('pu.project_id')
+        ->get();
+
+    [$inserted, $skipped] = DB::transaction(function () use ($legacy, $deptMap) {
+        $inserted = 0;
+        $skipped = 0;
+        $now = now();
+
+        foreach ($legacy as $row) {
+            // Idempotente: si la vinculación ya existe en la pivote, se omite.
+            $alreadyLinked = DB::table('payroll_user_project')
+                ->where('payroll_user_id', $row->payroll_user_id)
+                ->where('project_id', $row->project_id)
+                ->exists();
+
+            if ($alreadyLinked) {
+                $skipped++;
+                continue;
+            }
+
+            $orgProps = json_decode($row->org_props ?? '{}', true);
+            $departmentName = $orgProps['department'] ?? null;
+
+            DB::table('payroll_user_project')->insert([
+                'payroll_user_id' => $row->payroll_user_id,
+                'project_id' => $row->project_id,
+                'department_id' => $departmentName ? ($deptMap[$departmentName] ?? null) : null,
+                'work_type' => 'internal',
+                // Tiempo extra: el aprobado, o el solicitado si aún no se aprueba.
+                'extra_hours' => $row->approved_extra_hours ?? $row->extra_hours,
+                'extra_minutes' => $row->approved_extra_minutes ?? $row->extra_minutes,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            $inserted++;
+        }
+
+        return [$inserted, $skipped];
+    });
+
+    return "Backfill payroll_user_project completado. Insertados: {$inserted}, omitidos (ya existentes): {$skipped}.";
 });
 
 // --- OTROS / API ---

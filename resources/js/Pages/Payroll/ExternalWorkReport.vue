@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -56,6 +57,35 @@ const periodLabel = () => {
     };
     return labels[props.period_type] || props.period_type || '';
 };
+
+const capitalize = (value) => {
+    if (!value) return '';
+    return value.charAt(0).toUpperCase() + value.slice(1);
+};
+
+// Etiqueta legible del periodo en español, calculada desde las fechas del reporte
+// (el backend entrega rangeLabel con nombres de mes en inglés vía Carbon).
+const periodRangeLabel = computed(() => {
+    const start = props.start_date ? parseISO(props.start_date) : null;
+    const end = props.end_date ? parseISO(props.end_date) : null;
+
+    if (!start || !end || !isValid(start) || !isValid(end)) {
+        return props.rangeLabel || '';
+    }
+
+    if (props.period_type === 'custom') {
+        return `${format(start, 'dd/MM/yyyy')} al ${format(end, 'dd/MM/yyyy')}`;
+    }
+
+    if (props.period_type === 'bimonthly' || props.period_type === 'quadrimester') {
+        const startLabel = capitalize(format(start, 'MMMM', { locale: es }));
+        const endLabel = capitalize(format(end, 'MMMM yyyy', { locale: es }));
+        return `${startLabel} – ${endLabel}`;
+    }
+
+    // Mensual (y cualquier otro caso)
+    return capitalize(format(start, 'MMMM yyyy', { locale: es }));
+});
 </script>
 
 <template>
@@ -89,7 +119,7 @@ const periodLabel = () => {
                         <p class="text-xs text-gray-500 uppercase tracking-widest mt-1">Personal que trabaja fuera de las instalaciones</p>
                     </div>
                     <div class="text-right text-xs text-gray-600 space-y-1">
-                        <p><span class="font-bold">Periodo:</span> {{ rangeLabel || `${start_date} → ${end_date}` }}</p>
+                        <p><span class="font-bold">Periodo:</span> {{ periodRangeLabel }}</p>
                         <p><span class="font-bold">Tipo:</span> {{ periodLabel() }}</p>
                         <p><span class="font-bold">Generado:</span> {{ generated_at }}</p>
                     </div>

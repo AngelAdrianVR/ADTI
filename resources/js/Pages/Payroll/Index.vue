@@ -89,6 +89,12 @@ const handlePageChange = (val) => {
 
 // ─── MODAL: Reporte de personal en trabajo externo ───
 const canViewExternalReport = computed(() => (page.props?.auth?.user?.permissions || []).includes('Ver incidencias'));
+const canReceipts = computed(() => (page.props?.auth?.user?.permissions || []).includes('Ver pre-nominas'));
+const showReportsMenu = computed(() => canReceipts.value || canViewExternalReport.value);
+const handleReportCommand = (command) => {
+    if (command === 'receipts') openReceiptsModal();
+    if (command === 'external') openExternalReportModal();
+};
 const showExternalReportModal = ref(false);
 const reportPeriodType = ref('monthly');
 const reportYear = ref(new Date().getFullYear());
@@ -101,6 +107,31 @@ const reportPeriodOptions = computed(() => {
     if (reportPeriodType.value === 'quadrimester') return { count: 3, label: 'Cuatrimestre' };
     return { count: 0, label: '' };
 });
+
+const capitalizeFirst = (value) => (value ? value.charAt(0).toUpperCase() + value.slice(1) : value);
+
+// Meses (1-12) que abarca un bimestre/cuatrimestre según su índice dentro del año.
+const periodMonthsRange = (index) => {
+    if (reportPeriodType.value === 'bimonthly') {
+        const start = ((index - 1) * 2) + 1;
+        return [start, start + 1];
+    }
+    if (reportPeriodType.value === 'quadrimester') {
+        const start = ((index - 1) * 4) + 1;
+        return [start, start + 3];
+    }
+    return [index, index];
+};
+
+const monthName = (month) =>
+    new Date(reportYear.value, month - 1, 1).toLocaleString('es-MX', { month: 'long' });
+
+// Rótulo de cada opción: "Bimestre 2 (Marzo – Abril)" / "Cuatrimestre 3 (Septiembre – Diciembre)"
+const reportPeriodOptionLabel = (index) => {
+    const label = reportPeriodOptions.value.label;
+    const [from, to] = periodMonthsRange(index);
+    return `${label} ${index} (${capitalizeFirst(monthName(from))} – ${capitalizeFirst(monthName(to))})`;
+};
 
 const openExternalReportModal = () => {
     reportPeriodType.value = 'monthly';
@@ -278,24 +309,26 @@ const generateRangeReceipts = () => {
                             >
                             <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-sm"></i>
                         </div>
-                        <!-- Botón Generar Recibos por Rango -->
-                        <PrimaryButton 
-                            v-if="$page.props.auth.user.permissions.includes('Ver pre-nominas')"
-                            @click="openReceiptsModal"
-                            class="!bg-teal-600 hover:!bg-teal-700 whitespace-nowrap"
-                        >
-                            <i class="fa-solid fa-file-signature mr-2"></i> 
-                            Generar Recibos
-                        </PrimaryButton>
-                        <!-- Botón Reporte de Personal Externo -->
-                        <PrimaryButton 
-                            v-if="canViewExternalReport"
-                            @click="openExternalReportModal"
-                            class="!bg-orange-600 hover:!bg-orange-700 whitespace-nowrap"
-                        >
-                            <i class="fa-solid fa-earth-americas mr-2"></i> 
-                            Reporte personal externo
-                        </PrimaryButton>
+                        <!-- Menú desplegable: Recibo / Reporte -->
+                        <el-dropdown v-if="showReportsMenu" trigger="click" placement="bottom-end" @command="handleReportCommand">
+                            <el-button type="primary" class="!bg-teal-600 !border-teal-600 hover:!bg-teal-700 whitespace-nowrap">
+                                <i class="fa-solid fa-file-signature mr-2"></i>
+                                Recibo / Reporte
+                                <i class="fa-solid fa-chevron-down ml-1 text-xs"></i>
+                            </el-button>
+                            <template #dropdown>
+                                <el-dropdown-menu>
+                                    <el-dropdown-item v-if="canReceipts" command="receipts">
+                                        <i class="fa-solid fa-file-signature mr-2 text-teal-600"></i>
+                                        Generar Recibos
+                                    </el-dropdown-item>
+                                    <el-dropdown-item v-if="canViewExternalReport" command="external">
+                                        <i class="fa-solid fa-earth-americas mr-2 text-orange-600"></i>
+                                        Reporte personal externo
+                                    </el-dropdown-item>
+                                </el-dropdown-menu>
+                            </template>
+                        </el-dropdown>
                     </div>
                 </div>
 
@@ -600,7 +633,7 @@ const generateRangeReceipts = () => {
                             <el-option
                                 v-for="i in reportPeriodOptions.count"
                                 :key="i"
-                                :label="`${reportPeriodOptions.label} ${i}`"
+                                :label="reportPeriodOptionLabel(i)"
                                 :value="i"
                             />
                         </el-select>

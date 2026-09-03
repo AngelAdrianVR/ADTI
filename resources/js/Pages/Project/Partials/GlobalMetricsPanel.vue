@@ -3,8 +3,11 @@ import { ref, computed, onMounted } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import { ElNotification } from 'element-plus';
 import { Refresh, TrendCharts, Medal, Coin, Clock, InfoFilled } from '@element-plus/icons-vue';
-import LineChart from '@/Components/Charts/LineChart.vue';
+import VueApexCharts from 'vue3-apexcharts';
 import axios from 'axios';
+
+// Registro local del componente ApexCharts para usarlo como <apexchart> en el template.
+const apexchart = VueApexCharts;
 
 const loading = ref(false);
 const metrics = ref({
@@ -42,20 +45,63 @@ const orderedEmployees = computed(() => {
     return list || [];
 });
 
-// ─── Gráfica mensual de tiempo extra ───
+// ─── Gráfica mensual de tiempo extra (ApexCharts) ───
 const monthlySeries = computed(() => metrics.value.monthly_series || []);
 
 const chartLabels = computed(() => monthlySeries.value.map((m) => {
     if (!m.month) return '';
     const [y, mo] = m.month.split('-').map(Number);
     const name = new Date(y, mo - 1, 1).toLocaleString('es-MX', { month: 'short' }).replace('.', '');
-    return `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+    const cap = `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+    return `${cap} '${String(y).slice(2)}`;
 }));
 
-const chartSeries = computed(() => [
-    { name: 'Trabajo interno', color: '#1676A2', values: monthlySeries.value.map(m => m.internal_hours) },
-    { name: 'Trabajo externo', color: '#F97316', values: monthlySeries.value.map(m => m.external_hours) },
-]);
+const chartSeries = computed(() => {
+    const months = monthlySeries.value;
+    return [
+        { name: 'Trabajo interno', data: months.map(m => m.internal_hours) },
+        { name: 'Trabajo externo', data: months.map(m => m.external_hours) },
+        { name: 'Total', data: months.map(m => Math.round(((m.internal_hours || 0) + (m.external_hours || 0)) * 100) / 100) },
+    ];
+});
+
+const chartOptions = computed(() => ({
+    chart: {
+        type: 'line',
+        height: 320,
+        toolbar: { show: true, tools: { download: true }, export: { csv: { filename: 'tiempo-extra-mensual' } } },
+        zoom: { enabled: false },
+        fontFamily: 'inherit',
+        foreColor: '#64748b',
+        animations: { enabled: true, easing: 'easeinout', speed: 500 },
+    },
+    colors: ['#1676A2', '#F97316', '#9CA3AF'],
+    stroke: { curve: 'smooth', width: [3, 3, 2], dashArray: [0, 0, 6] },
+    fill: { opacity: 1, type: 'solid' },
+    dataLabels: { enabled: false },
+    markers: { size: 3.5, strokeWidth: 0, hover: { size: 5 } },
+    legend: { position: 'bottom', horizontalAlign: 'center', fontSize: '12px' },
+    grid: { borderColor: '#e5e7eb', strokeDashArray: 4, padding: { left: 10, right: 10 } },
+    xaxis: {
+        categories: chartLabels.value,
+        axisBorder: { show: false },
+        axisTicks: { show: false },
+        labels: { style: { fontSize: '11px', fontWeight: 500 } },
+        tooltip: { enabled: false },
+    },
+    yaxis: {
+        labels: { formatter: (value) => `${Number(value).toFixed(1)}`, style: { fontSize: '11px' } },
+        title: { text: 'Horas extra', style: { fontSize: '10px', fontWeight: 600, color: '#94a3b8' } },
+    },
+    tooltip: {
+        shared: true,
+        intersect: false,
+        y: {
+            formatter: (value) => (value === undefined || value === null ? '' : `${Number(value).toFixed(2)} h`),
+        },
+    },
+    noData: { text: 'Sin datos para mostrar', align: 'center', verticalAlign: 'middle' },
+}));
 
 // ─── Desglose interno / externo ───
 const workType = computed(() => metrics.value.work_type_breakdown || {});
@@ -167,7 +213,7 @@ onMounted(loadMetrics);
                     <p class="text-xs text-gray-500 mt-0.5">Horas extra mensuales por tipo de trabajo (solo días vinculados a proyectos).</p>
                 </div>
                 <div v-if="monthlySeries.length > 0">
-                    <LineChart :labels="chartLabels" :series="chartSeries" :height="280" />
+                    <apexchart type="line" height="320" :options="chartOptions" :series="chartSeries" />
                 </div>
                 <div v-else class="flex flex-col items-center justify-center py-10 text-gray-400">
                     <i class="fa-solid fa-chart-line text-2xl mb-2 opacity-60"></i>

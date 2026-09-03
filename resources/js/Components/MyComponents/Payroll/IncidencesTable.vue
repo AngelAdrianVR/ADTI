@@ -194,13 +194,65 @@ const openProjectModal = () => {
         extra_hours: p.extra_hours ?? null,
         extra_minutes: p.extra_minutes ?? null,
     }));
-    if (projectForm.projects.length === 0) addProjectRow();
+    if (projectForm.projects.length === 0) {
+        // Primer proyecto: se pre-carga TODO el tiempo extra del día para facilitar el cuadre.
+        const def = defaultExtraForDay();
+        projectForm.projects.push({
+            project_id: null,
+            work_type: 'internal',
+            department_id: null,
+            extra_hours: def.hours,
+            extra_minutes: def.minutes,
+        });
+    }
     showProjectModal.value = true;
+};
+
+// Tiempo extra efectivo del día seleccionado (aprobado o, si no, el propuesto/solicitado)
+const dayExtraMinutes = computed(() => {
+    const d = selectedDayForProjects.value;
+    if (!d) return 0;
+    const h = Number(d.approved_extra_hours ?? d.extra_hours ?? 0) || 0;
+    const m = Number(d.approved_extra_minutes ?? d.extra_minutes ?? 0) || 0;
+    return (h * 60) + m;
+});
+
+const defaultExtraForDay = () => {
+    const totalMins = dayExtraMinutes.value;
+    return { hours: Math.floor(totalMins / 60), minutes: totalMins % 60 };
 };
 
 const addProjectRow = () => {
     projectForm.projects.push({ project_id: null, work_type: 'internal', department_id: null, extra_hours: null, extra_minutes: null });
 };
+
+// Reparte el tiempo extra total del día en partes iguales entre los proyectos
+// ya seleccionados (el residuo se asigna a las primeras filas).
+const splitEvenly = () => {
+    const totalMins = dayExtraMinutes.value;
+    const filledIndexes = projectForm.projects.map((r, i) => (r.project_id ? i : -1)).filter(i => i >= 0);
+    if (totalMins <= 0 || filledIndexes.length === 0) return;
+
+    const share = Math.floor(totalMins / filledIndexes.length);
+    let remainder = totalMins % filledIndexes.length;
+
+    projectForm.projects.forEach((r, index) => {
+        if (!r.project_id) {
+            r.extra_hours = null;
+            r.extra_minutes = null;
+            return;
+        }
+        let mins = share;
+        if (remainder > 0) {
+            mins += 1;
+            remainder -= 1;
+        }
+        r.extra_hours = Math.floor(mins / 60);
+        r.extra_minutes = mins % 60;
+    });
+};
+
+const filledProjectsCount = computed(() => projectForm.projects.filter(r => r.project_id).length);
 
 const removeProjectRow = (index) => {
     projectForm.projects.splice(index, 1);
@@ -447,9 +499,20 @@ const submitProjects = () => {
                 </div>
             </div>
 
-            <el-button type="primary" plain class="!w-full mt-4" @click="addProjectRow">
-                <i class="fa-solid fa-plus mr-2"></i> Agregar otro proyecto al día
-            </el-button>
+            <div class="mt-4 flex flex-col sm:flex-row gap-2">
+                <el-button type="primary" plain class="flex-1" @click="addProjectRow">
+                    <i class="fa-solid fa-plus mr-2"></i> Agregar otro proyecto al día
+                </el-button>
+                <el-button
+                    type="success"
+                    plain
+                    class="flex-1"
+                    :disabled="dayExtraMinutes <= 0 || filledProjectsCount < 1"
+                    @click="splitEvenly"
+                >
+                    <i class="fa-solid fa-scale-balanced mr-2"></i> Repartir tiempo extra equitativamente
+                </el-button>
+            </div>
 
             <template #footer>
                 <div class="flex justify-end gap-2 pt-2">
