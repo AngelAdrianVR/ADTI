@@ -70,12 +70,30 @@ class Project extends Model
             });
     }
 
+    // Vínculos de la tabla pivote payroll_user_project: un proyecto puede estar
+    // vinculado a varios días (y un día a varios proyectos) con detalle de tipo
+    // interno/externo, departamento y tiempo extra por proyecto.
+    public function extraTimeProjectLinks(): HasMany
+    {
+        return $this->hasMany(PayrollUserProject::class);
+    }
+
     // Total de horas extra aprobadas vinculadas a este proyecto
     // (consulta SQL agregada: evita cargar modelos)
     public function getExtraHoursTotalAttribute()
     {
-        $totals = $this->extraTimeRecords()
-            ->selectRaw('COALESCE(SUM(approved_extra_hours), 0) as hours, COALESCE(SUM(approved_extra_minutes), 0) as minutes')
+        // Fuente de verdad: tabla pivote payroll_user_project (vinculación múltiple
+        // de proyectos por día). Solo se cuentan vínculos cuyo día tiene el tiempo
+        // extra APROBADO (extra_hour_status = 'approved').
+        $totals = $this->extraTimeProjectLinks()
+            ->whereHas('payrollUser', function ($q) {
+                $q->where('extra_hour_status', 'approved')
+                    ->where(function ($qq) {
+                        $qq->where('approved_extra_hours', '>', 0)
+                            ->orWhere('approved_extra_minutes', '>', 0);
+                    });
+            })
+            ->selectRaw('COALESCE(SUM(extra_hours), 0) as hours, COALESCE(SUM(extra_minutes), 0) as minutes')
             ->first();
 
         return round((float) $totals->hours + ((float) $totals->minutes / 60), 2);

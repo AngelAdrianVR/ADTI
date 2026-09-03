@@ -678,7 +678,71 @@ class PayrollUserController extends Controller
     }
 
     /**
-     * Vincula o desvincula un proyecto a un día específico de un usuario.
+     * Sincroniza la vinculación de MÚLTIPLES proyectos a un día laborado de un
+     * usuario. Cada vínculo especifica el tipo de trabajo (interno/externo),
+     * departamento imputable y el tiempo extra invertido en ese proyecto ese día.
+     */
+    public function setProjects(Request $request)
+    {
+        $request->validate([
+            'date' => 'required|date',
+            'user_id' => 'required|exists:users,id',
+            'projects' => 'present|array|max:20',
+            'projects.*.project_id' => 'required|integer|exists:projects,id',
+            'projects.*.work_type' => 'required|in:internal,external',
+            'projects.*.department_id' => 'nullable|integer|exists:departments,id',
+            'projects.*.extra_hours' => 'nullable|integer|min:0|max:23',
+            'projects.*.extra_minutes' => 'nullable|integer|min:0|max:59',
+        ]);
+
+        $payrollUser = PayrollUser::where('user_id', $request->user_id)
+            ->whereDate('date', $request->date)
+            ->first();
+
+        if (!$payrollUser) {
+            if ($request->header('X-Inertia')) {
+                return back()->withErrors(['projects' => 'No existe un registro de asistencia para este día.']);
+            }
+
+            return response()->json(['message' => 'No existe un registro de asistencia para este día.'], 422);
+        }
+
+        // Reconstruir vínculos (se borran y recrean para garantizar consistencia)
+        \App\Models\PayrollUserProject::where('payroll_user_id', $payrollUser->id)->delete();
+
+        foreach ($request->input('projects', []) as $data) {
+            if (empty($data['project_id'])) {
+                continue;
+            }
+
+            \App\Models\PayrollUserProject::create([
+                'payroll_user_id' => $payrollUser->id,
+                'project_id' => $data['project_id'],
+                'work_type' => $data['work_type'] ?? 'internal',
+                'department_id' => $data['department_id'] ?: null,
+                'extra_hours' => (isset($data['extra_hours']) && $data['extra_hours'] !== null && $data['extra_hours'] !== '')
+                    ? (int) $data['extra_hours']
+                    : null,
+                'extra_minutes' => (isset($data['extra_minutes']) && $data['extra_minutes'] !== null && $data['extra_minutes'] !== '')
+                    ? (int) $data['extra_minutes']
+                    : null,
+            ]);
+        }
+
+        // Mantener la columna legacy 'project_id' (primer proyecto) para retrocompatibilidad
+        $first = collect($request->input('projects', []))->first();
+        $payrollUser->update(['project_id' => $first['project_id'] ?? null]);
+
+        if ($request->header('X-Inertia')) {
+            return back();
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Retrocompatibilidad: vincula o desvincula UN solo proyecto a un día.
+     * Delega en setProjects para mantener sincronizada la tabla pivote.
      */
     public function setProject(Request $request)
     {
@@ -688,20 +752,18 @@ class PayrollUserController extends Controller
             'project_id' => 'nullable|exists:projects,id',
         ]);
 
-        $payrollUser = PayrollUser::where('user_id', $request->user_id)
-            ->whereDate('date', $request->date)
-            ->first();
-
-        if ($payrollUser) {
-            $payrollUser->update([
+        $projects = [];
+        if ($request->filled('project_id')) {
+            $projects[] = [
                 'project_id' => $request->project_id,
-            ]);
+                'work_type' => $request->work_type ?? 'internal',
+                'department_id' => $request->department_id ?? null,
+                'extra_hours' => $request->extra_hours ?? null,
+                'extra_minutes' => $request->extra_minutes ?? null,
+            ];
         }
+        $request->merge(['projects' => $projects]);
 
-        if ($request->header('X-Inertia')) {
-            return back();
-        }
-
-        return response()->json(['success' => true]);
+        return $this->setProjects($request);
     }
 }

@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import { ElNotification } from 'element-plus';
 import { Refresh, TrendCharts, Medal, Coin, Clock, InfoFilled } from '@element-plus/icons-vue';
+import LineChart from '@/Components/Charts/LineChart.vue';
 import axios from 'axios';
 
 const loading = ref(false);
@@ -12,6 +13,15 @@ const metrics = ref({
     employees_ranking_by_cost: [],
     total_extra_hours: 0,
     total_cost: 0,
+    monthly_series: [],
+    work_type_breakdown: {
+        internal_hours: 0,
+        internal_cost: 0,
+        external_hours: 0,
+        external_cost: 0,
+        total_hours: 0,
+        total_cost: 0,
+    },
 });
 const dateRange = ref(null);
 const employeeOrder = ref('hours'); // 'hours' | 'cost'
@@ -30,6 +40,34 @@ const orderedEmployees = computed(() => {
         ? metrics.value.employees_ranking_by_cost
         : metrics.value.employees_ranking;
     return list || [];
+});
+
+// ─── Gráfica mensual de tiempo extra ───
+const monthlySeries = computed(() => metrics.value.monthly_series || []);
+
+const chartLabels = computed(() => monthlySeries.value.map((m) => {
+    if (!m.month) return '';
+    const [y, mo] = m.month.split('-').map(Number);
+    const name = new Date(y, mo - 1, 1).toLocaleString('es-MX', { month: 'short' }).replace('.', '');
+    return `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+}));
+
+const chartSeries = computed(() => [
+    { name: 'Trabajo interno', color: '#1676A2', values: monthlySeries.value.map(m => m.internal_hours) },
+    { name: 'Trabajo externo', color: '#F97316', values: monthlySeries.value.map(m => m.external_hours) },
+]);
+
+// ─── Desglose interno / externo ───
+const workType = computed(() => metrics.value.work_type_breakdown || {});
+
+const workTypeBars = computed(() => {
+    const total = Number(workType.value.total_hours) || 0;
+    if (total <= 0) return { internal: 0, external: 0 };
+    const internal = ((Number(workType.value.internal_hours) || 0) / total) * 100;
+    return {
+        internal,
+        external: Math.max(0, 100 - internal),
+    };
 });
 
 const loadMetrics = async () => {
@@ -120,6 +158,67 @@ onMounted(loadMetrics);
                 </p>
             </div>
         </div>
+
+        <!-- Carga de tiempo extra mensual (gráfica de línea) -->
+        <div class="px-5 pt-5">
+            <div class="bg-white rounded-xl border border-gray-100 p-5">
+                <div class="mb-3">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-gray-800">Carga de tiempo extra durante el año</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">Horas extra mensuales por tipo de trabajo (solo días vinculados a proyectos).</p>
+                </div>
+                <div v-if="monthlySeries.length > 0">
+                    <LineChart :labels="chartLabels" :series="chartSeries" :height="280" />
+                </div>
+                <div v-else class="flex flex-col items-center justify-center py-10 text-gray-400">
+                    <i class="fa-solid fa-chart-line text-2xl mb-2 opacity-60"></i>
+                    <p class="text-sm">Sin datos de tiempo extra vinculado a proyectos en el rango seleccionado.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Desglose interno vs externo -->
+        <div class="px-5 pt-5">
+            <div class="bg-white rounded-xl border border-gray-100 p-5">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-gray-800 mb-1">Desglose interno vs externo</h3>
+                <p class="text-xs text-gray-500 mb-4">Distribución del tiempo extra de días vinculados a proyectos según tipo de trabajo.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="rounded-xl border border-teal-200 bg-teal-50/60 p-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2 text-teal-700">
+                                <i class="fa-solid fa-building"></i>
+                                <span class="font-bold text-sm">Trabajo interno</span>
+                            </div>
+                            <span class="text-[10px] font-bold uppercase text-teal-600 bg-white border border-teal-200 rounded-full px-2 py-0.5">{{ workTypeBars.internal.toFixed(1) }}%</span>
+                        </div>
+                        <p class="text-2xl font-bold text-teal-700 mt-2">{{ formatHours(workType.internal_hours) }}</p>
+                        <p class="text-xs text-teal-600 mt-0.5">Costo: {{ formatCurrency(workType.internal_cost) }}</p>
+                    </div>
+
+                    <div class="rounded-xl border border-orange-200 bg-orange-50/60 p-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2 text-orange-700">
+                                <i class="fa-solid fa-earth-americas"></i>
+                                <span class="font-bold text-sm">Trabajo externo</span>
+                            </div>
+                            <span class="text-[10px] font-bold uppercase text-orange-600 bg-white border border-orange-200 rounded-full px-2 py-0.5">{{ workTypeBars.external.toFixed(1) }}%</span>
+                        </div>
+                        <p class="text-2xl font-bold text-orange-600 mt-2">{{ formatHours(workType.external_hours) }}</p>
+                        <p class="text-xs text-orange-600 mt-0.5">Costo: {{ formatCurrency(workType.external_cost) }}</p>
+                    </div>
+                </div>
+
+                <!-- Barra proporcional -->
+                <div class="mt-4 h-2.5 w-full rounded-full overflow-hidden flex bg-gray-100">
+                    <div class="h-full bg-teal-500" :style="{ width: workTypeBars.internal + '%' }"></div>
+                    <div class="h-full bg-orange-500" :style="{ width: workTypeBars.external + '%' }"></div>
+                </div>
+                <p class="text-xs text-gray-400 mt-2">
+                    Total vinculado a proyectos: {{ formatHours(workType.total_hours) }} · {{ formatCurrency(workType.total_cost) }}
+                </p>
+            </div>
+        </div>
+
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 p-5">
             <!-- Ranking de proyectos -->

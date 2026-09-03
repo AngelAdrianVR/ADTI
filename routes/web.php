@@ -149,6 +149,9 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     // Revertir decisión
     Route::delete('payrolls/extra-hours-revert', [PayrollExtraHoursController::class, 'revertDecision'])->name('payrolls.extra-hours-revert');
 
+    // Reporte de personal que trabaja fuera de las instalaciones de ADTI (debe ir ANTES del resource)
+    Route::get('payrolls/external-work-report', [PayrollController::class, 'externalWorkReport'])->name('payrolls.external-work-report');
+
     Route::resource('payrolls', PayrollController::class)->only(['index', 'show']);
 
     Route::resource('payroll-comments', PayrollCommentController::class)->middleware('auth');
@@ -166,6 +169,8 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::get('payroll-users/recalculate-extra-time', [PayrollUserController::class, 'recalculateExtraTime'])->name('payroll-users.recalculate-extra-time');
     Route::put('payroll-users/clear-extra-time', [PayrollUserController::class, 'clearExtraTime'])->name('payroll-users.clear-extra-time');
     Route::put('payroll-users/set-project', [PayrollUserController::class, 'setProject'])->name('payroll-users.set-project');
+    // Vinculación de MÚLTIPLES proyectos por día (interno/externo, departamento, tiempo extra por proyecto)
+    Route::put('payroll-users/set-projects', [PayrollUserController::class, 'setProjects'])->name('payroll-users.set-projects');
 
     Route::resource('holidays', HolidayController::class);
     Route::post('holidays/massive-delete', [HolidayController::class, 'massiveDelete'])->name('holidays.massive-delete');

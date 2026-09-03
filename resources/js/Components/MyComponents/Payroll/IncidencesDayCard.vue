@@ -40,6 +40,25 @@ const getIncidenceColor = (incidence) => {
 };
 
 const handleCommand = (cmd) => emit('command', cmd);
+
+// ─── Proyectos vinculados al día (varios) ───
+// day.projects viene desde el backend (tabla pivote). Como respaldo para
+// lecturas que aún no lo incluyan (ej. MyPayrolls), se usa day.project.
+const getDayProjects = (day) => {
+    if (day.projects && day.projects.length > 0) return day.projects;
+    if (day.project) return [{ id: day.project.id, project: day.project, work_type: 'internal', extra_hours: null, extra_minutes: null }];
+    return [];
+};
+
+const projectTooltip = (p) => {
+    const type = p.work_type === 'external' ? 'Trabajo externo' : 'Trabajo interno';
+    const dept = p.department?.name || p.department || '';
+    const parts = [`${p.project?.name ?? 'Proyecto'} - ${p.project?.client || 'Sin cliente'}`, type];
+    if (dept) parts.push(`Depto: ${dept}`);
+    if (p.extra_hours || p.extra_minutes) parts.push(`Extra: ${p.extra_hours || 0}h ${p.extra_minutes || 0}m`);
+    return parts.join(' · ');
+};
+
 </script>
 
 <template>
@@ -111,15 +130,10 @@ const handleCommand = (cmd) => emit('command', cmd);
                             </el-dropdown-item>
 
                             <!-- OPCIONES DE PROYECTO -->
-                            <el-dropdown-item divided disabled>Proyecto</el-dropdown-item>
-                            <el-dropdown-item v-if="!day.project_id" :command="`link_project|${day.date}`">
-                                <i class="fa-solid fa-link mr-2"></i> Vincular proyecto
-                            </el-dropdown-item>
-                            <el-dropdown-item v-if="day.project_id" :command="`change_project|${day.date}`">
-                                <i class="fa-solid fa-pen-to-square mr-2 text-indigo-500"></i> Cambiar proyecto
-                            </el-dropdown-item>
-                            <el-dropdown-item v-if="day.project_id" :command="`unlink_project|${day.date}`">
-                                <i class="fa-solid fa-link-slash mr-2 text-red-400"></i> Desvincular proyecto
+                            <el-dropdown-item divided disabled>Proyectos</el-dropdown-item>
+                            <el-dropdown-item :command="`${getDayProjects(day).length ? 'change_project' : 'link_project'}|${day.date}`">
+                                <i class="fa-solid fa-diagram-project mr-2 text-teal-600"></i>
+                                {{ getDayProjects(day).length ? 'Editar proyectos' : 'Vincular proyectos' }}
                             </el-dropdown-item>
                         </el-dropdown-menu>
                     </template>
@@ -241,11 +255,14 @@ const handleCommand = (cmd) => emit('command', cmd);
                 </div>
             </template>
 
-            <!-- Proyecto vinculado -->
-            <div v-if="day.project" class="mt-1.5 border-t border-gray-100 pt-1">
-                <el-tooltip :content="`${day.project.name} - ${day.project.client || 'Sin cliente'}`" placement="top">
-                    <div class="text-[8px] text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200 font-semibold text-center leading-tight w-full truncate">
-                        <i class="fa-solid fa-diagram-project mr-1"></i>{{ day.project.name }}
+            <!-- Proyectos vinculados (varios) -->
+            <div v-if="getDayProjects(day).length" class="mt-1.5 border-t border-gray-100 pt-1 flex flex-col gap-0.5 w-full">
+                <el-tooltip v-for="p in getDayProjects(day)" :key="p.project_id || p.id" :content="projectTooltip(p)" placement="top">
+                    <div class="flex items-center gap-1 text-[8px] px-1.5 py-0.5 rounded border font-semibold text-center leading-tight w-full truncate"
+                         :class="p.work_type === 'external' ? 'text-orange-700 bg-orange-50 border-orange-200' : 'text-teal-700 bg-teal-50 border-teal-200'">
+                        <i :class="p.work_type === 'external' ? 'fa-solid fa-earth-americas' : 'fa-solid fa-diagram-project'" class="shrink-0"></i>
+                        <span class="truncate">{{ p.project?.name }}</span>
+                        <span v-if="p.extra_hours || p.extra_minutes" class="ml-auto shrink-0 font-bold">+{{ p.extra_hours || 0 }}h{{ p.extra_minutes || 0 }}m</span>
                     </div>
                 </el-tooltip>
             </div>
@@ -258,11 +275,14 @@ const handleCommand = (cmd) => emit('command', cmd);
                     'text-gray-400': !['Falta injustificada', 'Salió de Viaje'].includes(day.incidence)
                 }">{{ day.incidence || '-' }}</span>
 
-                <!-- Proyecto vinculado (días sin horas) -->
-                <div v-if="day.project" class="mt-1.5 border-t border-gray-100 pt-1">
-                    <el-tooltip :content="`${day.project.name} - ${day.project.client || 'Sin cliente'}`" placement="top">
-                        <div class="text-[8px] text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200 font-semibold text-center leading-tight w-full truncate">
-                            <i class="fa-solid fa-diagram-project mr-1"></i>{{ day.project.name }}
+                <!-- Proyectos vinculados (varios) -->
+                <div v-if="getDayProjects(day).length" class="mt-1.5 border-t border-gray-100 pt-1 flex flex-col gap-0.5 w-full">
+                    <el-tooltip v-for="p in getDayProjects(day)" :key="p.project_id || p.id" :content="projectTooltip(p)" placement="top">
+                        <div class="flex items-center gap-1 text-[8px] px-1.5 py-0.5 rounded border font-semibold text-center leading-tight w-full truncate"
+                             :class="p.work_type === 'external' ? 'text-orange-700 bg-orange-50 border-orange-200' : 'text-teal-700 bg-teal-50 border-teal-200'">
+                            <i :class="p.work_type === 'external' ? 'fa-solid fa-earth-americas' : 'fa-solid fa-diagram-project'" class="shrink-0"></i>
+                            <span class="truncate">{{ p.project?.name }}</span>
+                            <span v-if="p.extra_hours || p.extra_minutes" class="ml-auto shrink-0 font-bold">+{{ p.extra_hours || 0 }}h{{ p.extra_minutes || 0 }}m</span>
                         </div>
                     </el-tooltip>
                 </div>

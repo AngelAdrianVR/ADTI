@@ -87,6 +87,51 @@ const handlePageChange = (val) => {
     currentPage.value = val;
 };
 
+// ─── MODAL: Reporte de personal en trabajo externo ───
+const canViewExternalReport = computed(() => (page.props?.auth?.user?.permissions || []).includes('Ver incidencias'));
+const showExternalReportModal = ref(false);
+const reportPeriodType = ref('monthly');
+const reportYear = ref(new Date().getFullYear());
+const reportMonth = ref(new Date().getMonth() + 1);
+const reportPeriodIndex = ref(1);
+const reportDateRange = ref(null);
+
+const reportPeriodOptions = computed(() => {
+    if (reportPeriodType.value === 'bimonthly') return { count: 6, label: 'Bimestre' };
+    if (reportPeriodType.value === 'quadrimester') return { count: 3, label: 'Cuatrimestre' };
+    return { count: 0, label: '' };
+});
+
+const openExternalReportModal = () => {
+    reportPeriodType.value = 'monthly';
+    reportYear.value = new Date().getFullYear();
+    reportMonth.value = new Date().getMonth() + 1;
+    reportPeriodIndex.value = 1;
+    reportDateRange.value = null;
+    showExternalReportModal.value = true;
+};
+
+const generateExternalReport = () => {
+    const params = { period_type: reportPeriodType.value };
+    if (reportPeriodType.value === 'custom') {
+        if (!reportDateRange.value || !reportDateRange.value[0] || !reportDateRange.value[1]) {
+            ElMessage.warning('Selecciona el rango de fechas del periodo personalizado.');
+            return;
+        }
+        params.start_date = reportDateRange.value[0];
+        params.end_date = reportDateRange.value[1];
+    } else {
+        params.year = reportYear.value;
+        if (reportPeriodType.value === 'monthly') {
+            params.month = reportMonth.value;
+        } else {
+            params.period_index = reportPeriodIndex.value;
+        }
+    }
+    window.open(route('payrolls.external-work-report', params), '_blank');
+};
+
+
 // ─── MODAL: Generar Recibos por Rango ───
 const showReceiptsModal = ref(false);
 const dateRange = ref(null);
@@ -241,6 +286,15 @@ const generateRangeReceipts = () => {
                         >
                             <i class="fa-solid fa-file-signature mr-2"></i> 
                             Generar Recibos
+                        </PrimaryButton>
+                        <!-- Botón Reporte de Personal Externo -->
+                        <PrimaryButton 
+                            v-if="canViewExternalReport"
+                            @click="openExternalReportModal"
+                            class="!bg-orange-600 hover:!bg-orange-700 whitespace-nowrap"
+                        >
+                            <i class="fa-solid fa-earth-americas mr-2"></i> 
+                            Reporte personal externo
                         </PrimaryButton>
                     </div>
                 </div>
@@ -485,6 +539,105 @@ const generateRangeReceipts = () => {
                     </div>
                 </template>
             </el-dialog>
+
+            <!-- Modal: Reporte de personal en trabajo externo -->
+            <el-dialog
+                v-model="showExternalReportModal"
+                title="Reporte de personal en trabajo externo"
+                width="560px"
+                class="!rounded-xl"
+            >
+                <div class="space-y-5">
+                    <div class="flex items-start gap-2 text-sm text-gray-600 bg-orange-50 border border-orange-100 rounded-lg p-3">
+                        <i class="fa-solid fa-earth-americas text-orange-500 mt-0.5"></i>
+                        <p>
+                            El reporte incluye los días donde se registró vinculación de proyecto marcada como
+                            <b>trabajo externo</b>, mostrando empleado, fecha, entrada/salida, ubicación y proyectos vinculados.
+                        </p>
+                    </div>
+
+                    <!-- Tipo de periodo -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fa-solid fa-calendar-days mr-1 text-orange-600"></i>
+                            Tipo de periodo
+                        </label>
+                        <el-radio-group v-model="reportPeriodType" class="w-full grid grid-cols-4 gap-1">
+                            <el-radio-button value="monthly">Mensual</el-radio-button>
+                            <el-radio-button value="bimonthly">Bimestral</el-radio-button>
+                            <el-radio-button value="quadrimester">Cuatrimestral</el-radio-button>
+                            <el-radio-button value="custom">Personalizado</el-radio-button>
+                        </el-radio-group>
+                    </div>
+
+                    <!-- Año (común a todos excepto personalizado) -->
+                    <div v-if="reportPeriodType !== 'custom'">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Año</label>
+                        <el-select v-model="reportYear" class="w-full" filterable>
+                            <el-option v-for="y in 12" :key="y" :label="String(new Date().getFullYear() - y + 1)" :value="new Date().getFullYear() - y + 1" />
+                        </el-select>
+                    </div>
+
+                    <!-- Mensual -->
+                    <div v-if="reportPeriodType === 'monthly'">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Mes</label>
+                        <el-select v-model="reportMonth" class="w-full">
+                            <el-option
+                                v-for="m in 12"
+                                :key="m"
+                                :label="new Date(reportYear, m - 1, 1).toLocaleString('es-MX', { month: 'long' })"
+                                :value="m"
+                            />
+                        </el-select>
+                    </div>
+
+                    <!-- Bimestral / Cuatrimestral -->
+                    <div v-if="reportPeriodOptions.count > 0">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                            {{ reportPeriodOptions.label }}
+                        </label>
+                        <el-select v-model="reportPeriodIndex" class="w-full">
+                            <el-option
+                                v-for="i in reportPeriodOptions.count"
+                                :key="i"
+                                :label="`${reportPeriodOptions.label} ${i}`"
+                                :value="i"
+                            />
+                        </el-select>
+                    </div>
+
+                    <!-- Personalizado -->
+                    <div v-if="reportPeriodType === 'custom'">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Rango de fechas</label>
+                        <el-date-picker
+                            v-model="reportDateRange"
+                            type="daterange"
+                            range-separator="al"
+                            start-placeholder="Fecha inicial"
+                            end-placeholder="Fecha final"
+                            value-format="YYYY-MM-DD"
+                            format="DD MMM YYYY"
+                            class="w-full"
+                            :clearable="true"
+                        />
+                    </div>
+                </div>
+
+                <template #footer>
+                    <div class="flex justify-end gap-2">
+                        <el-button @click="showExternalReportModal = false">Cancelar</el-button>
+                        <el-button
+                            type="primary"
+                            @click="generateExternalReport"
+                            class="!bg-orange-600 !border-orange-600 hover:!bg-orange-700"
+                        >
+                            <i class="fa-solid fa-file-export mr-2"></i>
+                            Generar reporte
+                        </el-button>
+                    </div>
+                </template>
+            </el-dialog>
+
 
             <!-- Modal: Gestión de tiempo extra (abre la catorcena en curso) -->
             <ExtraTimeManagementModal

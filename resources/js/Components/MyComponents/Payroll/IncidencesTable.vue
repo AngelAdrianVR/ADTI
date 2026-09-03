@@ -13,6 +13,7 @@ const props = defineProps({
     canEdit: { type: Boolean, default: true },
     approvalGroups: { type: Array, default: () => [] },
     projects: { type: Array, default: () => [] },
+    departments: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits(['edit-comment']);
@@ -69,7 +70,7 @@ const onDragEnd = () => {
 
 const form = useForm({ date: null, check_in: null, check_out: null, break_start: null, break_end: null, incidence: null, user_id: props.payrollUser.user.id, payroll_id: props.payroll.id });
 const approveForm = useForm({ payroll_user_id: null, status: 'approved', approved_extra_hours: 0, approved_extra_minutes: 0, comments: '' });
-const projectForm = useForm({ date: null, user_id: props.payrollUser.user.id, project_id: null });
+const projectForm = useForm({ date: null, user_id: props.payrollUser.user.id, projects: [] });
 
 // ─── Formateador de dinero con separadores de miles ───
 const formatMoney = (value) => {
@@ -157,15 +158,11 @@ const handleCommand = (command) => {
     } else if (action === 'clear_extra_time') {
         router.put(route('payroll-users.clear-extra-time'), { date: form.date, user_id: props.payrollUser.user.id }, { preserveScroll: true, onSuccess: () => ElNotification.success('Tiempo extra eliminado') });
     } else if (action === 'link_project' || action === 'change_project') {
-        const r = props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(date)));
-        projectForm.date = form.date;
-        projectForm.project_id = r?.project_id || null;
-        showProjectModal.value = true;
+        openProjectModal();
     } else if (action === 'unlink_project') {
-        router.put(route('payroll-users.set-project'), { date: form.date, user_id: props.payrollUser.user.id, project_id: null }, {
-            preserveScroll: true,
-            onSuccess: () => ElNotification.success('Proyecto desvinculado')
-        });
+        projectForm.date = form.date;
+        projectForm.projects = [];
+        submitProjects();
     } else {
         form.incidence = action;
         setIncidence();
@@ -175,11 +172,6 @@ const handleCommand = (command) => {
 const setIncidence = () => form.put(route('payroll-users.set-incidence'), { onSuccess: () => { ElNotification.success('Incidencia actualizada'); form.reset(); }, onError: () => ElNotification.error('Error al actualizar') });
 const updateAttendance = () => form.put(route('payroll-users.update-attendance'), { onSuccess: () => { ElNotification.success('Asistencia actualizada'); showAttendanceModal.value = false; form.reset(); } });
 const removeLate = () => form.put(route('payroll-users.remove-late'), { onSuccess: () => ElNotification.success('Retardo eliminado') });
-const submitProject = () => projectForm.put(route('payroll-users.set-project'), {
-    preserveScroll: true,
-    onSuccess: () => { ElNotification.success('Proyecto vinculado'); showProjectModal.value = false; projectForm.reset(); },
-    onError: () => ElNotification.error('Error al vincular proyecto')
-});
 const submitApproveExtraTime = () => {
     approveForm.status = 'approved';
     approveForm.post(route('payrolls.extra-hours-decide', { payroll: payrollId.value }), { preserveScroll: true, onSuccess: () => { ElNotification.success('Tiempo extra aprobado'); showApproveModal.value = false; approveForm.reset(); } });
@@ -187,6 +179,94 @@ const submitApproveExtraTime = () => {
 const submitRejectExtraTime = () => {
     approveForm.status = 'rejected';
     approveForm.post(route('payrolls.extra-hours-decide', { payroll: payrollId.value }), { preserveScroll: true, onSuccess: () => { ElNotification.success('Tiempo extra rechazado'); showApproveModal.value = false; approveForm.reset(); } });
+};
+
+// ─── Vincular proyectos (MÚLTIPLES por día) ───
+const openProjectModal = () => {
+    projectForm.date = form.date;
+    projectForm.clearErrors();
+    const r = props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(form.date)));
+    const existing = (r?.projects && r.projects.length) ? r.projects : [];
+    projectForm.projects = existing.map(p => ({
+        project_id: p.project_id,
+        work_type: p.work_type || 'internal',
+        department_id: p.department_id || null,
+        extra_hours: p.extra_hours ?? null,
+        extra_minutes: p.extra_minutes ?? null,
+    }));
+    if (projectForm.projects.length === 0) addProjectRow();
+    showProjectModal.value = true;
+};
+
+const addProjectRow = () => {
+    projectForm.projects.push({ project_id: null, work_type: 'internal', department_id: null, extra_hours: null, extra_minutes: null });
+};
+
+const removeProjectRow = (index) => {
+    projectForm.projects.splice(index, 1);
+    if (projectForm.projects.length === 0) addProjectRow();
+};
+
+// Proyectos disponibles: se excluyen los ya elegidos en otras filas del día
+const availableProjectsForRow = (index) => {
+    const selectedIds = projectForm.projects.map(r => r.project_id).filter(Boolean);
+    return props.projects.filter(p => p.id === projectForm.projects[index]?.project_id || !selectedIds.includes(p.id));
+};
+
+const selectedDayForProjects = computed(() => {
+    if (!projectForm.date) return null;
+    return props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(projectForm.date))) || null;
+});
+
+const dayExtraApprovedText = computed(() => {
+    const d = selectedDayForProjects.value;
+    if (!d) return '0h 0m';
+    const h = d.approved_extra_hours ?? d.extra_hours ?? 0;
+    const m = d.approved_extra_minutes ?? d.extra_minutes ?? 0;
+    return `${h}h ${m}m`;
+});
+
+const hasDayExtraApproved = computed(() => {
+    const d = selectedDayForProjects.value;
+    return !!d && (((d.approved_extra_hours ?? d.extra_hours ?? 0) > 0) || ((d.approved_extra_minutes ?? d.extra_minutes ?? 0) > 0));
+});
+
+const projectsExtraTotalText = computed(() => {
+    let h = 0;
+    let m = 0;
+    projectForm.projects.forEach(r => {
+        h += Number(r.extra_hours) || 0;
+        m += Number(r.extra_minutes) || 0;
+    });
+    h += Math.floor(m / 60);
+    m = m % 60;
+    return `${h}h ${m}m`;
+});
+
+const projectsExtraOverflow = computed(() => {
+    const d = selectedDayForProjects.value;
+    if (!d || !hasDayExtraApproved.value) return false;
+    const dayMins = ((d.approved_extra_hours ?? d.extra_hours ?? 0) * 60) + (d.approved_extra_minutes ?? d.extra_minutes ?? 0);
+    let h = 0;
+    let m = 0;
+    projectForm.projects.forEach(r => {
+        h += Number(r.extra_hours) || 0;
+        m += Number(r.extra_minutes) || 0;
+    });
+    return ((h * 60) + m) > dayMins;
+});
+
+const submitProjects = () => {
+    projectForm.projects = projectForm.projects.filter(r => r.project_id);
+    projectForm.put(route('payroll-users.set-projects'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            ElNotification.success('Proyectos actualizados');
+            showProjectModal.value = false;
+            projectForm.reset();
+        },
+        onError: (errors) => ElNotification.error(errors?.projects || 'Error al actualizar proyectos'),
+    });
 };
 </script>
 
@@ -305,35 +385,77 @@ const submitRejectExtraTime = () => {
             </template>
         </el-dialog>
 
-        <!-- Modal: Vincular Proyecto -->
-        <el-dialog v-model="showProjectModal" title="Vincular proyecto al día" width="420px" class="!rounded-xl" destroy-on-close>
-            <div class="mb-5 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-100 flex gap-2 items-start">
+        <!-- Modal: Vincular Proyectos (múltiples por día) -->
+        <el-dialog v-model="showProjectModal" :title="`Proyectos del día ${projectForm.date || ''}`" width="760px" class="!rounded-xl" destroy-on-close>
+            <div class="mb-4 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-100 flex gap-2 items-start">
                 <i class="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
-                <p>Selecciona un proyecto para relacionarlo con este día. Esto permite asociar el tiempo trabajado a un proyecto específico.</p>
+                <p>Vincula uno o varios proyectos al día laborado. En cada uno indica si fue <b>interno</b> o <b>externo</b>, el departamento imputable y el tiempo extra invertido. La suma por proyecto debe coincidir con el total del día para cuadrar las métricas.</p>
             </div>
-            <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-2">Proyecto</label>
-                <el-select 
-                    v-model="projectForm.project_id" 
-                    placeholder="Selecciona un proyecto..." 
-                    filterable 
-                    clearable
-                    class="w-full"
-                >
-                    <el-option 
-                        v-for="project in projects" 
-                        :key="project.id" 
-                        :label="`${project.name} (${project.client})`" 
-                        :value="project.id" 
-                    />
-                </el-select>
-                <span v-if="projectForm.errors.project_id" class="text-xs text-red-500 mt-1 block">{{ projectForm.errors.project_id }}</span>
+
+            <div class="flex flex-wrap items-center gap-3 mb-4">
+                <div class="flex items-center gap-2 text-xs bg-gray-50 rounded-lg border border-gray-100 px-3 py-2">
+                    <span class="text-gray-400 uppercase font-bold text-[10px]">T.E. del día:</span>
+                    <span class="font-bold text-amber-600">{{ dayExtraApprovedText }}</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs bg-gray-50 rounded-lg border border-gray-100 px-3 py-2">
+                    <span class="text-gray-400 uppercase font-bold text-[10px]">Suma proyectos:</span>
+                    <span class="font-bold" :class="projectsExtraOverflow ? 'text-red-500' : 'text-teal-600'">{{ projectsExtraTotalText }}</span>
+                </div>
+                <div v-if="projectsExtraOverflow" class="flex-1 flex items-center gap-2 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-lg px-3 py-2">
+                    <i class="fa-solid fa-triangle-exclamation shrink-0"></i>
+                    <span>La suma excede el tiempo extra del día; ajusta los valores para no inflar métricas.</span>
+                </div>
             </div>
+
+            <div class="space-y-3 max-h-[52vh] overflow-y-auto pr-1">
+                <div v-for="(row, index) in projectForm.projects" :key="index" class="border border-gray-200 rounded-xl p-3 bg-white">
+                    <div class="flex items-start gap-3">
+                        <div class="flex-1">
+                            <label class="block text-[11px] font-bold text-gray-500 uppercase mb-1">Proyecto</label>
+                            <el-select v-model="row.project_id" placeholder="Selecciona un proyecto..." filterable class="w-full">
+                                <el-option v-for="project in availableProjectsForRow(index)" :key="project.id" :label="`${project.name} (${project.client})`" :value="project.id" />
+                            </el-select>
+                        </div>
+                        <el-button circle plain type="danger" size="small" class="!mt-5" :disabled="projectForm.projects.length === 1" @click="removeProjectRow(index)">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </el-button>
+                    </div>
+                    <div class="grid grid-cols-12 gap-3 mt-3">
+                        <div class="col-span-5">
+                            <label class="block text-[11px] font-bold text-gray-500 uppercase mb-1">Tipo de trabajo</label>
+                            <el-radio-group v-model="row.work_type" class="w-full">
+                                <el-radio-button value="internal"><i class="fa-solid fa-building mr-1"></i>Interno</el-radio-button>
+                                <el-radio-button value="external"><i class="fa-solid fa-earth-americas mr-1"></i>Externo</el-radio-button>
+                            </el-radio-group>
+                        </div>
+                        <div class="col-span-3">
+                            <label class="block text-[11px] font-bold text-gray-500 uppercase mb-1">Departamento</label>
+                            <el-select v-model="row.department_id" placeholder="Opcional" clearable filterable class="w-full">
+                                <el-option v-for="dept in departments" :key="dept.id" :label="dept.name" :value="dept.id" />
+                            </el-select>
+                        </div>
+                        <div class="col-span-4">
+                            <label class="block text-[11px] font-bold text-gray-500 uppercase mb-1">Tiempo extra</label>
+                            <div class="flex items-center gap-1">
+                                <el-input-number v-model="row.extra_hours" :min="0" :max="23" :controls="false" class="!flex-1" placeholder="0" />
+                                <span class="text-gray-400 text-xs">h</span>
+                                <el-input-number v-model="row.extra_minutes" :min="0" :max="59" :controls="false" class="!flex-1" placeholder="0" />
+                                <span class="text-gray-400 text-xs">m</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <el-button type="primary" plain class="!w-full mt-4" @click="addProjectRow">
+                <i class="fa-solid fa-plus mr-2"></i> Agregar otro proyecto al día
+            </el-button>
+
             <template #footer>
                 <div class="flex justify-end gap-2 pt-2">
                     <el-button @click="showProjectModal = false">Cancelar</el-button>
-                    <el-button type="primary" @click="submitProject" :loading="projectForm.processing" class="!bg-indigo-600 !border-indigo-600">
-                        <i class="fa-solid fa-link mr-2"></i> Vincular
+                    <el-button type="primary" @click="submitProjects" :loading="projectForm.processing" class="!bg-indigo-600 !border-indigo-600">
+                        <i class="fa-solid fa-diagram-project mr-2"></i> Guardar proyectos
                     </el-button>
                 </div>
             </template>

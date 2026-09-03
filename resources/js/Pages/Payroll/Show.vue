@@ -35,6 +35,11 @@ const props = defineProps({
         type: Array,
         default: () => []
     },
+    // Departamentos (catálogo) para detallar el vínculo proyecto-día
+    departments: {
+        type: Array,
+        default: () => []
+    },
     // Costos de hora extra configurados
     extraHourCosts: {
         type: Array,
@@ -455,6 +460,7 @@ const saveComment = () => {
                                     :canEdit="true"
                                     :approvalGroups="approvalGroups"
                                     :projects="projects"
+                                    :departments="departments"
                                     @edit-comment="openCommentModal"
                                 />
                             </div>

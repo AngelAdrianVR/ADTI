@@ -699,6 +699,15 @@ class PayrollController extends Controller
             ->orderBy('name')
             ->get();
 
+        // 2.6 Vínculos de la tabla pivote (varios proyectos por día laborado)
+        $allProjectLinks = \App\Models\PayrollUserProject::with(['project:id,name,client', 'department:id,name'])
+            ->whereIn('payroll_user_id', $payrollUserIds)
+            ->get()
+            ->groupBy('payroll_user_id');
+
+        // 2.7 Departamentos (catálogo) para el selector al vincular proyectos
+        $departments = \App\Models\Department::orderBy('name')->get(['id', 'name']);
+
         // 3. Cargar costos de hora extra configurados para esta nómina
         $extraHourCosts = $payroll->extraHourCosts()->get();
 
@@ -728,7 +737,7 @@ class PayrollController extends Controller
                 ];
             })->values()->toArray();
 
-        $formattedUsers = $usersCollection->groupBy('id')->map(function ($userGroup) use ($payroll, $allAttendances, $allComments, $holidays, $extraHourCosts, $approvalGroups, $allDecisions) {
+        $formattedUsers = $usersCollection->groupBy('id')->map(function ($userGroup) use ($payroll, $allAttendances, $allComments, $holidays, $extraHourCosts, $approvalGroups, $allDecisions, $allProjectLinks) {
             $user = $userGroup->first();
             
             // Pasamos collect([]) si está nulo para evitar llamadas extras a BD
@@ -753,6 +762,18 @@ class PayrollController extends Controller
 
             // Inyectar comentarios, costos y datos de aprobación dentro de las incidencias
             foreach ($incidences as $incidence) {
+                // Vínculos de proyectos (varios por día) del registro real
+                $incidence->projects = collect($allProjectLinks->get($incidence->id) ?? [])
+                    ->map(fn ($l) => [
+                        'id' => $l->id,
+                        'project_id' => $l->project_id,
+                        'project' => $l->project ? ['id' => $l->project->id, 'name' => $l->project->name, 'client' => $l->project->client] : null,
+                        'work_type' => $l->work_type,
+                        'department_id' => $l->department_id,
+                        'department' => $l->department ? ['id' => $l->department->id, 'name' => $l->department->name] : null,
+                        'extra_hours' => $l->extra_hours,
+                        'extra_minutes' => $l->extra_minutes,
+                    ])->values()->all();
                 $dateKey = $incidence->date->toDateString();
                 if ($commentsByDate->has($dateKey)) {
                     $incidence->comment = $commentsByDate->get($dateKey);
@@ -864,6 +885,148 @@ class PayrollController extends Controller
             'extraHourCosts' => $extraHourCosts,
             'approvalGroups' => $approvalGroups,
             'projects' => $projects,
+            'departments' => $departments,
         ];
+    }
+
+
+    /**
+     * Reporte de personal que trabaja fuera de las instalaciones de ADTI.
+     * Filtra los días con vínculos de proyecto marcados como "Trabajo externo"
+     * (work_type = 'external') dentro del periodo indicado (mensual, bimestral,
+     * cuatrimestral o personalizado).
+     */
+    public function externalWorkReport(Request $request)
+    {
+        $request->validate([
+            'period_type' => 'required|in:monthly,bimonthly,quadrimester,custom',
+            'year' => 'nullable|integer|min:2000|max:2100',
+            'period_index' => 'nullable|integer|min:1|max:6',
+            'month' => 'nullable|integer|min:1|max:12',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+        ]);
+
+        [$startDate, $endDate, $rangeLabel] = $this->resolveExternalWorkRange($request);
+
+        if (!$startDate || !$endDate) {
+            return back()->withErrors(['error' => 'No fue posible calcular el rango del reporte.']);
+        }
+
+        // Días con vinculación "externa". Se agrupan por empleado/fecha: un día
+        // puede tener varios proyectos externos (todos se muestran en una fila).
+        $links = \App\Models\PayrollUserProject::query()
+            ->where('work_type', 'external')
+            ->whereHas('payrollUser', fn ($q) => $q->whereBetween('date', [
+                $startDate->toDateString(),
+                $endDate->toDateString(),
+            ]))
+            ->with([
+                'project:id,name,client',
+                'department:id,name',
+                'payrollUser.user:id,name,code,org_props,profile_photo_path',
+            ])
+            ->get();
+
+        // Visibilidad: con "Ver incidencias" ve todos; si no, solo empleados a cargo + sí mismo.
+        $currentUser = auth()->user();
+        $allowedUsersQuery = \App\Models\User::whereIn('id', $links->pluck('payrollUser.user_id'));
+        if (!$currentUser->can('Ver incidencias')) {
+            $employeeIds = $currentUser->employees_in_charge ?? [];
+            if (!in_array($currentUser->id, $employeeIds)) {
+                $employeeIds[] = $currentUser->id;
+            }
+            $allowedUsersQuery->whereIn('id', $employeeIds);
+        }
+        $allowedUserIds = $allowedUsersQuery->pluck('id');
+        $links = $links->filter(fn ($l) => $allowedUserIds->contains($l->payrollUser->user_id))->values();
+
+        $rows = $links
+            ->groupBy(fn ($l) => $l->payroll_user_id)
+            ->map(function ($group) {
+                $pu = $group->first()->payrollUser;
+
+                return [
+                    'user_id' => $pu->user_id,
+                    'user' => [
+                        'id' => $pu->user->id,
+                        'name' => $pu->user->name,
+                        'code' => $pu->user->code,
+                        'department' => $pu->user->org_props['department'] ?? null,
+                        'profile_photo_url' => $pu->user->profile_photo_url,
+                    ],
+                    'date' => $pu->date->toDateString(),
+                    'check_in' => $pu->check_in ? substr($pu->check_in, 0, 5) : null,
+                    'check_out' => $pu->check_out ? substr($pu->check_out, 0, 5) : null,
+                    'check_in_location' => $pu->check_in_location,
+                    'check_out_location' => $pu->check_out_location,
+                    'projects' => $group->map(fn ($l) => [
+                        'id' => $l->project_id,
+                        'name' => $l->project->name ?? 'Proyecto eliminado',
+                        'client' => $l->project->client ?? null,
+                        'department' => $l->department->name ?? null,
+                    ])->values(),
+                ];
+            })
+            ->values()
+            ->sortBy(fn ($row) => $row['date'])
+            ->sortBy(fn ($row) => $row['user']['name'])
+            ->values()
+            ->all();
+
+        return inertia('Payroll/ExternalWorkReport', [
+            'rows' => $rows,
+            'period_type' => $request->period_type,
+            'rangeLabel' => $rangeLabel,
+            'start_date' => $startDate->toDateString(),
+            'end_date' => $endDate->toDateString(),
+            'total_people' => collect($rows)->pluck('user_id')->unique()->count(),
+            'total_days' => count($rows),
+            'generated_at' => now()->format('d/m/Y H:i'),
+        ]);
+    }
+
+    /**
+     * Calcula el rango [inicio, fin] y una etiqueta legible según el tipo de
+     * periodo seleccionado en el reporte de personal externo.
+     *
+     * @return array{0: ?Carbon, 1: ?Carbon, 2: string}
+     */
+    private function resolveExternalWorkRange(Request $request): array
+    {
+        $year = (int) ($request->year ?? now()->year);
+        $type = $request->period_type;
+
+        if ($type === 'custom') {
+            if (!$request->filled('start_date') || !$request->filled('end_date')) {
+                return [null, null, ''];
+            }
+            $start = Carbon::parse($request->start_date)->startOfDay();
+            $end = Carbon::parse($request->end_date)->endOfDay();
+
+            return [$start, $end, $start->format('d/m/Y').' al '.$end->format('d/m/Y')];
+        }
+
+        $periodIndex = (int) ($request->period_index ?? 1);
+
+        if ($type === 'monthly') {
+            $month = (int) ($request->month ?? now()->month);
+            $start = Carbon::create($year, $month, 1)->startOfDay();
+
+            return [$start, $start->copy()->endOfMonth(), $start->format('F Y')];
+        }
+
+        if ($type === 'bimonthly') {
+            $startMonth = (($periodIndex - 1) * 2) + 1;
+            $start = Carbon::create($year, $startMonth, 1)->startOfDay();
+
+            return [$start, $start->copy()->addMonths(1)->endOfMonth(), $start->format('F').' – '.$start->copy()->addMonths(1)->format('F Y')];
+        }
+
+        // quadrimester
+        $startMonth = (($periodIndex - 1) * 4) + 1;
+        $start = Carbon::create($year, $startMonth, 1)->startOfDay();
+
+        return [$start, $start->copy()->addMonths(3)->endOfMonth(), $start->format('F').' – '.$start->copy()->addMonths(3)->format('F Y')];
     }
 }

@@ -72,10 +72,17 @@ class PayrollUser extends Pivot
         return $this->belongsTo(User::class, 'approved_by');
     }
 
-    // Relación: Proyecto vinculado a este día
+    // Relación: Proyecto vinculado a este día (legacy, un solo proyecto)
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    // Relación: Proyectos múltiples vinculados a este día (pivote con detalle:
+    // tipo interno/externo, departamento y tiempo extra por proyecto)
+    public function projects(): HasMany
+    {
+        return $this->hasMany(PayrollUserProject::class, 'payroll_user_id');
     }
 
     // Relación: Decisiones de aprobación por niveles para esta entrada

@@ -418,17 +418,37 @@ class ProjectController extends Controller
 
     /**
      * Sincronización simple (mejor esfuerzo): al registrar tiempo en un proyecto,
-     * si existe una asistencia (PayrollUser) para ese usuario/fecha y aún no tiene
-     * proyecto vinculado, se le asigna. Así el tiempo extra aprobado de incidencias
-     * se refleja automáticamente en el tiempo invertido del proyecto.
+     * si existe una asistencia (PayrollUser) para ese usuario/fecha, se vincula el
+     * proyecto a ese día tanto en la columna legacy (project_id) como en la tabla
+     * pivote payroll_user_project (vínculo múltiple). Así el tiempo extra aprobado
+     * de incidencias se refleja automáticamente en el tiempo invertido del proyecto.
      */
     private function linkPayrollProjectToDate(int $userId, int $projectId, ?Carbon $date = null)
     {
         $date = $date ?? Carbon::now();
 
-        PayrollUser::where('user_id', $userId)
+        $payrollUser = PayrollUser::where('user_id', $userId)
             ->whereDate('date', $date->toDateString())
-            ->whereNull('project_id')
-            ->update(['project_id' => $projectId]);
+            ->first();
+
+        if (!$payrollUser) {
+            return;
+        }
+
+        // Columna legacy (solo si aún no hay un proyecto "principal")
+        if (!$payrollUser->project_id) {
+            $payrollUser->update(['project_id' => $projectId]);
+        }
+
+        // Vínculo múltiple en la tabla pivote (sin duplicar)
+        \App\Models\PayrollUserProject::firstOrCreate(
+            [
+                'payroll_user_id' => $payrollUser->id,
+                'project_id' => $projectId,
+            ],
+            [
+                'work_type' => 'internal',
+            ]
+        );
     }
 }
