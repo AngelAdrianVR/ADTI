@@ -67,7 +67,7 @@ Manages biweekly payroll periods and daily attendance records. Each payroll has 
 | `PUT /payroll-users/revert-extra-time` | Revert approval |
 | `PUT /payroll-users/reject-extra-time` | Reject extra time |
 | `GET /payroll-users/recalculate-extra-time` | Recalculate extra hours for a record |
-| `PUT /payroll-users/clear-extra-time` | Clear extra time values |
+| `PUT /payroll-users/clear-extra-time` | Clear extra time values — accepts a single `date` or a `dates[]` array (bulk, up to 31 days) |
 | `PUT /payroll-users/set-project` | Assign payroll day to a project |
 
 ---

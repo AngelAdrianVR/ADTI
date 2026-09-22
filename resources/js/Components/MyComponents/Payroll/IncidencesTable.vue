@@ -3,7 +3,7 @@ import { ref, computed } from 'vue';
 import { useForm, router, usePage } from '@inertiajs/vue3';
 import { format, isSameDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ElNotification } from 'element-plus';
+import { ElNotification, ElMessageBox } from 'element-plus';
 import { useIncidencesApproval } from '@/Composables/payroll/useIncidencesApproval.js';
 import IncidencesDayCard from '@/Components/MyComponents/Payroll/IncidencesDayCard.vue';
 
@@ -45,6 +45,8 @@ const dragStartX = ref(0);
 const dragScrollLeft = ref(0);
 
 const onDragStart = (e) => {
+    // En modo selección el clic marca días, no arrastra el carrusel
+    if (selectionMode.value) return;
     isDragging.value = true;
     dragStartX.value = e.pageX - scrollContainer.value.offsetLeft;
     dragScrollLeft.value = scrollContainer.value.scrollLeft;
@@ -71,6 +73,78 @@ const onDragEnd = () => {
 const form = useForm({ date: null, check_in: null, check_out: null, break_start: null, break_end: null, incidence: null, user_id: props.payrollUser.user.id, payroll_id: props.payroll.id });
 const approveForm = useForm({ payroll_user_id: null, status: 'approved', approved_extra_hours: 0, approved_extra_minutes: 0, comments: '' });
 const projectForm = useForm({ date: null, user_id: props.payrollUser.user.id, projects: [] });
+
+// ─── Selección múltiple de días (eliminar tiempo extra en lote) ───
+const selectionMode = ref(false);
+const selectedDates = ref([]);
+const bulkClearForm = useForm({ user_id: props.payrollUser.user.id, dates: [] });
+
+// Clave de día (YYYY-MM-DD) para comparar fechas sin importar la hora
+const dayKey = (day) => String(day.date).slice(0, 10);
+
+// Un día es elegible cuando tiene tiempo extra registrado (pendiente o aprobado)
+const hasDayExtraTime = (day) => (day.extra_hours || 0) > 0 || (day.extra_minutes || 0) > 0;
+
+const eligibleDaysCount = computed(() => props.payrollUser.incidences.filter(hasDayExtraTime).length);
+
+const isDaySelected = (day) => selectedDates.value.includes(dayKey(day));
+
+const selectedDays = computed(() => props.payrollUser.incidences.filter(day => isDaySelected(day)));
+
+// Minutos extra que se eliminarán (usa el valor aprobado si existe, si no el solicitado)
+const selectedExtraMinutes = computed(() => selectedDays.value.reduce((total, day) => {
+    const h = Number(day.approved_extra_hours ?? day.extra_hours) || 0;
+    const m = Number(day.approved_extra_minutes ?? day.extra_minutes) || 0;
+    return total + (h * 60) + m;
+}, 0));
+
+const selectedExtraTimeText = computed(() => `${Math.floor(selectedExtraMinutes.value / 60)}h ${selectedExtraMinutes.value % 60}m`);
+
+const toggleSelectionMode = () => {
+    selectionMode.value = !selectionMode.value;
+    if (!selectionMode.value) selectedDates.value = [];
+};
+
+const toggleDaySelection = (day) => {
+    if (!hasDayExtraTime(day)) return;
+    const key = dayKey(day);
+    selectedDates.value = isDaySelected(day)
+        ? selectedDates.value.filter(date => date !== key)
+        : [...selectedDates.value, key];
+};
+
+const selectAllEligibleDays = () => {
+    selectedDates.value = props.payrollUser.incidences.filter(hasDayExtraTime).map(dayKey);
+};
+
+const clearDaySelection = () => { selectedDates.value = []; };
+
+// Elimina el tiempo extra de todos los días seleccionados en una sola petición
+const clearSelectedExtraTime = async () => {
+    if (selectedDays.value.length === 0) return;
+
+    try {
+        await ElMessageBox.confirm(
+            `Se eliminará el tiempo extra de ${selectedDays.value.length} día(s) (${selectedExtraTimeText.value}). También se borran las aprobaciones registradas. ¿Continuar?`,
+            'Eliminar tiempo extra',
+            { confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', type: 'warning' }
+        );
+    } catch (e) {
+        return; // Cancelado por el usuario
+    }
+
+    bulkClearForm.dates = [...selectedDates.value];
+    bulkClearForm.put(route('payroll-users.clear-extra-time'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            ElNotification.success(`Tiempo extra eliminado en ${bulkClearForm.dates.length} día(s)`);
+            selectionMode.value = false;
+            selectedDates.value = [];
+            bulkClearForm.reset();
+        },
+        onError: (errors) => ElNotification.error(errors?.dates || errors?.date || 'Error al eliminar el tiempo extra'),
+    });
+};
 
 // ─── Formateador de dinero con separadores de miles ───
 const formatMoney = (value) => {
@@ -356,9 +430,31 @@ const submitProjects = () => {
 
         <!-- Body -->
         <div v-show="isOpen" class="border-t border-gray-100 bg-gray-50/50 p-4">
+            <!-- Selección múltiple de días para eliminar tiempo extra en lote -->
+            <div v-if="canEdit && eligibleDaysCount > 0" class="flex flex-wrap items-center gap-2 mb-3">
+                <el-button v-if="!selectionMode" size="small" plain type="primary" @click="toggleSelectionMode">
+                    <i class="fa-solid fa-list-check mr-2"></i> Seleccionar varios días
+                </el-button>
+                <template v-else>
+                    <span class="text-[11px] font-bold uppercase tracking-wide text-gray-500 flex items-center gap-1.5">
+                        <i class="fa-solid fa-hand-pointer text-indigo-500"></i>
+                        {{ selectedDays.length }} de {{ eligibleDaysCount }} día(s) · {{ selectedExtraTimeText }}
+                    </span>
+                    <el-button size="small" plain @click="selectAllEligibleDays">Seleccionar todos</el-button>
+                    <el-button size="small" plain :disabled="selectedDays.length === 0" @click="clearDaySelection">Limpiar</el-button>
+                    <el-button size="small" type="danger" :disabled="selectedDays.length === 0" :loading="bulkClearForm.processing" @click="clearSelectedExtraTime">
+                        <i class="fa-solid fa-trash-can mr-2"></i> Eliminar tiempo extra ({{ selectedDays.length }})
+                    </el-button>
+                    <el-button size="small" plain @click="toggleSelectionMode">Cancelar</el-button>
+                </template>
+            </div>
+            <p v-if="selectionMode" class="text-[10px] text-gray-400 mb-2">
+                Toca los días con tiempo extra para marcarlos o desmarcarlos. Solo se pueden seleccionar días con T.E. registrado.
+            </p>
             <div
                 ref="scrollContainer"
-                class="overflow-x-auto pb-2 cursor-grab"
+                class="overflow-x-auto pb-2"
+                :class="selectionMode ? 'cursor-default' : 'cursor-grab'"
                 @mousedown="onDragStart"
                 @mousemove="onDragMove"
                 @mouseup="onDragEnd"
@@ -377,7 +473,11 @@ const submitProjects = () => {
                         :getLocationError="getLocationError"
                         :projects="projects"
                         :canSeeMoney="canSeeMoney"
+                        :selectionMode="selectionMode"
+                        :isSelected="isDaySelected(day)"
+                        :canSelect="hasDayExtraTime(day)"
                         @command="handleCommand"
+                        @toggle-select="toggleDaySelection"
                     />
                 </div>
             </div>

@@ -15,9 +15,13 @@ const props = defineProps({
     incidences: { type: Array, required: true },
     projects: { type: Array, default: () => [] },
     canSeeMoney: { type: Boolean, default: false },
+    // Modo selección múltiple: permite marcar varios días para acciones en lote
+    selectionMode: { type: Boolean, default: false },
+    isSelected: { type: Boolean, default: false },
+    canSelect: { type: Boolean, default: true },
 });
 
-const emit = defineEmits(['command']);
+const emit = defineEmits(['command', 'toggle-select']);
 
 const formatDate = (date) => format(new Date(date), 'dd MMM', { locale: es });
 const getDayName = (date) => format(new Date(date), 'EEEE', { locale: es });
@@ -41,6 +45,14 @@ const getIncidenceColor = (incidence) => {
 
 const handleCommand = (cmd) => emit('command', cmd);
 
+// ─── Selección múltiple ───
+// En modo selección, el clic sobre la tarjeta marca/desmarca el día. Solo los
+// días con tiempo extra registrado son seleccionables (es lo que se elimina en lote).
+const toggleSelect = () => {
+    if (!props.selectionMode || !props.canSelect) return;
+    emit('toggle-select', props.day);
+};
+
 // ─── Proyectos vinculados al día (varios) ───
 // day.projects viene desde el backend (tabla pivote). Como respaldo para
 // lecturas que aún no lo incluyan (ej. MyPayrolls), se usa day.project.
@@ -62,10 +74,25 @@ const projectTooltip = (p) => {
 </script>
 
 <template>
-    <div class="flex flex-col w-48 border rounded-lg bg-white overflow-hidden shadow-sm transition-all hover:shadow-md relative"
-         :class="getIncidenceColor(day)">
+    <div class="flex flex-col w-48 border rounded-lg bg-white overflow-hidden shadow-sm transition-all relative"
+         :class="[
+             getIncidenceColor(day),
+             selectionMode ? (canSelect ? 'cursor-pointer hover:shadow-md' : 'cursor-not-allowed opacity-60') : 'hover:shadow-md',
+             isSelected ? 'ring-2 ring-indigo-500 ring-offset-1 shadow-md' : ''
+         ]"
+         @click="toggleSelect">
+        <!-- Indicador de selección múltiple -->
+        <div v-if="selectionMode" class="absolute top-1 left-1 z-20 pointer-events-none">
+            <span class="flex items-center justify-center w-4 h-4 rounded border text-[9px] shadow-sm"
+                  :class="isSelected
+                      ? 'bg-indigo-600 border-indigo-600 text-white'
+                      : (canSelect ? 'bg-white border-gray-300 text-transparent' : 'bg-gray-100 border-gray-200 text-gray-300')">
+                <i class="fa-solid fa-check"></i>
+            </span>
+        </div>
+
         <!-- Indicador de Comentario -->
-        <div v-if="day.comment" class="absolute top-1 left-1 z-10">
+        <div v-if="day.comment && !selectionMode" class="absolute top-1 left-1 z-10">
             <el-tooltip :content="day.comment.comments" placement="top" effect="dark">
                 <i class="fa-solid fa-comment-dots text-indigo-500 text-xs drop-shadow-sm"></i>
             </el-tooltip>
@@ -81,7 +108,7 @@ const projectTooltip = (p) => {
         <div class="flex-1 p-2 flex flex-col justify-center items-center text-xs gap-1 min-h-[85px] relative group">
 
             <!-- Dropdown de Acciones -->
-            <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10" v-if="canEdit">
+            <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10" v-if="canEdit && !selectionMode">
                 <el-dropdown trigger="click" @command="handleCommand" size="small">
                     <button class="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600">
                         <i class="fa-solid fa-ellipsis-vertical"></i>
@@ -151,7 +178,7 @@ const projectTooltip = (p) => {
                     <div class="flex items-center gap-0.5">
                         <span class="text-gray-800 font-mono font-bold text-[11px]">{{ day.check_in?.substring(0, 5) || '??' }}</span>
                         <el-tooltip v-if="isValidLocation(day.check_in_location)" content="Ver ubicación de entrada" placement="top">
-                            <a :href="`https://www.google.com/maps/search/?api=1&query=${day.check_in_location}`" target="_blank" class="text-blue-500 hover:text-blue-700 transition-colors" @click.stop>
+                            <a :href="`https://www.google.com/maps/search/?api=1&query=${day.check_in_location}`" target="_blank" class="text-blue-500 hover:text-blue-700 transition-colors" :class="{ 'pointer-events-none': selectionMode }" @click.stop>
                                 <i class="fa-solid fa-location-dot text-[9px]"></i>
                             </a>
                         </el-tooltip>
@@ -163,7 +190,7 @@ const projectTooltip = (p) => {
                     <div class="flex items-center gap-0.5">
                         <span class="text-gray-800 font-mono font-bold text-[11px]">{{ day.check_out?.substring(0, 5) || '??' }}</span>
                         <el-tooltip v-if="isValidLocation(day.check_out_location)" content="Ver ubicación de salida" placement="top">
-                            <a :href="`https://www.google.com/maps/search/?api=1&query=${day.check_out_location}`" target="_blank" class="text-blue-500 hover:text-blue-700 transition-colors" @click.stop>
+                            <a :href="`https://www.google.com/maps/search/?api=1&query=${day.check_out_location}`" target="_blank" class="text-blue-500 hover:text-blue-700 transition-colors" :class="{ 'pointer-events-none': selectionMode }" @click.stop>
                                 <i class="fa-solid fa-location-dot text-[9px]"></i>
                             </a>
                         </el-tooltip>

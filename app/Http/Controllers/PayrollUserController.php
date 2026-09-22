@@ -610,21 +610,38 @@ class PayrollUserController extends Controller
     }
 
     /**
-     * Eliminar el tiempo extra de un día específico.
+     * Eliminar el tiempo extra de uno o varios días.
+     * Acepta `date` (un solo día, uso legado) o `dates` (varios días de la
+     * catorcena) para limpiar el tiempo extra en una sola operación.
      * Borra horas/minutos extra y cualquier dato de aprobación asociado.
      */
     public function clearExtraTime(Request $request)
     {
         $request->validate([
-            'date' => 'required|date',
             'user_id' => 'required|exists:users,id',
+            'date' => 'nullable|required_without:dates|date',
+            'dates' => 'nullable|required_without:date|array|min:1|max:31',
+            'dates.*' => 'date',
         ]);
 
-        $payrollUser = PayrollUser::where('user_id', $request->user_id)
-            ->whereDate('date', clone \Carbon\Carbon::parse($request->date))
-            ->first();
+        // Normalizamos todas las fechas recibidas a Y-m-d (sin duplicados),
+        // aceptando indistintamente un solo día o la selección de varios.
+        $dates = collect($request->input('dates', []))
+            ->push($request->input('date'))
+            ->filter()
+            ->map(fn ($date) => \Carbon\Carbon::parse($date)->toDateString())
+            ->unique()
+            ->values();
 
-        if ($payrollUser) {
+        $payrollUsers = PayrollUser::where('user_id', $request->user_id)
+            ->where(function ($query) use ($dates) {
+                foreach ($dates as $date) {
+                    $query->orWhereDate('date', $date);
+                }
+            })
+            ->get();
+
+        foreach ($payrollUsers as $payrollUser) {
             // Limpiar tiempo extra calculado y aprobación
             $payrollUser->update([
                 'extra_hours' => null,
@@ -644,7 +661,7 @@ class PayrollUserController extends Controller
             return back();
         }
 
-        return response()->json(['success' => true]);
+        return response()->json(['success' => true, 'cleared' => $payrollUsers->count()]);
     }
 
     public function recalculateExtraTime()
