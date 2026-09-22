@@ -35,4 +35,25 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | BioTime Pro (reloj checador)
+    |--------------------------------------------------------------------------
+    | url: URL base del reloj al que el ERP puede llegar por API
+    |      (ej. http://127.0.0.1:81 si el ERP corre en la misma máquina del reloj,
+    |      o http://192.168.1.50:81 si está en la misma red).
+    |      Si se deja vacío, el comando intenta detectar la IP local de la máquina.
+    | backfill_key: llave para ejecutar /backfill-biotime desde el navegador.
+    */
+
+    'biotime' => [
+        'url' => env('BIOTIME_URL'),
+        'port' => env('BIOTIME_PORT', 81),
+        'username' => env('BIOTIME_USER', 'admin'),
+        'password' => env('BIOTIME_PASS', 'adti1234'),
+        'timeout' => (int) env('BIOTIME_TIMEOUT', 30),
+        'page_size' => (int) env('BIOTIME_PAGE_SIZE', 200),
+        'backfill_key' => env('BACKFILL_KEY'),
+    ],
+
 ];

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BioTimeBackfillController;
 use App\Http\Controllers\BioTimeTransactionsController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
@@ -323,6 +324,12 @@ Route::get('/backfill-payroll-user-project', function () {
 
     return "Backfill payroll_user_project completado. Insertados: {$inserted}, omitidos (ya existentes): {$skipped}.";
 });
+
+// --- BACKFILL DE CHECADAS BIOTIME (recuperación de días sin registro) ---
+// Reporte (dry-run):  /backfill-biotime?emp=63,64,65&from=2026-09-01&to=2026-09-21
+// Aplicar cambios:    el mismo enlace + &apply=1&confirm=SI
+// Protegido con BACKFILL_KEY del .env o con una sesión abierta en el ERP.
+Route::get('/backfill-biotime', [BioTimeBackfillController::class, 'run']);
 
 // --- OTROS / API ---
 Route::get('/api/process-transaction/{time}/{emp_code}', [PayrollUserController::class, 'processBioTimeTransaction']);
