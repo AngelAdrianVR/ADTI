@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ExtraHourApprovalDecision;
 use App\Services\ExtraHourCostResolver;
+use App\Services\ExtraHourPendingQuery;
 use App\Models\Holiday;
 use App\Models\Payroll;
 use App\Models\PayrollComment;
@@ -11,10 +12,15 @@ use App\Models\PayrollUser;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class PayrollController extends Controller
 {
+    public function __construct(
+        private ExtraHourPendingQuery $pendingExtraHours
+    ) {}
+
     public function index()
     {
         $payrolls = Payroll::latest()
@@ -421,12 +427,22 @@ class PayrollController extends Controller
 
         $currentUser = auth()->user();
 
-        // 1. Usuarios visibles según permisos y jerarquía organizacional
-        $query = User::whereNotIn('org_props->position', ['Dirección', 'Soporte DTW'])
+        // 1. Usuarios visibles según permisos, jerarquía organizacional y —nuevo—
+        //    los grupos donde el usuario es aprobador de tiempo extra (sin esto el
+        //    aprobador no veía los días que el badge le manda a autorizar).
+        //    El filtro de puesto es NULL-safe: en MySQL un `NOT IN` sobre un valor
+        //    NULL descarta la fila, así que sin esto un colaborador sin puesto
+        //    configurado quedaba invisible para todo el mundo.
+        $query = User::where(function ($q) {
+                $q->whereNull('org_props->position')
+                  ->orWhereNotIn('org_props->position', ['Dirección', 'Soporte DTW']);
+            })
             ->where('is_active', true);
         if (!$currentUser->can('Ver incidencias')) {
-            if (!empty($currentUser->employees_in_charge)) {
-                $employeesIds = $currentUser->employees_in_charge;
+            $employeesIds = array_map('intval', $currentUser->employees_in_charge ?? []);
+            $employeesIds = array_values(array_unique(array_merge($employeesIds, $this->approverEmployeeIds($currentUser))));
+
+            if (!empty($employeesIds)) {
                 if (!in_array($currentUser->id, $employeesIds)) {
                     $employeesIds[] = $currentUser->id;
                 }
@@ -634,12 +650,45 @@ class PayrollController extends Controller
         return app(ExtraHourCostResolver::class)->resolve($dateObj, $userId, $extraHourCosts);
     }
 
+    /**
+     * Colaboradores de los grupos donde el usuario es aprobador de algún nivel
+     * (en cualquier catorcena).
+     *
+     * Es imprescindible para que un aprobador SIN el permiso global 'Ver incidencias'
+     * pueda ver los días que el badge de la barra superior le manda a autorizar:
+     * antes su lista visible era sólo `employees_in_charge`, así que podía recibir
+     * "18 días en tu turno" y no verlos en el modal (ni poder decidirlos).
+     *
+     * @return array<int, int>
+     */
+    private function approverEmployeeIds(User $user): array
+    {
+        return DB::table('extra_hour_approval_group_user')
+            ->whereIn('approval_group_id', function ($q) use ($user) {
+                $q->select('l.approval_group_id')
+                    ->from('extra_hour_approval_levels as l')
+                    ->join('extra_hour_approval_level_user as lu', 'lu.approval_level_id', '=', 'l.id')
+                    ->where('lu.user_id', $user->id);
+            })
+            ->distinct()
+            ->pluck('user_id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
     private function getUserProcessedInfo(Payroll $payroll, $userIds = null)
     {
         $currentUser = auth()->user();
         
-        // 1. Determinar qué usuarios mostrar basado en permisos y jerarquía
-        $query = User::whereNotIn('org_props->position', ['Dirección', 'Soporte DTW'])
+        // 1. Determinar qué usuarios mostrar basado en permisos y jerarquía.
+        //    El filtro de puesto es NULL-safe (en MySQL `NOT IN` sobre NULL descarta
+        //    la fila): sin esto, un colaborador sin puesto configurado desaparecía
+        //    de la nómina y del panel de tiempo extra para todos los usuarios.
+        $query = User::where(function ($q) {
+                $q->whereNull('org_props->position')
+                  ->orWhereNotIn('org_props->position', ['Dirección', 'Soporte DTW']);
+            })
             ->where(function ($q) use ($payroll) {
                 $q->where('is_active', true)
                   ->orWhereHas('payrolls', function ($sub) use ($payroll) {
@@ -649,15 +698,20 @@ class PayrollController extends Controller
 
         // Aplicamos la jerarquía y permisos
         if (!$currentUser->can('Ver incidencias')) {
-            if (!empty($currentUser->employees_in_charge)) {
+            // Subordinados + colaboradores de los grupos donde es aprobador de
+            // tiempo extra (si no, no podría ver ni decidir los días que el badge
+            // le asigna). Si no tiene ninguno de los dos, no ve a nadie.
+            $employeesIds = array_map('intval', $currentUser->employees_in_charge ?? []);
+            $employeesIds = array_values(array_unique(array_merge($employeesIds, $this->approverEmployeeIds($currentUser))));
+
+            if (!empty($employeesIds)) {
                 // Solo cargar los usuarios a su cargo + a sí mismo
-                $employeesIds = $currentUser->employees_in_charge;
                 if (!in_array($currentUser->id, $employeesIds)) {
                     $employeesIds[] = $currentUser->id;
                 }
                 $query->whereIn('id', $employeesIds);
             } else {
-                // No tiene permisos ni empleados a cargo -> no ve a nadie
+                // No tiene permisos, ni empleados a cargo, ni grupos de aprobación
                 $query->whereRaw('1 = 0');
             }
         }
@@ -737,7 +791,7 @@ class PayrollController extends Controller
                 ];
             })->values()->toArray();
 
-        $formattedUsers = $usersCollection->groupBy('id')->map(function ($userGroup) use ($payroll, $allAttendances, $allComments, $holidays, $extraHourCosts, $approvalGroups, $allDecisions, $allProjectLinks) {
+        $formattedUsers = $usersCollection->groupBy('id')->map(function ($userGroup) use ($payroll, $allAttendances, $allComments, $holidays, $extraHourCosts, $approvalGroups, $allDecisions, $allProjectLinks, $currentUser) {
             $user = $userGroup->first();
             
             // Pasamos collect([]) si está nulo para evitar llamadas extras a BD
@@ -854,6 +908,17 @@ class PayrollController extends Controller
                 // Acuerdo de tiempo extra perseguido a través de niveles
                 $incidence->proposed_extra_hours = $incidence->proposed_extra_hours ?? null;
                 $incidence->proposed_extra_minutes = $incidence->proposed_extra_minutes ?? null;
+
+                // Permiso calculado en el SERVIDOR con la regla canónica
+                // (ExtraHourPendingQuery::evaluateIncidence): el frontend usa estos
+                // campos tal cual, así que no puede discrepar del badge ni del modal.
+                // Un día con current_approval_level_id = NULL queda como
+                // 'orphan' (sin flujo de autorización) y NUNCA como accionable.
+                $incidence->approval = $this->pendingExtraHours->evaluateIncidence(
+                    $incidence,
+                    $approvalGroups,
+                    (int) ($currentUser?->id ?? 0)
+                );
             }
 
             return [
@@ -886,6 +951,11 @@ class PayrollController extends Controller
             'approvalGroups' => $approvalGroups,
             'projects' => $projects,
             'departments' => $departments,
+            // Resumen canónico de tiempo extra del usuario actual para esta catorcena
+            // (lo usan las tarjetas KPI y el modal: un solo número en todo el sistema).
+            'extraTimeSummary' => $currentUser
+                ? $this->pendingExtraHours->summaryForPayroll($currentUser, $payroll)
+                : null,
         ];
     }
 

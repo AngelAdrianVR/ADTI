@@ -2,16 +2,16 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\ExtraHourApprovalLevel;
-use App\Models\Payroll;
-use App\Models\PayrollUser;
+use App\Services\ExtraHourPendingQuery;
 use App\Models\VacationRequest;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
 {
+    public function __construct(
+        private ExtraHourPendingQuery $pendingExtraHours
+    ) {}
     /**
      * The root template that's loaded on the first page visit.
      *
@@ -95,47 +95,17 @@ class HandleInertiaRequests extends Middleware
             },
 
             // Contador de tiempo extra pendiente por aprobar (por catorcena)
-            // Solo muestra entradas donde es el TURNO del usuario (nivel actual = su nivel)
+            // Regla canónica en ExtraHourPendingQuery: es el TURNO del usuario
+            // (nivel actual suyo, empleado en el grupo de ese nivel, sin decisión
+            // previa) y el día tiene tiempo extra registrado. Los días sin flujo
+            // de autorización (nivel NULL) NO cuentan: se reportan aparte.
             'auth.user.pendingExtraTimePayrolls' => function () use ($request) {
                 $user = $request->user();
-                if (!$user) return [];
-
-                $userId = $user->id;
-
-                // ¿Es aprobador en algún nivel?
-                $isApprover = ExtraHourApprovalLevel::whereHas('approvers', fn ($q) => $q->where('user_id', $userId))->exists();
-                if (!$isApprover) {
+                if (!$user) {
                     return [];
                 }
 
-                // Solo pendientes cuyo nivel ACTUAL tiene a este usuario como aprobador
-                $results = PayrollUser::where('extra_hour_status', 'pending')
-                    ->whereNotNull('current_approval_level_id')
-                    ->whereHas('currentApprovalLevel', fn ($q) => $q->whereHas('approvers', fn ($q2) => $q2->where('user_id', $userId)))
-                    ->select('payroll_id', DB::raw('COUNT(*) as pending_count'))
-                    ->groupBy('payroll_id')
-                    ->orderBy('payroll_id', 'desc')
-                    ->get();
-
-                if ($results->isEmpty()) {
-                    return [];
-                }
-
-                // Cargar datos de las catorcenas
-                $payrollIds = $results->pluck('payroll_id');
-                $payrolls = Payroll::whereIn('id', $payrollIds)
-                    ->orderBy('id', 'desc')
-                    ->get()
-                    ->keyBy('id');
-
-                return $results->map(function ($row) use ($payrolls) {
-                    $payroll = $payrolls->get($row->payroll_id);
-                    return [
-                        'id' => $row->payroll_id,
-                        'label' => $payroll ? $payroll->biweekly : 'Catorcena #' . $row->payroll_id,
-                        'pending_count' => (int) $row->pending_count,
-                    ];
-                })->values()->toArray();
+                return $this->pendingExtraHours->summaryFor($user);
             },
         ]);
     }

@@ -111,8 +111,16 @@ const logout = () => {
                                     >
                                         <div class="flex items-center justify-between gap-4 text-sm w-full">
                                             <span class="font-medium text-gray-700">Catorcena {{ payroll.label }}</span>
-                                            <span class="shrink-0 inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 text-[11px] font-bold text-white bg-amber-500 rounded-full">
-                                                {{ payroll.pending_count > 99 ? '99+' : payroll.pending_count }}
+                                            <span class="flex items-center gap-2">
+                                                <span v-if="payroll.pending_employees"
+                                                      class="text-[10px] text-gray-400 font-semibold uppercase"
+                                                      :title="`${payroll.pending_employees} colaboradores con días por autorizar`">
+                                                    {{ payroll.pending_employees }} colab.
+                                                </span>
+                                                <span class="shrink-0 inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 text-[11px] font-bold text-white bg-amber-500 rounded-full"
+                                                      title="Días de tiempo extra en tu turno">
+                                                    {{ payroll.pending_count > 99 ? '99+' : payroll.pending_count }} días
+                                                </span>
                                             </span>
                                         </div>
                                     </DropdownLink>

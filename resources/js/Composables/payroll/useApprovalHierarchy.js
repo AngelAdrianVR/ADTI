@@ -24,46 +24,67 @@ import { computed } from 'vue';
  * @returns {{ canAct: boolean, reason: string, isMyEmployee: boolean, alreadyDecided: boolean, status: string|null }}
  */
 export function computeActionPermission(incidence, groups, currentUserId) {
-    // Sin grupos configurados → modo directo
+    // ── 1) Permiso calculado por el SERVIDOR (regla canónica) ──
+    // PayrollController adjunta `approval` a cada incidencia (evaluateIncidence).
+    // Usarlo garantiza que el frontend y el badge de la barra superior muestren
+    // EXACTAMENTE el mismo número y las mismas acciones.
+    const server = incidence?.approval;
+    if (server) {
+        return {
+            canAct: !!server.can_act,
+            reason: server.reason || '',
+            currentLevel: null,
+            isMyEmployee: !!server.is_my_employee,
+            alreadyDecided: !!server.already_decided,
+            orphan: !!server.orphan,
+            myDecision: null,
+        };
+    }
+
+    // ── 2) Cálculo local (modo rango y payloads sin flags) ──
+    const hasExtra = (incidence?.extra_hours || 0) > 0 || (incidence?.extra_minutes || 0) > 0;
+    if (!hasExtra) {
+        return { canAct: false, reason: 'Sin tiempo extra', currentLevel: null, isMyEmployee: false, alreadyDecided: false, orphan: false };
+    }
+
+    // Sin grupos en la catorcena → el día NO tiene flujo de autorización.
+    // (Antes se devolvía canAct: true como "modo directo", lo que permitía a
+    //  cualquier aprobador cerrar días que la jerarquía nunca inicializó.)
     if (!groups || groups.length === 0) {
-        return { canAct: true, reason: '', currentLevel: null, isMyEmployee: true, alreadyDecided: false };
+        return {
+            canAct: false,
+            reason: 'Sin flujo de autorización (la catorcena no tiene grupos configurados)',
+            currentLevel: null,
+            isMyEmployee: false,
+            alreadyDecided: false,
+            orphan: true,
+        };
     }
 
     const cid = Number(currentUserId);
+    const employeeId = Number(incidence.user_id);
 
-    // Niveles donde el usuario es aprobador dentro de estos grupos
-    const myLevelIds = new Set();
-    groups.forEach(group => {
-        (group.levels || []).forEach(level => {
-            if ((level.approvers || []).some(a => Number(a.id) === cid)) {
-                myLevelIds.add(level.id);
-            }
-        });
-    });
+    // Grupo del empleado (el de menor id, igual que ExtraHourApprovalService::findGroupForUser)
+    const employeeGroup = groups.find(g => (g.employee_ids || []).map(Number).includes(employeeId)) || null;
 
-    // Empleados que el usuario debe aprobar dentro de estos grupos
-    const myEmployeeIds = new Set();
-    groups.forEach(group => {
-        const isMyGroup = (group.levels || []).some(level =>
-            (level.approvers || []).some(a => Number(a.id) === cid)
-        );
-        if (isMyGroup) {
-            (group.employee_ids || []).forEach(id => myEmployeeIds.add(Number(id)));
-        }
-    });
+    const isMyEmployee = !!employeeGroup && (employeeGroup.levels || []).some(level =>
+        (level.approvers || []).some(a => Number(a.id) === cid)
+    );
 
     // Verificar si el empleado está en mi scope
-    const isMyEmployee = myEmployeeIds.has(Number(incidence.user_id));
     if (!isMyEmployee) {
-        return { canAct: false, reason: 'Fuera de tu grupo', currentLevel: null, isMyEmployee: false, alreadyDecided: false };
+        return { canAct: false, reason: 'Fuera de tu grupo', currentLevel: null, isMyEmployee: false, alreadyDecided: false, orphan: false };
     }
 
-    const status = incidence.extra_hour_status || incidence.extra_hour_status;
+    const status = incidence.extra_hour_status || 'none';
+    const currentLevelId = incidence.current_approval_level_id;
+    const decisions = incidence.approval_decisions || [];
 
     // Ya resuelto (approved/rejected)
     if (status === 'approved' || status === 'rejected') {
-        const decisions = incidence.approval_decisions || [];
-        const myDecision = decisions.find(d => Number(d.approver?.id) === cid);
+        const myDecision = currentLevelId
+            ? decisions.find(d => Number(d.approver?.id) === cid && Number(d.level_id) === Number(currentLevelId))
+            : decisions.find(d => Number(d.approver?.id) === cid);
         return {
             canAct: false,
             reason: status === 'approved' ? 'Ya fue aprobado' : 'Ya fue rechazado',
@@ -71,54 +92,72 @@ export function computeActionPermission(incidence, groups, currentUserId) {
             isMyEmployee: true,
             alreadyDecided: !!myDecision,
             myDecision: myDecision || null,
+            orphan: false,
         };
     }
 
-    // Pendiente: verificar si soy aprobador del nivel actual
-    const currentLevelId = incidence.current_approval_level_id;
-
-    // Sin nivel específico → modo directo (cualquiera del grupo puede)
+    // Sin nivel = día SIN FLUJO DE AUTORIZACIÓN: nunca accionable.
+    // (Antes se devolvía canAct: true con la razón "Pendiente de decisión", y esos
+    //  días sumaban en "en tu turno" aunque la jerarquía no los hubiera inicializado.)
     if (!currentLevelId) {
-        return { canAct: true, reason: 'Pendiente de decisión', currentLevel: null, isMyEmployee: true, alreadyDecided: false };
+        return {
+            canAct: false,
+            reason: 'Sin flujo de autorización (el colaborador no está en ningún grupo)',
+            currentLevel: null,
+            isMyEmployee: true,
+            alreadyDecided: false,
+            orphan: true,
+        };
     }
 
-    // Verificar si estoy en el nivel actual
-    if (myLevelIds.has(Number(currentLevelId))) {
-        // Verificar que no haya decidido ya en este nivel
-        const decisions = incidence.approval_decisions || [];
-        const myDecision = decisions.find(d =>
-            Number(d.approver?.id) === cid &&
-            Number(d.level_id) === Number(currentLevelId)
-        );
-        if (myDecision) {
-            return {
-                canAct: false,
-                reason: myDecision.status === 'approved' ? 'Has aprobado este tiempo extra' : 'Has rechazado este tiempo extra',
-                currentLevel: null,
-                isMyEmployee: true,
-                alreadyDecided: true,
-                myDecision,
-            };
-        }
-        // ¿Otro aprobador del mismo nivel ya decidió?
-        const hasOtherDecision = decisions.some(d =>
-            Number(d.level_id) === Number(currentLevelId) &&
-            Number(d.approver?.id) !== cid
-        );
-        if (hasOtherDecision) {
-            return {
-                canAct: false,
-                reason: 'Otro aprobador de tu nivel ya decidió',
-                currentLevel: null,
-                isMyEmployee: true,
-                alreadyDecided: false,
-            };
-        }
-        return { canAct: true, reason: 'Es tu turno de revisar', currentLevel: null, isMyEmployee: true, alreadyDecided: false };
+    // El nivel actual debe pertenecer al grupo del empleado Y yo ser su aprobador
+    const isMyLevel = (employeeGroup.levels || []).some(level =>
+        Number(level.id) === Number(currentLevelId) &&
+        (level.approvers || []).some(a => Number(a.id) === cid)
+    );
+
+    if (!isMyLevel) {
+        return { canAct: false, reason: 'Esperando decisión de otro nivel', currentLevel: null, isMyEmployee: true, alreadyDecided: false, orphan: false };
     }
 
-    // No soy aprobador del nivel actual
-    return { canAct: false, reason: 'Esperando decisión de otro nivel', currentLevel: null, isMyEmployee: true, alreadyDecided: false };
+    // Los niveles PREVIOS del grupo ya deben estar aprobados (misma regla que
+    // ExtraHourApprovalService::decide()). Si no, el día sigue "en espera" y no
+    // debe contarse como "en tu turno" ni ofrecer botones que fallarían.
+    const currentLevelNumber = Number(
+        (employeeGroup.levels || []).find(level => Number(level.id) === Number(currentLevelId))?.level || 0
+    );
+    const hasPendingPreviousLevel = (employeeGroup.levels || []).some(level => {
+        if (Number(level.level || 0) >= currentLevelNumber) return false;
+        return !decisions.some(d => Number(d.level_id) === Number(level.id) && d.status === 'approved');
+    });
+    if (hasPendingPreviousLevel) {
+        return { canAct: false, reason: 'Esperando aprobación del nivel previo', currentLevel: null, isMyEmployee: true, alreadyDecided: false, orphan: false };
+    }
+
+    const myDecision = decisions.find(d =>
+        Number(d.approver?.id) === cid && Number(d.level_id) === Number(currentLevelId)
+    );
+    if (myDecision) {
+        return {
+            canAct: false,
+            reason: myDecision.status === 'approved' ? 'Has aprobado este tiempo extra' : 'Has rechazado este tiempo extra',
+            currentLevel: null,
+            isMyEmployee: true,
+            alreadyDecided: true,
+            myDecision,
+            orphan: false,
+        };
+    }
+
+    // ¿Otro aprobador del mismo nivel ya decidió?
+    const hasOtherDecision = decisions.some(d =>
+        Number(d.level_id) === Number(currentLevelId) && Number(d.approver?.id) !== cid
+    );
+    if (hasOtherDecision) {
+        return { canAct: false, reason: 'Otro aprobador de tu nivel ya decidió', currentLevel: null, isMyEmployee: true, alreadyDecided: false, orphan: false };
+    }
+
+    return { canAct: true, reason: 'Es tu turno de revisar', currentLevel: null, isMyEmployee: true, alreadyDecided: false, orphan: false };
 }
 
 /**

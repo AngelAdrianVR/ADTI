@@ -44,6 +44,12 @@ const props = defineProps({
     extraHourCosts: {
         type: Array,
         default: () => []
+    },
+    // Resumen canónico de tiempo extra para el usuario actual (días/colaboradores
+    // pendientes y días sin flujo). Lo calcula ExtraHourPendingQuery en el backend.
+    extraTimeSummary: {
+        type: Object,
+        default: null
     }
 });
 
@@ -147,18 +153,22 @@ const visiblePayrollUsers = computed(() => {
     return filteredPayrollUsers.value.slice(0, limit.value);
 });
 
-// --- COMPUTED: KPIs DE TIEMPO EXTRA (Dinámicos por aprobador) ---
+// --- COMPUTED: KPIs DE TIEMPO EXTRA (una sola definición: la del servidor) ---
+// Las tarjetas usan el resumen canónico del backend (extraTimeSummary), el MISMO
+// que alimenta el badge de la barra superior y el modal. Antes cada lugar
+// calculaba su propio "pendiente" con reglas distintas y los números no cuadraban.
 const totalExtraTimeStats = computed(() => {
+    const summary = props.extraTimeSummary || {};
+    const isApprover = hierarchy.isCurrentUserApprover.value;
+    const hasHierarchy = props.approvalGroups && props.approvalGroups.length > 0;
+
+    const formatTime = (mins) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
+
+    // Acumulados informativos de tiempo (minutos) para el detalle de la tarjeta
     let pendingMins = 0;
     let approvedMins = 0;
 
-    const isApprover = hierarchy.isCurrentUserApprover.value;
-    const employeeIds = hierarchy.myEmployeeIds.value;
-    const hasHierarchy = props.approvalGroups && props.approvalGroups.length > 0;
-
     props.payrollUsers.forEach(item => {
-        if (hasHierarchy && isApprover && !employeeIds.has(Number(item.user.id))) return;
-
         item.incidences.forEach(inc => {
             const hasExtra = (inc.extra_hours > 0 || inc.extra_minutes > 0);
             if (!hasExtra) return;
@@ -166,21 +176,22 @@ const totalExtraTimeStats = computed(() => {
             const totalMins = (inc.extra_hours || 0) * 60 + (inc.extra_minutes || 0);
             const status = inc.extra_hour_status || 'none';
 
-            if (status === 'pending') {
-                // Verificar si el nivel actual me corresponde
-                const levelId = inc.current_approval_level_id;
-                if (!levelId || hierarchy.myLevelIds.value.has(Number(levelId))) {
-                    pendingMins += totalMins;
-                }
-            } else if (status === 'approved') {
+            if (status === 'approved') {
                 approvedMins += totalMins;
+            } else if (status === 'pending' && !inc.approval?.orphan && inc.approval?.can_act !== false) {
+                // Sólo lo que está en mi turno (el permiso lo calcula el servidor)
+                pendingMins += totalMins;
             }
         });
     });
 
-    const formatTime = (mins) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
-
     return {
+        // Números canónicos: son los mismos que muestra el badge de la barra superior
+        pendingDays: summary.pending_days ?? 0,
+        pendingEmployees: summary.pending_employees ?? 0,
+        orphanDays: summary.orphan_days ?? 0,
+        orphanUncovered: summary.orphan_uncovered_days ?? 0,
+        // Tiempo acumulado (informativo)
         pending: formatTime(pendingMins),
         approved: formatTime(approvedMins),
         isApprover,
@@ -380,18 +391,25 @@ const saveComment = () => {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" 
                     v-if="totalExtraTimeStats.isApprover">
                     
-                    <!-- KPI Tiempo Pendiente -->
+                    <!-- KPI Tiempo Pendiente (mismo número que el badge superior) -->
                     <div @click="showExtraTimeModal = true" class="bg-white p-4 rounded-xl shadow-sm border border-amber-100 flex items-center justify-between cursor-pointer hover:shadow-md hover:border-amber-300 transition-all group">
                         <div>
                             <p class="text-xs text-amber-600 font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                                <i class="fa-solid fa-clock-rotate-left"></i> Tiempo Pendiente
+                                <i class="fa-solid fa-clock-rotate-left"></i> Tiempo Extra Pendiente
                             </p>
                             <div class="flex items-baseline gap-2">
-                                <p class="text-3xl font-black text-gray-800 group-hover:text-amber-600 transition-colors font-mono">{{ totalExtraTimeStats.pending }}</p>
+                                <p class="text-3xl font-black text-gray-800 group-hover:text-amber-600 transition-colors font-mono">{{ totalExtraTimeStats.pendingDays }}</p>
                                 <span class="text-[10px] text-gray-500 font-bold uppercase bg-gray-100 px-2 py-0.5 rounded-full">
-                                    {{ totalExtraTimeStats.isApprover ? 'Tu turno' : 'Por revisar' }}
+                                    días · {{ totalExtraTimeStats.pendingEmployees }} colaboradores
                                 </span>
                             </div>
+                            <p class="text-[11px] text-gray-500 mt-1">
+                                <i class="fa-solid fa-stopwatch mr-1"></i>{{ totalExtraTimeStats.pending }} en tu turno
+                                <span v-if="totalExtraTimeStats.orphanDays > 0" class="text-amber-600 font-semibold ml-2"
+                                      title="Días con tiempo extra cuyo colaborador no está en ningún grupo: no se pueden autorizar">
+                                    <i class="fa-solid fa-triangle-exclamation mr-1"></i>{{ totalExtraTimeStats.orphanDays }} sin flujo
+                                </span>
+                            </p>
                         </div>
                         <div class="w-14 h-14 bg-amber-50 rounded-full flex items-center justify-center text-amber-500 text-xl group-hover:scale-110 transition-transform">
                             <i class="fa-solid fa-stopwatch"></i>
@@ -495,7 +513,6 @@ const saveComment = () => {
                 :payrollUsers="payrollUsers"
                 :payrollId="payroll.id"
                 :approvalGroups="approvalGroups"
-                :employeeIds="hierarchy.myEmployeeIds.value"
                 :payrollStartDate="payroll.start_date"
                 @updated="reloadPayrollData"
             />

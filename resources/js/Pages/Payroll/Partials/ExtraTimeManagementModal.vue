@@ -14,7 +14,6 @@ const props = defineProps({
     payrollUsers: Array,
     payrollId: Number,
     approvalGroups: { type: Array, default: () => [] },
-    employeeIds: { type: Object, default: null }, // Set de IDs de empleados del aprobador
     payrollStartDate: { type: String, default: '' }, // Fecha inicio de la catorcena (ISO YYYY-MM-DD)
 });
 
@@ -101,22 +100,38 @@ const rangeHierarchy = computed(() => {
 // Jerarquía activa según el modo
 const activeHierarchy = computed(() => (isRangeMode.value ? rangeHierarchy.value : hierarchy));
 
-// IDs de empleados en scope: null = sin jerarquía o modo rango (el backend ya filtra por catorcena)
+// IDs de empleados en alcance ("mi gente"): colaboradores de los grupos donde el
+// usuario es aprobador (en cualquier nivel) + los que tiene como personal a cargo
+// (aunque no pertenezcan a ningún grupo) + él mismo.
+// La unión es clave: el backend ya autoriza/decide por grupo de aprobación, así
+// que el frontend no debe ocultar a un colaborador que el servidor sí devolvió
+// (p. ej. un 2º nivel de autorización que no tiene a esos empleados a cargo).
+// null = sin grupos configurados o modo rango (el backend ya acota por catorcena).
 const scopedEmployeeIds = computed(() => {
     if (isRangeMode.value) return null;
     if (!localApprovalGroups.value || localApprovalGroups.value.length === 0) return null;
-    return hierarchy.myEmployeeIds.value;
+
+    const ids = new Set(
+        Array.from(hierarchy.myEmployeeIds.value || []).map(id => Number(id))
+    );
+    (page.props?.auth?.user?.employees_in_charge || []).forEach(id => ids.add(Number(id)));
+    if (page.props?.auth?.user?.id) ids.add(Number(page.props.auth.user.id));
+
+    return ids.size > 0 ? ids : null;
 });
 
 const records = useExtraTimeRecords(recordsSource, filters, scopedEmployeeIds);
 
-// Contar cuántos registros son accionables por el usuario actual
+// Contar cuántos registros son accionables por el usuario actual.
+// Usa el permiso calculado en el SERVIDOR (incidence.approval) para que coincida
+// exactamente con el badge de la barra superior; si no viene (modo rango), cae al
+// cálculo local con la jerarquía de la catorcena del registro.
+// Los días sin flujo de autorización (nivel NULL) NUNCA cuentan.
 const actionableCount = computed(() => {
-    if (!activeHierarchy.value.isCurrentUserApprover) return 0;
     let count = 0;
     records.unifiedRecords.value.forEach(record => {
         const perm = activeHierarchy.value.getActionPermission(record.incidence);
-        if (perm.canAct && perm.isMyEmployee) count++;
+        if (perm.canAct && !perm.alreadyDecided && !perm.orphan) count++;
     });
     return count;
 });

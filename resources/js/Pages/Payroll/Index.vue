@@ -678,7 +678,6 @@ const generateRangeReceipts = () => {
                 :payrollUsers="[]"
                 :payrollId="null"
                 :approvalGroups="[]"
-                :employeeIds="null"
                 :payrollStartDate="''"
             />
         </main>

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ExtraHourApprovalDecision;
 use App\Models\ExtraHourApprovalGroup;
 use App\Models\ExtraHourApprovalLevel;
+use App\Models\Payroll;
 use App\Models\PayrollUser;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,19 @@ class ExtraHourApprovalService
     /**
      * Inicializa el flujo de aprobación cuando se detectan horas extra.
      * Se llama desde PayrollUser::calculateExtraTime() y desde importación BioTime.
+     *
+     * Sólo avanza hacia adelante:
+     *  - Si el registro ya está en un nivel VÁLIDO del grupo del empleado, NO se
+     *    reescribe (antes, cada recálculo de checadas "rebobinaba" al nivel 1 un
+     *    registro que ya estaba en el nivel 2, dejando al aprobador de nivel 1 un
+     *    día que ya había aprobado y sin poder decidirlo).
+     *  - Si el registro quedó sin nivel y el empleado SÍ tiene grupo, se asigna el
+     *    primer nivel (rescate de estados viejos).
+     *  - Si el empleado no tiene grupo, queda como "sin flujo de autorización"
+     *    (pending + nivel NULL): no cuenta en los indicadores ni es accionable.
+     *
+     * @param  bool  $force  Re-inicia el flujo desde el primer nivel del grupo
+     *                       (usar sólo desde reparaciones explícitas).
      */
     public function initializeWorkflow(PayrollUser $payrollUser, bool $force = false): void
     {
@@ -33,12 +47,25 @@ class ExtraHourApprovalService
 
         $group = $this->findGroupForUser($payrollUser);
         if (!$group) {
-            // Modo directo: sin grupo, cualquiera con permiso puede aprobar
+            // Sin grupo → día SIN FLUJO DE AUTORIZACIÓN (no es "modo directo accionable")
             $payrollUser->updateQuietly([
                 'extra_hour_status' => 'pending',
                 'current_approval_level_id' => null,
             ]);
             return;
+        }
+
+        if (!$force) {
+            $currentLevelId = $payrollUser->current_approval_level_id;
+            $isInFlight = $currentLevelId
+                && $payrollUser->extra_hour_status === 'pending'
+                && $group->levels()->whereKey($currentLevelId)->exists();
+
+            if ($isInFlight) {
+                // El flujo ya está en curso y el nivel es válido para este grupo:
+                // no tocar (idempotente).
+                return;
+            }
         }
 
         $firstLevel = $group->levels()->orderBy('level')->first();
@@ -64,36 +91,50 @@ class ExtraHourApprovalService
                 throw new \RuntimeException('Este tiempo extra ya fue resuelto.');
             }
 
+            if (!$payrollUser->extra_hours && !$payrollUser->extra_minutes) {
+                throw new \RuntimeException('Este día no tiene tiempo extra registrado.');
+            }
+
             $currentLevelId = $payrollUser->current_approval_level_id;
 
-            // Si está pendiente pero sin nivel asignado (modo directo), intentar
-            // re-inicializar el flujo por si se configuraron grupos después.
-            if (!$currentLevelId && $payrollUser->extra_hour_status === 'pending') {
-                // Re-ejecutar initializeWorkflow para encontrar el grupo ahora
-                $this->initializeWorkflow($payrollUser);
-                // Refrescar desde BD para obtener el nuevo current_approval_level_id
+            // Sin nivel = día SIN FLUJO DE AUTORIZACIÓN (el colaborador no está en
+            // ningún grupo de esta catorcena). No se decide desde aquí: primero hay
+            // que asignar al colaborador a un grupo. Sólo se re-inicializa cuando el
+            // grupo YA existe (rescate explícito de estados viejos).
+            if (!$currentLevelId) {
+                if (!$this->findGroupForUser($payrollUser)) {
+                    throw new \RuntimeException('Este día no tiene flujo de autorización: el colaborador no está en ningún grupo de esta catorcena.');
+                }
+
+                $this->initializeWorkflow($payrollUser, true);
                 $payrollUser->refresh();
                 $currentLevelId = $payrollUser->current_approval_level_id;
             }
 
             $currentLevel = $currentLevelId ? ExtraHourApprovalLevel::find($currentLevelId) : null;
 
-            if ($currentLevel) {
-                // Verificar que el aprobador pertenece al nivel actual
-                if (!$currentLevel->approvers()->where('user_id', $approver->id)->exists()) {
-                    throw new \RuntimeException('No eres aprobador del nivel actual.');
-                }
+            // El actor SIEMPRE debe ser aprobador del nivel actual: antes, con la
+            // columna de nivel en NULL ("modo directo"), cualquier usuario
+            // autenticado podía aprobar o rechazar el registro.
+            if (!$currentLevel || !$currentLevel->approvers()->where('user_id', $approver->id)->exists()) {
+                throw new \RuntimeException('No eres aprobador del nivel actual.');
+            }
 
-                // Verificar niveles anteriores (si estamos en nivel > 1)
-                $group = $currentLevel->group;
-                if ($currentLevel->level > 1) {
-                    $prevLevel = $group->levels()
-                        ->where('level', '<', $currentLevel->level)
-                        ->orderBy('level', 'desc')
-                        ->first();
-                    if ($prevLevel && !$this->isLevelApproved($payrollUser->id, $prevLevel)) {
-                        throw new \RuntimeException('El nivel anterior aún no ha sido aprobado.');
-                    }
+            $group = $currentLevel->group;
+
+            // El colaborador debe seguir perteneciendo al grupo del nivel actual
+            if (!$group || !$group->employees()->where('user_id', $payrollUser->user_id)->exists()) {
+                throw new \RuntimeException('El colaborador ya no pertenece al grupo de este nivel de autorización.');
+            }
+
+            // Verificar niveles anteriores (si estamos en nivel > 1)
+            if ($currentLevel->level > 1) {
+                $prevLevel = $group->levels()
+                    ->where('level', '<', $currentLevel->level)
+                    ->orderBy('level', 'desc')
+                    ->first();
+                if ($prevLevel && !$this->isLevelApproved($payrollUser->id, $prevLevel)) {
+                    throw new \RuntimeException('El nivel anterior aún no ha sido aprobado.');
                 }
             }
 
@@ -102,9 +143,8 @@ class ExtraHourApprovalService
             $proposedHours = $data['approved_extra_hours'] ?? $payrollUser->proposed_extra_hours ?? $payrollUser->extra_hours;
             $proposedMinutes = $data['approved_extra_minutes'] ?? $payrollUser->proposed_extra_minutes ?? $payrollUser->extra_minutes;
 
-            // Registrar decisión solo si hay un nivel formal asignado.
-            // En modo directo (current_approval_level_id = NULL), no se inserta
-            // en extra_hour_approval_decisions porque la columna approval_level_id es NOT NULL.
+            // Registrar la decisión (siempre hay un nivel: los días sin flujo se
+            // rechazan más arriba, así que queda auditoría completa de cada decisión).
             if ($currentLevelId) {
                 ExtraHourApprovalDecision::updateOrCreate(
                     [
@@ -200,6 +240,10 @@ class ExtraHourApprovalService
 
     /**
      * Chequeo ligero: ¿el usuario puede actuar sobre este registro?
+     *
+     * Misma regla canónica que ExtraHourPendingQuery::pendingQuery(): hace falta
+     * tiempo extra, nivel asignado, ser aprobador de ESE nivel, que el colaborador
+     * pertenezca al grupo del nivel y que nadie haya decidido todavía en el nivel.
      */
     public function canAct(PayrollUser $payrollUser, User $user): bool
     {
@@ -207,14 +251,36 @@ class ExtraHourApprovalService
             return false;
         }
 
-        $currentLevelId = $payrollUser->current_approval_level_id;
-        if (!$currentLevelId) {
-            // Modo directo: cualquiera con permiso puede
-            return true;
+        if (!$payrollUser->extra_hours && !$payrollUser->extra_minutes) {
+            return false;
         }
 
-        return ExtraHourApprovalLevel::whereKey($currentLevelId)
-            ->whereHas('approvers', fn ($q) => $q->where('user_id', $user->id))
+        $currentLevelId = $payrollUser->current_approval_level_id;
+        if (!$currentLevelId) {
+            // Día sin flujo de autorización: nadie puede decidirlo desde el modal
+            return false;
+        }
+
+        $level = ExtraHourApprovalLevel::with('group')->find($currentLevelId);
+        if (!$level || !$level->group) {
+            return false;
+        }
+
+        $belongsToGroup = $level->group->employees()
+            ->where('user_id', $payrollUser->user_id)
+            ->exists();
+        if (!$belongsToGroup) {
+            return false;
+        }
+
+        $isApprover = $level->approvers()->where('user_id', $user->id)->exists();
+        if (!$isApprover) {
+            return false;
+        }
+
+        return !ExtraHourApprovalDecision::where('payroll_user_id', $payrollUser->id)
+            ->where('approval_level_id', $currentLevelId)
+            ->where('status', '!=', 'pending')
             ->exists();
     }
 
@@ -302,7 +368,93 @@ class ExtraHourApprovalService
     {
         return $payrollUser->payroll->approvalGroups()
             ->whereHas('employees', fn ($q) => $q->where('user_id', $payrollUser->user_id))
+            ->orderBy('id')
             ->first();
+    }
+
+    /**
+     * Mapa [user_id => grupo] de una catorcena (gana el grupo de menor id).
+     * Evita N+1 al reconciliar cientos de registros.
+     *
+     * @return array<int, ExtraHourApprovalGroup>
+     */
+    private function groupsByEmployee(Payroll $payroll): array
+    {
+        $map = [];
+        foreach ($payroll->approvalGroups()->with('employees')->orderBy('id')->get() as $group) {
+            foreach ($group->employees as $employee) {
+                $map[(int) $employee->id] ??= $group;
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * Rescata los días de tiempo extra que quedaron SIN FLUJO DE AUTORIZACIÓN
+     * (current_approval_level_id = NULL) pero cuyo colaborador SÍ pertenece a un
+     * grupo de esa catorcena: les asigna el primer nivel del grupo.
+     *
+     * Los días de colaboradores sin grupo se dejan intactos (no hay a quién
+     * asignarlos): se reportan como "sin jerarquía" y no cuentan en los indicadores.
+     *
+     * @return array{rescued:int,without_group:int,groups_without_levels:int,details:array<int,string>}
+     */
+    public function reconcileOrphans(Payroll $payroll, bool $dryRun = false): array
+    {
+        $rows = PayrollUser::where('payroll_id', $payroll->id)
+            ->where('extra_hour_status', 'pending')
+            ->whereNull('current_approval_level_id')
+            ->where(function ($q) {
+                $q->where('extra_hours', '>', 0)->orWhere('extra_minutes', '>', 0);
+            })
+            ->orderBy('user_id')
+            ->get();
+
+        $groupsByEmployee = $this->groupsByEmployee($payroll);
+        $rescued = 0;
+        $withoutGroup = 0;
+        $withoutLevels = 0;
+        $details = [];
+
+        foreach ($rows as $row) {
+            $group = $groupsByEmployee[(int) $row->user_id] ?? null;
+            if (!$group) {
+                $withoutGroup++;
+                continue;
+            }
+
+            $firstLevel = $group->levels()->orderBy('level')->first();
+            if (!$firstLevel) {
+                $withoutLevels++;
+                continue;
+            }
+
+            $details[] = sprintf(
+                'payroll_user_id=%d user_id=%d fecha=%s → nivel %d (%s)',
+                $row->id,
+                $row->user_id,
+                $row->date?->toDateString(),
+                $firstLevel->level,
+                $firstLevel->name ?? 'sin nombre'
+            );
+
+            if (!$dryRun) {
+                $row->updateQuietly([
+                    'extra_hour_status' => 'pending',
+                    'current_approval_level_id' => $firstLevel->id,
+                ]);
+            }
+
+            $rescued++;
+        }
+
+        return [
+            'rescued' => $rescued,
+            'without_group' => $withoutGroup,
+            'groups_without_levels' => $withoutLevels,
+            'details' => $details,
+        ];
     }
 
     private function recalculateState(PayrollUser $payrollUser): void
@@ -409,17 +561,78 @@ class ExtraHourApprovalService
 
     /**
      * Determina si el actor es aprobador de algún nivel del grupo del empleado.
-     * En modo directo (sin grupos configurados), cualquier aprobador puede.
+     *
+     * Si el colaborador no tiene grupo NO hay jerarquía que invocar: sólo se
+     * permite intervenir a un usuario con el permiso global 'Ver incidencias'
+     * (administración). Antes devolvía `true` para cualquier usuario autenticado,
+     * lo que permitía a cualquiera revertir aprobaciones.
      */
     private function isApproverForUser(PayrollUser $payrollUser, User $user): bool
     {
         $group = $this->findGroupForUser($payrollUser);
         if (!$group) {
-            return true; // Modo directo
+            return $user->can('Ver incidencias');
         }
 
         return ExtraHourApprovalLevel::where('approval_group_id', $group->id)
             ->whereHas('approvers', fn ($q) => $q->where('user_id', $user->id))
             ->exists();
     }
+
+    /**
+     * Reinicia el flujo de los registros EN VUELO de una catorcena.
+     *
+     * Se usa cada vez que se reconfiguran los grupos (guardar o copiar): al
+     * recrearse los niveles, las decisiones previas se borran por cascade y el
+     * nivel actual queda en NULL, así que los registros deben volver al primer
+     * nivel de su grupo nuevo. No toca aprobaciones finales legítimas
+     * (estado final + approved_at) ni inventa decisiones.
+     *
+     * @return array{reset:int,skipped_final:int,without_group:int}
+     */
+    public function resetInFlightForPayroll(Payroll $payroll): array
+    {
+        $rows = PayrollUser::where('payroll_id', $payroll->id)
+            ->where(function ($q) {
+                $q->where('extra_hours', '>', 0)->orWhere('extra_minutes', '>', 0);
+            })
+            ->get();
+
+        $groupsByEmployee = $this->groupsByEmployee($payroll);
+        $reset = 0;
+        $skippedFinal = 0;
+        $withoutGroup = 0;
+
+        foreach ($rows as $row) {
+            if (in_array($row->extra_hour_status, ['approved', 'rejected']) && $row->approved_at !== null) {
+                $skippedFinal++;
+                continue;
+            }
+
+            if (!isset($groupsByEmployee[(int) $row->user_id])) {
+                // Colaborador sin grupo: queda como día sin flujo de autorización
+                $row->updateQuietly([
+                    'extra_hour_status' => 'pending',
+                    'current_approval_level_id' => null,
+                ]);
+                $withoutGroup++;
+                continue;
+            }
+
+            $row->updateQuietly([
+                'approved_extra_hours' => null,
+                'approved_extra_minutes' => null,
+                'approved_by' => null,
+                'approved_at' => null,
+                'proposed_extra_hours' => null,
+                'proposed_extra_minutes' => null,
+            ]);
+
+            $this->initializeWorkflow($row, true);
+            $reset++;
+        }
+
+        return ['reset' => $reset, 'skipped_final' => $skippedFinal, 'without_group' => $withoutGroup];
+    }
+
 }

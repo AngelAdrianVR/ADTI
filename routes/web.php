@@ -229,43 +229,60 @@ Route::get('products-search', [ProductController::class, 'searchProduct'])->name
 Route::get('products-fetch-subcategory-products/{subcategory_id}', [ProductController::class, 'fetchSubcategoryProducts'])->name('products.fetch-subcategory-products');
 
 // Comandos de utilidad (Artisan)
-Route::get('/clear-all', function () {
-    Artisan::call('cache:clear');
-    Artisan::call('config:clear');
-    Artisan::call('route:clear');
-    Artisan::call('view:clear');
-    return 'cleared.';
-});
+// SEGURIDAD: estos comandos estaban declarados fuera del grupo autenticado (solo
+// middleware `web`), asi que cualquiera con la URL podia dispararlos; entre ellos
+// `extra-hours:fix-approved-decisions`, que degradaba aprobaciones ya cerradas.
+// Ahora exigen sesion + permiso, y el comando destructivo fue sustituido por la
+// reconciliacion NO destructiva (dry-run por defecto).
+Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified'])->group(function () {
+    $requireIncidencePermission = function () {
+        if (!auth()->user()?->can('Ver incidencias')) {
+            abort(403, 'No autorizado.');
+        }
+    };
 
-Route::get('/storage-link', function () {
-    Artisan::call('storage:link');
-    return 'Storage link created.';
-});
+    Route::get('/clear-all', function () {
+        Artisan::call('cache:clear');
+        Artisan::call('config:clear');
+        Artisan::call('route:clear');
+        Artisan::call('view:clear');
+        return 'cleared.';
+    });
 
-Route::get('/payrolls-close', function () {
-    Artisan::call('payrolls:close');
-    return 'Listo!';
-});
+    Route::get('/storage-link', function () {
+        Artisan::call('storage:link');
+        return 'Storage link created.';
+    });
 
-Route::get('/backfill-status', function () {
-    Artisan::call('extra-hours:backfill-status');
-    return 'Backfill completado.';
-});
+    Route::get('/payrolls-close', function () use ($requireIncidencePermission) {
+        $requireIncidencePermission();
+        Artisan::call('payrolls:close');
+        return 'Catorcena cerrada. La jerarquia de autorizacion de tiempo extra se arrastro a la nueva.';
+    });
 
-Route::get('/fix-approved-decisions', function () {
-    Artisan::call('extra-hours:fix-approved-decisions');
-    return 'Corrección de aprobadores completada.';
-});
+    // Auditoria (solo lectura) del estado de autorizacion del tiempo extra.
+    Route::get('/extra-hours-audit', function () use ($requireIncidencePermission) {
+        $requireIncidencePermission();
+        Artisan::call('extra-hours:audit-states');
+        return response(Artisan::output(), 200)->header('Content-Type', 'text/plain; charset=UTF-8');
+    });
 
-Route::get('/repair-orphan-extra-hours', function () {
-    Artisan::call('extra-hours:repair-orphan-states');
-    return 'Reparación de estados huérfanos completada.';
+    // Reconciliacion: sin ?apply=1 solo informa (dry-run).
+    Route::get('/extra-hours-reconcile', function (\Illuminate\Http\Request $request) use ($requireIncidencePermission) {
+        $requireIncidencePermission();
+        Artisan::call('extra-hours:reconcile', ['--apply' => $request->boolean('apply')]);
+        return response(Artisan::output(), 200)->header('Content-Type', 'text/plain; charset=UTF-8');
+    });
 });
 
 // Backfill: migra las vinculaciones existentes (payroll_user.project_id) hacia la
 // tabla pivote payroll_user_project (cuando la tabla se crea a mano en producción vía SQL).
 // Lógica equivalente al backfill de la migración 2026_09_02_000001_create_payroll_user_project_table.
 Route::get('/backfill-payroll-user-project', function () {
+    if (!auth()->user()?->can('Ver incidencias')) {
+        abort(403, 'No autorizado.');
+    }
+
     // Mapa de departamentos (nombre -> id) para resolver el departamento del empleado.
     $deptMap = DB::table('departments')->pluck('id', 'name');
 

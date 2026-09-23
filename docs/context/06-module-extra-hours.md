@@ -12,7 +12,10 @@ A multi-level approval workflow for overtime (horas extra). When the payroll sys
 
 | File | Role |
 |------|------|
-| `app/Services/ExtraHourApprovalService.php` | **Core state machine**: initialize, decide, bulkDecide, revert, canAct |
+| `app/Services/ExtraHourApprovalService.php` | **Core state machine**: initialize, decide, bulkDecide, revert, canAct, reconcileOrphans, resetInFlightForPayroll |
+| `app/Services/ExtraHourPendingQuery.php` | **Single source of truth** of "pending for me": `pendingQuery`, `orphanQuery`, `summaryFor`, `summaryForPayroll`, `evaluateIncidence` |
+| `app/Console/Commands/AuditExtraHourStates.php` | Read-only inventory of inconsistent approval states (`extra-hours:audit-states`) |
+| `app/Console/Commands/ReconcileExtraHourStates.php` | Non-destructive repair, dry-run by default (`extra-hours:reconcile --apply`) |
 | `app/Http/Controllers/PayrollExtraHoursController.php` | UI for cost config, approval groups/levels, decide actions (JSON errors for AJAX) |
 | `app/Models/ExtraHourCost.php` | Cost configuration per payroll/day/user |
 | `app/Models/ExtraHourApprovalGroup.php` | Group of employees sharing an approval chain |
@@ -21,7 +24,7 @@ A multi-level approval workflow for overtime (horas extra). When the payroll sys
 | `app/Models/PayrollUser.php` | Contains desnormalized `extra_hour_status` and `current_approval_level_id` |
 | `resources/js/Pages/Payroll/Show.vue` | Payroll detail — hosts `ExtraTimeManagementModal` |
 | `resources/js/Pages/Payroll/Partials/ExtraTimeManagementModal.vue` | Main modal for extra time approval, composes filters + records + actions |
-| `resources/js/Components/MyComponents/Payroll/ExtraTimeUnifiedView.vue` | Renders grouped records, approval flow visualization, action buttons |
+| `resources/js/Components/MyComponents/Payroll/ExtraTimeUnifiedView.vue` | Renders grouped records, approval flow visualization, action buttons, and the *"Sólo días en mi turno"* filter |
 | `resources/js/Composables/payroll/useExtraTimeActions.js` | `approveSingle`, `rejectSingle`, `approveEmployee`, `rejectEmployee` |
 | `resources/js/Composables/payroll/useExtraTimeRecords.js` | Computed: `unifiedRecords`, `groupedUnifiedRecords`, `editableRecords` |
 | `resources/js/Composables/payroll/useExtraTimeFilters.js` | Department, comment, project, date range filters |
@@ -81,8 +84,12 @@ A multi-level approval workflow for overtime (horas extra). When the payroll sys
 **Key rules:**
 - A rejection at ANY level immediately terminates the workflow as globally **rejected**.
 - Approval at a level advances to the next level. Approval at the last level → globally **approved**.
-- If no group/levels are configured for the user → **direct mode**: anyone with the right permission can approve without multi-level routing. No `ExtraHourApprovalDecision` record is created (since `approval_level_id` is NOT NULL).
-- **Auto-reinitialization**: If `decide()` detects `current_approval_level_id = NULL` while `extra_hour_status = 'pending'`, it calls `initializeWorkflow()` again before processing. This picks up groups that were configured after the initial BioTime import. The first approval for each record in a payroll will trigger this one-time re-sync.
+- **No group for the employee → "sin flujo de autorización" (orphan day)**: the record keeps `extra_hour_status = 'pending'` with `current_approval_level_id = NULL`. It is **NOT** decidable (no "direct mode" anymore), it does **not** count in any indicator, and the modal shows it separately as *"sin flujo de autorización"*. `decide()` rejects these records unless the employee actually has a group in that catorcena (in which case it rescues them to level 1 first).
+- **Canonical pending rule** (single source of truth = `ExtraHourPendingQuery`): a day counts as *pending for me* only if it has extra time, is `pending`, has a **non-null** `current_approval_level_id`, that level has me as approver, the employee belongs to the level's group, **all previous levels of that group are already approved** (`scopePreviousLevelsApproved()` — the same condition `decide()` enforces with *"El nivel anterior aún no ha sido aprobado"*), and nobody has decided yet at that level. Badge (`HandleInertiaRequests`), KPI cards (`PayrollController@getUserProcessedInfo` → `extraTimeSummary`), per-incidence flags (`incidence.approval`) and the modal's `actionableCount` all use this same rule, so all numbers match.
+- **Approver scope vs. `employees_in_charge`**: approving extra time does **not** require the employee to be in the approver's *"Empleados a cargo"* list. `PayrollController::approverEmployeeIds()` adds the employees of every group where the user is an approver at **any** level, so a 2nd/3rd-level approver sees (and can decide) their group's days even when they cannot open the employee's catorcena. `ExtraHourApprovalService::decide()` only checks: I am an approver of the **current** level, the employee still belongs to that level's group, and the previous level is approved.
+- **Modal filter "Sólo días en mi turno"** (`ExtraTimeUnifiedView.vue`): visible switch next to the *"N días en tu turno para aprobar/rechazar"* label, **on by default** when there are actionable days. It narrows the list to the days the user can approve/reject right now (the same `can_act && !alreadyDecided` predicate used by the counters) and drops collaborators with nothing actionable; turning it off shows every collaborator/day in scope. The header counters stay canonical (they are not recomputed by the filter).
+- **Modal employee scope** (`ExtraTimeManagementModal.vue`): the client-side scope is the **union** of the approver's groups' employees + the authenticated user's `employees_in_charge` + the user themself (the backend already scopes the payload), so the modal never hides a collaborator the server did return.
+- **Forward-only workflow**: `initializeWorkflow()` never rewinds an in-flight record (it used to reset any `pending` record to level 1 on every punch recalculation). Rescuing orphans is explicit: `extra-hours:reconcile` or `ExtraHourApprovalService::reconcileOrphans()`.
 
 ---
 
@@ -191,10 +198,11 @@ This allows flexible cost models: one rate for all weekdays, a different rate fo
 
 ## Known Limitations & Technical Debt
 
-1. **Desnormalization sync risk**: `extra_hour_status` and `current_approval_level_id` on `payroll_user` must stay in sync with `extra_hour_approval_decisions`. The service handles this, but any direct DB manipulation will break it.
+1. **Desnormalization sync risk**: `extra_hour_status` and `current_approval_level_id` on `payroll_user` must stay in sync with `extra_hour_approval_decisions`. The service handles this, but any direct DB manipulation will break it. **Only `ExtraHourApprovalService` may write these columns** (and `extra-hours:reconcile` for repairs).
 2. **No notification system**: When a record moves to a new level, there's no automated notification to the next-level approvers. They must manually check the UI.
 3. **No timeouts/auto-escalation**: If an approver never acts, the record stays `pending` indefinitely. No SLA or auto-advance mechanism.
 4. **Costs are informational only**: The `extra_hour_costs` table stores rates but there's no payroll calculation that uses them automatically. The cost data is for the pre-payroll report.
-5. **Legacy NULL `extra_hour_status`**: Records created before migration `2026_07_03_000001` may have `NULL` `extra_hour_status`. The service now treats `NULL` as `'none'` in `decide()`, but `initializeWorkflow()` should be called (via `calculateExtraTime()` or auto-reinit) to properly set it.
+5. **Legacy NULL / open items**: `extra_hour_status = 'none'` + `current_approval_level_id = NULL` means "no extra time" or "cleared". A `pending` record with `current_approval_level_id = NULL` is an *orphan*: `extra-hours:audit-states` (read-only) lists them and `extra-hours:reconcile --apply` rescues the ones whose employee has a group, marks the residues (`pending` without hours) as `none`, and leaves the rest as "sin flujo".
 6. **Race condition on `decide()`**: The `lockForUpdate()` protects within a single transaction, but two approvers at the same level could theoretically both try to decide. The second will hit the status validation and fail — this is handled gracefully but the UX for the second approver could be confusing.
-7. **Direct mode skips `ExtraHourApprovalDecision`**: In direct mode (`current_approval_level_id = NULL`), no record is written to `extra_hour_approval_decisions` because the `approval_level_id` column is NOT NULL. The approval is recorded only via `approved_by` and `approved_at` on `payroll_user`. The auto-reinitialization in `decide()` mitigates this by assigning the proper level on first approval attempt if groups exist.
+7. **Repair commands**: `extra-hours:fix-approved-decisions`, `extra-hours:backfill-status` and `extra-hours:repair-orphan-states` are **deprecated and destructive** (they fabricated approval decisions attributing them to the first configured approver). Use `extra-hours:audit-states` + `extra-hours:reconcile` instead. The maintenance HTTP routes now require `auth` + `Ver incidencias` (they used to be public).
+8. **Client-side employee scope**: the modal still prefilters by the approver's group/`employees_in_charge` union. If a new rule ever grants approval rights outside those two sources, this client filter must be updated too (otherwise the backend would return the day but the modal would hide it). `tests/Feature/ExtraHourApprovalTest.php` covers the L2-approver-without-direct-reports case.

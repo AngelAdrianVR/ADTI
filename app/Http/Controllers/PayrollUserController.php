@@ -619,6 +619,7 @@ class PayrollUserController extends Controller
     {
         $request->validate([
             'user_id' => 'required|exists:users,id',
+            'payroll_id' => 'nullable|integer|exists:payrolls,id',
             'date' => 'nullable|required_without:dates|date',
             'dates' => 'nullable|required_without:date|array|min:1|max:31',
             'dates.*' => 'date',
@@ -634,6 +635,9 @@ class PayrollUserController extends Controller
             ->values();
 
         $payrollUsers = PayrollUser::where('user_id', $request->user_id)
+            // Aislamiento por catorcena: antes sólo se filtraba por fecha, así que
+            // se podía borrar el tiempo extra del mismo día en OTRAS catorcenas.
+            ->when($request->filled('payroll_id'), fn ($q) => $q->where('payroll_id', $request->payroll_id))
             ->where(function ($query) use ($dates) {
                 foreach ($dates as $date) {
                     $query->orWhereDate('date', $date);
@@ -642,7 +646,10 @@ class PayrollUserController extends Controller
             ->get();
 
         foreach ($payrollUsers as $payrollUser) {
-            // Limpiar tiempo extra calculado y aprobación
+            // Limpiar tiempo extra, aprobación Y el estado desnormalizado del flujo.
+            // Antes sólo se limpiaban las horas: quedaban filas `pending` sin tiempo
+            // extra que seguían contando en el badge de "por autorizar" (38 sólo en
+            // la catorcena 43, 690 en toda la base).
             $payrollUser->update([
                 'extra_hours' => null,
                 'extra_minutes' => null,
@@ -650,6 +657,10 @@ class PayrollUserController extends Controller
                 'approved_extra_minutes' => null,
                 'approved_by' => null,
                 'approved_at' => null,
+                'proposed_extra_hours' => null,
+                'proposed_extra_minutes' => null,
+                'extra_hour_status' => 'none',
+                'current_approval_level_id' => null,
             ]);
 
             // Eliminar decisiones de aprobación asociadas

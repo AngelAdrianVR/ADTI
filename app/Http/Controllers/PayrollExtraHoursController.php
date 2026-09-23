@@ -249,33 +249,16 @@ class PayrollExtraHoursController extends Controller
         // Al reconfigurar grupos, las decisiones se borran por cascade, por lo que
         // los registros que no tengan una aprobación final legítima (approved_at)
         // deben volver a pending apuntando al primer nivel del grupo correcto.
-        $payrollUsers = PayrollUser::where('payroll_id', $payroll->id)
-            ->where(function ($q) {
-                $q->where('extra_hours', '>', 0)
-                  ->orWhere('extra_minutes', '>', 0);
-            })
-            ->get();
+        // Reinicia el flujo de los registros en vuelo (las decisiones previas se
+        // borraron por cascade al recrear los grupos). Esta misma rutina se usa al
+        // copiar configuracion de otra catorcena, que antes NO reinicializaba.
+        $reset = $this->approvals->resetInFlightForPayroll($payroll);
 
-        foreach ($payrollUsers as $pu) {
-            $status = $pu->extra_hour_status;
-
-            // No tocar aprobaciones finales legítimas (approved_at presente)
-            if (in_array($status, ['approved', 'rejected']) && $pu->approved_at !== null) {
-                continue;
-            }
-
-            // Limpiar campos legacy para evitar estados inconsistentes
-            $pu->updateQuietly([
-                'approved_extra_hours' => null,
-                'approved_extra_minutes' => null,
-                'approved_by' => null,
-                'approved_at' => null,
-            ]);
-
-            $this->approvals->initializeWorkflow($pu, true);
-        }
-
-        return back()->with('success', 'Grupos y niveles de autorizaciรณn guardados correctamente.');
+        return back()->with('success', sprintf(
+            'Grupos y niveles de autorización guardados correctamente. Días reiniciados al primer nivel: %d%s.',
+            $reset['reset'],
+            $reset['without_group'] > 0 ? ' · ' . $reset['without_group'] . ' sin grupo (sin flujo)' : ''
+        ));
     }
 
     /**
@@ -328,6 +311,12 @@ class PayrollExtraHoursController extends Controller
                     $newLevel->approvers()->sync($prevLevel->approvers->pluck('id'));
                 }
             }
+
+            // Las decisiones de los registros en vuelo apuntaban a los niveles que
+            // se acaban de eliminar: hay que devolverlos al primer nivel del grupo
+            // nuevo. Antes, esta copia dejaba TODOS los dias con tiempo extra
+            // "sin flujo de autorización" (nivel NULL) y descuadraba los contadores.
+            $this->approvals->resetInFlightForPayroll($payroll);
         });
 
         return back()->with('success', 'Configuraciรณn copiada de la nรณmina anterior correctamente.');
@@ -383,6 +372,12 @@ class PayrollExtraHoursController extends Controller
                     $newLevel->approvers()->sync($nextLevel->approvers->pluck('id'));
                 }
             }
+
+            // Las decisiones de los registros en vuelo apuntaban a los niveles que
+            // se acaban de eliminar: hay que devolverlos al primer nivel del grupo
+            // nuevo. Antes, esta copia dejaba TODOS los dias con tiempo extra
+            // "sin flujo de autorización" (nivel NULL) y descuadraba los contadores.
+            $this->approvals->resetInFlightForPayroll($payroll);
         });
 
         return back()->with('success', 'Configuraciรณn copiada de la nรณmina siguiente correctamente.');

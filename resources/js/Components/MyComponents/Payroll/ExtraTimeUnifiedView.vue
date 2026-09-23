@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ElMessageBox } from 'element-plus';
@@ -57,6 +57,9 @@ function getGlobalStatus(record) {
     // Rechazado global: algún nivel tiene rechazo
     if (decisions.some(d => d.status === 'rejected')) return 'rejected';
 
+    // Día SIN FLUJO DE AUTORIZACIÓN (nivel NULL): ni aprobado ni accionable
+    if (info.orphan) return 'orphan';
+
     // Ya decidí y el backend confirmó todo completo → Aprobado
     if (info.hasDecided && record.incidence.approved_at) return 'approved';
 
@@ -79,13 +82,14 @@ function getGlobalStatusLabel(status) {
         case 'approved': return { text: 'Aprobado', class: 'bg-green-100 text-green-700 border-green-200' };
         case 'rejected': return { text: 'Rechazado', class: 'bg-red-100 text-red-700 border-red-200' };
         case 'pending': return { text: 'En espera', class: 'bg-blue-100 text-blue-700 border-blue-200' };
+        case 'orphan': return { text: 'Sin flujo', class: 'bg-amber-50 text-amber-700 border-amber-200' };
         default: return { text: '—', class: 'bg-gray-50 text-gray-400' };
     }
 }
 
 // ─── MI DECISIÓN (del aprobador actual) ───
 function getMyDecisionInfo(record) {
-    if (!props.hierarchy) return { hasDecided: false, status: null, canAct: true, canRevert: false };
+    if (!props.hierarchy) return { hasDecided: false, status: null, canAct: true, canRevert: false, orphan: false };
     const perm = props.hierarchy.getActionPermission(record.incidence);
     // ¿Puedo revertir este registro? Un aprobador del grupo puede desbloquear
     // estados finales (incluidos huérfanos sin mi decisión).
@@ -97,8 +101,50 @@ function getMyDecisionInfo(record) {
         canRevert,
         reason: perm.reason || '',
         isMyEmployee: perm.isMyEmployee || false,
+        // Día SIN FLUJO DE AUTORIZACIÓN (nivel NULL): no es accionable ni cuenta
+        // en "en tu turno"; se reporta aparte en el encabezado.
+        orphan: perm.orphan || false,
     };
 }
+
+// ─── Días sin flujo de autorización (nivel NULL) mostrados ───
+const orphanCount = computed(() =>
+    (props.groups || []).reduce(
+        (sum, group) => sum + (group.records || []).filter(r => getMyDecisionInfo(r).orphan).length,
+        0
+    )
+);
+
+// ─── Filtro: sólo colaboradores con días en MI turno ───
+// El "turno" es la misma regla canónica que alimenta los contadores: el día se
+// puede aprobar/rechazar AHORA MISMO (permiso calculado en el servidor).
+// Arranca activo cuando hay días accionables, para ir directo a lo pendiente, y
+// se puede desactivar (visible en el encabezado) para ver TODOS los días.
+const isActionable = (record) => {
+    const info = getMyDecisionInfo(record);
+    return info.canAct && !info.hasDecided && !info.orphan;
+};
+
+const onlyActionable = ref(!!props.hierarchy && props.actionableCount > 0);
+
+// Grupos que se pintan: con el filtro activo se conservan sólo los días
+// accionables y se descartan los colaboradores que se quedarían sin días.
+const displayGroups = computed(() => {
+    if (!onlyActionable.value || !props.hierarchy) return props.groups;
+
+    return (props.groups || [])
+        .map(group => {
+            const records = (group.records || []).filter(isActionable);
+            const totalMinutes = records.reduce(
+                (sum, record) => sum + (record.incidence.extra_hours || 0) * 60 + (record.incidence.extra_minutes || 0),
+                0
+            );
+            return { ...group, records, totalMinutes };
+        })
+        .filter(group => group.records.length > 0);
+});
+
+const totalGroupsCount = computed(() => (props.groups || []).length);
 
 // ─── Stats por grupo (basado en MI decisión) ───
 function getGroupStats(group) {
@@ -203,20 +249,56 @@ async function confirmAndRevert(record) {
     <div v-else class="mt-2">
         <!-- Barra superior -->
         <div class="flex flex-col md:flex-row justify-between md:items-center bg-gray-50 p-3 rounded-t-lg border border-gray-200 border-b-0 gap-3">
-            <div>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <p class="text-xs text-gray-600 font-medium">
                     <i class="fa-solid fa-circle-info mr-1"></i>
-                    <strong>{{ totalRecords }}</strong> registros{{ activeFiltersLabel ? ` (${activeFiltersLabel})` : '' }}
+                    <strong>{{ totalRecords }}</strong> días {{ activeFiltersLabel ? ` (${activeFiltersLabel})` : '' }}
                     <template v-if="hierarchy && actionableCount > 0">
-                        · <span class="text-blue-600 font-bold">{{ actionableCount }} en tu turno</span>
+                        · <span class="text-blue-600 font-bold">{{ actionableCount }} días en tu turno para aprobar/rechazar</span>
+                    </template>
+                    <template v-if="orphanCount > 0">
+                        · <span class="text-amber-600 font-bold">{{ orphanCount }} sin flujo de autorización</span>
+                        <span class="text-gray-400">(no se pueden decidir: el colaborador no está en ningún grupo)</span>
                     </template>
                 </p>
+
+                <!-- Filtro de días en MI turno (por defecto activo).
+                     Vive junto a la etiqueta "días en tu turno" para no confundirse
+                     con los filtros de la parte superior del modal. -->
+                <div v-if="hierarchy"
+                    class="inline-flex items-center gap-2 bg-white border rounded-full pl-2.5 pr-3 py-1 shadow-sm"
+                    :class="onlyActionable ? 'border-blue-300' : 'border-gray-200'"
+                    title="Mostrar sólo los días que puedes aprobar/rechazar ahora mismo">
+                    <el-switch
+                        v-model="onlyActionable"
+                        size="small"
+                        style="--el-switch-on-color: #1676A2;"
+                    />
+                    <span class="text-[11px] font-semibold whitespace-nowrap"
+                        :class="onlyActionable ? 'text-[#1676A2]' : 'text-gray-500'">
+                        Sólo días en mi turno
+                    </span>
+                    <span v-if="onlyActionable && totalGroupsCount > 0"
+                        class="text-[10px] font-bold text-gray-400 whitespace-nowrap">
+                        · {{ displayGroups.length }}/{{ totalGroupsCount }} colaboradores
+                    </span>
+                </div>
             </div>
         </div>
 
+        <!-- Sin días en mi turno (filtro activo): se puede apagar desde el encabezado -->
+        <div v-if="onlyActionable && displayGroups.length === 0"
+            class="py-12 text-center bg-gray-50 rounded-b-lg border border-gray-200 border-t-0">
+            <i class="fa-solid fa-check-circle text-4xl text-green-300 mb-3 block"></i>
+            <p class="text-sm font-medium text-gray-600">No hay días en tu turno para aprobar/rechazar.</p>
+            <p class="text-xs text-gray-400 mt-1">
+                Apaga el filtro «Sólo días en mi turno» para ver todos los colaboradores y días.
+            </p>
+        </div>
+
         <!-- Lista de empleados colapsables -->
-        <div class="border border-gray-200 rounded-b-lg divide-y divide-gray-200">
-            <div v-for="group in groups" :key="group.user.id">
+        <div v-else class="border border-gray-200 rounded-b-lg divide-y divide-gray-200">
+            <div v-for="group in displayGroups" :key="group.user.id">
 
                 <!-- Header del empleado (click para colapsar) -->
                 <div @click="toggleGroup(group.user.id)"

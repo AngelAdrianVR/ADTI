@@ -77,7 +77,7 @@ const projectForm = useForm({ date: null, user_id: props.payrollUser.user.id, pr
 // ─── Selección múltiple de días (eliminar tiempo extra en lote) ───
 const selectionMode = ref(false);
 const selectedDates = ref([]);
-const bulkClearForm = useForm({ user_id: props.payrollUser.user.id, dates: [] });
+const bulkClearForm = useForm({ user_id: props.payrollUser.user.id, dates: [], payroll_id: props.payroll.id });
 
 // Clave de día (YYYY-MM-DD) para comparar fechas sin importar la hora
 const dayKey = (day) => String(day.date).slice(0, 10);
@@ -230,7 +230,7 @@ const handleCommand = (command) => {
             });
         }
     } else if (action === 'clear_extra_time') {
-        router.put(route('payroll-users.clear-extra-time'), { date: form.date, user_id: props.payrollUser.user.id }, { preserveScroll: true, onSuccess: () => ElNotification.success('Tiempo extra eliminado') });
+        router.put(route('payroll-users.clear-extra-time'), { date: form.date, user_id: props.payrollUser.user.id, payroll_id: props.payroll.id }, { preserveScroll: true, onSuccess: () => ElNotification.success('Tiempo extra eliminado') });
     } else if (action === 'link_project' || action === 'change_project') {
         openProjectModal();
     } else if (action === 'unlink_project') {
