@@ -249,4 +249,14 @@ class SubcategoryController extends Controller
         $products = $subcategory->products;
         return response()->json(['items' => $products]);
     }
+
+    // Devuelve la subcategoría con su jerarquía e imágenes.
+    // Utilizado en LandingPage/ShowSubcategory (carga diferida desde la vista).
+    // Los productos se obtienen aparte con products.fetch-subcategory-products.
+    public function fetchShowData(Subcategory $subcategory)
+    {
+        $subcategory->load(['media', 'category.subcategories.media', 'category.media']);
+
+        return response()->json(compact('subcategory'));
+    }
 }

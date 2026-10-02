@@ -237,4 +237,13 @@ class CategoryController extends Controller
 
         return response()->json(compact('items'));
     }
+
+    // Devuelve la categoría con sus subcategorías e imágenes.
+    // Utilizado en LandingPage/ShowCategory (carga diferida desde la vista).
+    public function fetchShowData(Category $category)
+    {
+        $category->load(['media', 'subcategories.media']);
+
+        return response()->json(compact('category'));
+    }
 }

@@ -1,5 +1,5 @@
 <template>
-    <PublicLayout :title="subcategory.name">
+    <PublicLayout :title="subcategory?.name ?? 'Catálogo'">
         <main class="px-2 lg:p-8 xl:px-48 py-7">
             <!-- Decorations  -->
             <!-- <figure class="-z-20">
@@ -15,18 +15,18 @@
                     <i class="fa-solid fa-angle-right text-xs"></i>
                     <div class="flex items-center space-x-3" v-for="(subcategory, index) in breadCrumbles" :key="subcategory">
                         <p @click="index === 0 ? $inertia.get(route('public.show-category', subcategory.id)) : $inertia.get(route('public.show-subcategory', subcategory.id))"
-                            class="cursor-pointer hover:text-primary" :class="subcategory.name === this.subcategory.name ? 'text-primary font-bold' : ''">{{ subcategory.name }}</p>
+                            class="cursor-pointer hover:text-primary" :class="subcategory.name === this.subcategory?.name ? 'text-primary font-bold' : ''">{{ subcategory.name }}</p>
                         <i v-if="breadCrumbles.length !== (index + 1) " class="fa-solid fa-angle-right text-xs"></i>                    
                     </div>
                 </div>
             </div>
 
-            <Loading v-if="loadingProducts" class="mt-4 lg:mt-20" />
+            <Loading v-if="loadingSubcategory || loadingProducts" class="mt-4 lg:mt-20" />
 
             <body v-else class="mx-2 md:mx-6">
                 <div class="flex items-center justify-between">
                     <h1 class="font-bold text-lg mb-2">{{ subcategory.name }}</h1>
-                    <p v-if="subcategoryProducts.length" class="text-[#6D6E72]">{{ subcategory?.products?.length }} Artículos</p>
+                    <p v-if="subcategoryProducts.length" class="text-[#6D6E72]">{{ total_products }} Artículos</p>
                 </div>
 
                 <section>
@@ -55,8 +55,10 @@ import axios from 'axios';
 export default {
 data() {
     return {
+        subcategory: null, //subcategoría recuperada en la petición del mounted
         breadCrumbles: [],
         subcategoryProducts: [], //productos recuperados en la petición del mounted
+        loadingSubcategory: true,
         loadingProducts: false
     }
 },
@@ -67,10 +69,29 @@ components:{
     Loading,
 },
 props:{
-    subcategory: Object,
+    subcategory_id: Number,
     total_products: Number // cantidad total de productos que contiene la subcategoría
 },
 methods:{
+    async fetchSubcategory() {
+        this.loadingSubcategory = true;
+        try {
+            const response = await axios.get(route('subcategories.fetch-show', this.subcategory_id));
+            if ( response.status === 200 ) {
+                this.subcategory = response.data.subcategory;
+            }
+        } catch (error) {
+            console.log(error);
+            this.$notify({
+                title: "Error",
+                message: "No se pudo cargar la subcategoría.",
+                type: "error",
+                position: "bottom-right",
+            });
+        } finally {
+            this.loadingSubcategory = false;
+        }
+    },
     saveBreadCrumbles() {
         let currentSubcategory = this.subcategory;
 
@@ -116,6 +137,7 @@ methods:{
 },
 computed:{
     handleSubcategoryArray() {
+        if ( !this.subcategory ) return [];
         //si la subcategoría es de nivel 1 recupera las subcategorías relacionadas a esa 1 nivel arriba
         if ( this.subcategory.level === 1 ) {
             return this.subcategory?.category?.subcategories?.filter(sb => sb.level === 2 && sb.prev_subcategory_id === this.subcategory.id)
@@ -128,7 +150,11 @@ computed:{
         }
     }
 },
-mounted() { 
+async mounted() { 
+    await this.fetchSubcategory(); //Recupera la subcategoría
+
+    if ( !this.subcategory ) return; //si no se pudo cargar, detener
+
     this.saveBreadCrumbles(); //guarda todas las subcategorias para el breas crumbles
 
     if ( this.total_products > 0 ) { //recupera los productos si la subcategoría contiene

@@ -106,6 +106,9 @@ This logic lives in `ProductController@store` and `ProductController@storeProduc
 | `GET /products-print-barcodes` | custom | Print barcode labels (uses jsbarcode) |
 | `GET /products-search` | custom | Search products (public) |
 | `GET /products-fetch-subcategory-products/{subcategory_id}` | custom | AJAX: products in subcategory |
+| `GET /products-fetch-show/{product}` | custom | AJAX: product detail + media (public landing) |
+| `GET /categories-fetch-show/{category}` | custom | AJAX: category detail + `subcategories.media` (public landing) |
+| `GET /subcategories-fetch-show/{subcategory}` | custom | AJAX: subcategory detail + category media (public landing) |
 
 ---
 

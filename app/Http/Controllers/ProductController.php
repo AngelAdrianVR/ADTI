@@ -519,5 +519,14 @@ class ProductController extends Controller
         // Si no existe un producto mayor, regresar el primero
         return $next ?? Product::orderBy('id', 'asc')->first();
     }
-    
+
+    // Devuelve el producto con su jerarquía e imágenes.
+    // Utilizado en LandingPage/ShowProduct (carga diferida desde la vista).
+    public function fetchShowData(Product $product)
+    {
+        $product->load(['media', 'subcategory.category.subcategories']);
+
+        return response()->json(compact('product'));
+    }
+
 }

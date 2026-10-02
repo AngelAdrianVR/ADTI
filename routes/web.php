@@ -37,26 +37,26 @@ Route::get('/', function () {
 })->name('welcome');
 
 // Rutas Públicas de Productos
+// Las vistas se renderizan de inmediato y la información pesada (media de las
+// subcategorías, productos, etc.) se consulta desde la propia vista vía axios,
+// para que la navegación no se bloquee esperando el eager-load.
+
 //ruta para mostrar las subcategorías de categoría
 Route::get('/show-category/{category_id}', function ($category_id) {
-    $category = Category::with(['media', 'subcategories.media'])->find($category_id);
-
-    // return $category;
     return Inertia::render('LandingPage/ShowCategory', [
-        'category' => $category
+        'category_id' => (int) $category_id
     ]);
 })->name('public.show-category');
 
 
 //ruta para mostrar las subcategorías de una subcategoría seleccionada
 Route::get('/show-subcategory/{subcategory_id}', function ($subcategory_id) {
-    $subcategory = Subcategory::with(['media', 'products', 'category.subcategories.media', 'category.media'])->find($subcategory_id);
-
+    // El count es barato (una sola query) y sirve para saber de antemano si hay
+    // productos que cargar; el resto de la información se consulta desde la vista.
     $total_products = Product::where('subcategory_id', $subcategory_id)->count();
 
-    // return $subcategory;
     return Inertia::render('LandingPage/ShowSubcategory', [
-        'subcategory' => $subcategory,
+        'subcategory_id' => (int) $subcategory_id,
         'total_products' => $total_products // cantidad de productos que contiene esa subcategoría
     ]);
 })->name('public.show-subcategory');
@@ -64,11 +64,8 @@ Route::get('/show-subcategory/{subcategory_id}', function ($subcategory_id) {
 
 //ruta para mostrar producto encontrado desde barra buscadora de inicio
 Route::get('/show-product/{product_id}', function ($product_id) {
-    $product = Product::with(['media', 'subcategory' => ['category.subcategories']])->find($product_id);
-
-    // return $product;
     return Inertia::render('LandingPage/ShowProduct', [
-        'product' => $product
+        'product_id' => (int) $product_id
     ]);
 })->name('public.show-product');
 
@@ -227,6 +224,12 @@ Route::get('vacation-requests/pending-count', [VacationRequestController::class,
 
 Route::get('products-search', [ProductController::class, 'searchProduct'])->name('products.search');
 Route::get('products-fetch-subcategory-products/{subcategory_id}', [ProductController::class, 'fetchSubcategoryProducts'])->name('products.fetch-subcategory-products');
+
+// Rutas JSON usadas por las vistas públicas para cargar su información después de
+// renderizar (evita bloquear la navegación con el eager-load pesado).
+Route::get('categories-fetch-show/{category}', [CategoryController::class, 'fetchShowData'])->name('categories.fetch-show');
+Route::get('subcategories-fetch-show/{subcategory}', [SubcategoryController::class, 'fetchShowData'])->name('subcategories.fetch-show');
+Route::get('products-fetch-show/{product}', [ProductController::class, 'fetchShowData'])->name('products.fetch-show');
 
 // Comandos de utilidad (Artisan)
 // SEGURIDAD: estos comandos estaban declarados fuera del grupo autenticado (solo
