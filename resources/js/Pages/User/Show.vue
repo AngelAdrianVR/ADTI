@@ -3,17 +3,27 @@ import { ref, onMounted } from 'vue';
 import { router, Head, Link } from '@inertiajs/vue3';
 import AppLayout from "@/Layouts/AppLayout.vue";
 import PrimaryButton from "@/Components/PrimaryButton.vue";
-import SecondaryButton from "@/Components/SecondaryButton.vue";
-import Back from "@/Components/MyComponents/Back.vue";
 import General from "./Tabs/General.vue";
 import DigitalDocuments from "./Tabs/DigitalDocuments.vue";
+import Performance from "./Tabs/Performance.vue";
+import EmployeesInCharge from "./Tabs/EmployeesInCharge.vue"; 
+import Vacations from "./Tabs/Vacations.vue"; // Componente nuevo
 import axios from "axios";
 import { ElNotification } from "element-plus";
+import { 
+    User,
+    Folder,
+    DataLine,
+    Avatar,
+    Calendar // Icono para la nueva pestaña
+} from '@element-plus/icons-vue';
 
 const props = defineProps({
     user: Object,
     users: Array,
-    vacations: Array,
+    vacations: Array, // Mantiene la compatibilidad si la usas en otro lado
+    employeesInCharge: Array, 
+    vacationDetails: Object, // NUEVA prop recibida del controlador
 });
 
 // State
@@ -77,7 +87,13 @@ onMounted(() => {
                 <!-- Encabezado y Navegación -->
                 <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                     <div class="flex items-center self-start md:self-auto">
-                        <Back :route="route('users.index')" class="mr-4" />
+                        <el-button
+                            @click="router.visit(route('users.index'))"
+                            circle
+                            class="!border-gray-200 !text-gray-500 hover:!text-indigo-600 hover:!border-indigo-300 !shadow-sm mr-4"
+                        >
+                            <i class="fa-solid fa-angle-left text-base"></i>
+                        </el-button>
                         <h1 class="text-2xl font-bold text-gray-800 hidden md:block">Expediente de Usuario</h1>
                     </div>
 
@@ -128,7 +144,7 @@ onMounted(() => {
                             <!-- Botón Nuevo -->
                             <button 
                                 @click="router.visit(route('users.create'))" 
-                                class="bg-primary text-white hover:bg-primary px-3 py-2 rounded-md shadow-sm transition-colors"
+                                class="bg-cyan-600 text-white hover:bg-cyan-700 px-3 py-2 rounded-md shadow-sm transition-colors"
                                 title="Crear nuevo usuario"
                             >
                                 <i class="fa-solid fa-plus"></i>
@@ -200,7 +216,7 @@ onMounted(() => {
                                 <el-tab-pane name="1">
                                     <template #label>
                                         <span class="flex items-center gap-2">
-                                            <i class="fa-regular fa-id-badge"></i> Información General
+                                            <el-icon><User /></el-icon> Información General
                                         </span>
                                     </template>
                                     <div class="py-6 animate-fade-in">
@@ -211,11 +227,47 @@ onMounted(() => {
                                 <el-tab-pane name="2">
                                     <template #label>
                                         <span class="flex items-center gap-2">
-                                            <i class="fa-regular fa-folder-open"></i> Expediente Digital
+                                            <el-icon><Folder /></el-icon> Expediente Digital
                                         </span>
                                     </template>
                                     <div class="py-6 animate-fade-in">
                                         <DigitalDocuments :user="user" />
+                                    </div>
+                                </el-tab-pane>
+
+                                <el-tab-pane name="3">
+                                    <template #label>
+                                        <span class="flex items-center gap-2">
+                                            <el-icon><DataLine /></el-icon> Desempeño
+                                        </span>
+                                    </template>
+                                    <div class="py-6 animate-fade-in">
+                                        <Performance :user="user" />
+                                    </div>
+                                </el-tab-pane>
+
+                                <!-- NUEVA PESTAÑA: PERSONAL A CARGO -->
+                                <el-tab-pane name="4" v-if="employeesInCharge.length > 0 || user.employees_in_charge?.length > 0">
+                                    <template #label>
+                                        <span class="flex items-center gap-2">
+                                            <el-icon><Avatar /></el-icon> Personal a Cargo
+                                            <span v-if="employeesInCharge.length" class="ml-1 bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded-full">{{ employeesInCharge.length }}</span>
+                                        </span>
+                                    </template>
+                                    <div class="py-6 animate-fade-in">
+                                        <EmployeesInCharge :employees="employeesInCharge" />
+                                    </div>
+                                </el-tab-pane>
+
+                                <!-- NUEVA PESTAÑA: VACACIONES Y AUSENCIAS -->
+                                <el-tab-pane name="5">
+                                    <template #label>
+                                        <span class="flex items-center gap-2">
+                                            <el-icon><Calendar /></el-icon> Vacaciones
+                                        </span>
+                                    </template>
+                                    <div class="py-6 animate-fade-in">
+                                        <Vacations :user="user" :vacationDetails="vacationDetails" />
                                     </div>
                                 </el-tab-pane>
 
@@ -230,7 +282,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* Personalización de Tabs similar a ProductShow */
+/* Personalización de Tabs */
 :deep(.el-tabs__nav-wrap::after) {
     background-color: #f3f4f6;
     height: 1px;

@@ -17,20 +17,42 @@ class PayrollUser extends Pivot
     protected $fillable = [
         'date',
         'check_in',
+        'check_in_location',
         'check_out',
+        'check_out_location',
         'late',
         'extra_hours',
         'extra_minutes',
         'user_id',
         'payroll_id',
         'incidence',
+        'project_id',
         'additionals',
-        'checked_in_platform'
+        'checked_in_platform',
+        // Nuevos campos
+        'approved_extra_hours',
+        'approved_extra_minutes',
+        'approved_by',
+        'approved_at',
+        // Valor ajustado "acordado" perseguido a través del pipeline de aprobación
+        'proposed_extra_hours',
+        'proposed_extra_minutes',
+        // Campos de pausa/comida
+        'break_start',
+        'break_end',
+        'break_minutes',
+        // Desnormalización del flujo de aprobación
+        'extra_hour_status',
+        'current_approval_level_id',
     ];
 
     protected $casts = [
         'date' => 'date',
         'additionals' => 'array',
+        'approved_at' => 'datetime',
+        'project_id' => 'integer',
+        'break_minutes' => 'integer',
+        'current_approval_level_id' => 'integer',
     ];
 
     // relationships
@@ -42,6 +64,79 @@ class PayrollUser extends Pivot
     public function payroll(): BelongsTo
     {
         return $this->belongsTo(Payroll::class);
+    }
+
+    // Relación para saber quién aprobó el tiempo
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    // Relación: Proyecto vinculado a este día (legacy, un solo proyecto)
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
+    // Relación: Proyectos múltiples vinculados a este día (pivote con detalle:
+    // tipo interno/externo, departamento y tiempo extra por proyecto)
+    public function projects(): HasMany
+    {
+        return $this->hasMany(PayrollUserProject::class, 'payroll_user_id');
+    }
+
+    // Relación: Decisiones de aprobación por niveles para esta entrada
+    public function approvalDecisions()
+    {
+        return $this->hasMany(ExtraHourApprovalDecision::class, 'payroll_user_id');
+    }
+
+    // Relación: Nivel de aprobación actual
+    public function currentApprovalLevel()
+    {
+        return $this->belongsTo(ExtraHourApprovalLevel::class, 'current_approval_level_id');
+    }
+
+    /**
+     * Obtiene los límites del turno según la configuración del usuario.
+     * Retorna un array con [start_of_shift, end_of_shift] como objetos Carbon.
+     * Para turnos nocturnos (que cruzan medianoche), end_of_shift tiene addDay().
+     */
+    public function getShiftBoundaries(): array
+    {
+        $shift = $this->user->org_props['work_shift'] ?? 'Turno 3 (09:00 - 18:00)';
+
+        return match ($shift) {
+            'Turno 1 (06:00 - 14:00)' => [
+                Carbon::createFromTime(6, 0),
+                Carbon::createFromTime(14, 0),
+            ],
+            'Turno 2 (14:00 - 22:00)' => [
+                Carbon::createFromTime(14, 0),
+                Carbon::createFromTime(22, 0),
+            ],
+            'Turno 3 (09:00 - 18:00)' => [
+                Carbon::createFromTime(9, 0),
+                Carbon::createFromTime(18, 0),
+            ],
+            // Retrocompatibilidad con turnos antiguos
+            'Nocturno (19:00 - 07:00)' => [
+                Carbon::createFromTime(19, 0),
+                Carbon::createFromTime(7, 0)->addDay(),
+            ],
+            'Nocturno (20:00 - 08:00)' => [
+                Carbon::createFromTime(20, 0),
+                Carbon::createFromTime(8, 0)->addDay(),
+            ],
+            'Diurno' => [
+                Carbon::createFromTime(9, 0),
+                Carbon::createFromTime(18, 0),
+            ],
+            default => [
+                Carbon::createFromTime(9, 0),
+                Carbon::createFromTime(18, 0),
+            ],
+        };
     }
 
     public function calculateExtraTime()
@@ -59,55 +154,77 @@ class PayrollUser extends Pivot
                 return;
             }
 
-            $extra_hours = 0;
-            $extra_minutes = 0;
+            // --- LÓGICA NOCTURNA: Si la salida es numéricamente menor a la entrada, cruzó la medianoche
+            if ($check_out->lessThan($check_in)) {
+                $check_out->addDay();
+            }
+
+            $total_extra_minutes = 0;
+
+            // Obtener límites del turno usando el nuevo método unificado
+            [$start_of_shift, $end_of_shift] = $this->getShiftBoundaries();
 
             // Si es fin de semana, todo el tiempo trabajado es extra
             if (Carbon::parse($this->date)->isWeekend()) {
-                $total_minutes = $check_in->diffInMinutes($check_out);
-                $extra_hours = intdiv($total_minutes, 60);
-                $extra_minutes = $total_minutes % 60;
+                $total_extra_minutes = $check_in->diffInMinutes($check_out);
             } else {
-                // De lunes a viernes, calcula el tiempo trabajado después de las 18:00 hrs
-                $end_of_day = Carbon::createFromTime(18, 0); // 18:00 hrs
+                // 1. Calcula el tiempo extra si llega ANTES de su hora de entrada oficial
+                if ($check_in->lessThan($start_of_shift)) {
+                    $total_extra_minutes += $check_in->diffInMinutes($start_of_shift);
+                }
 
-                if ($check_out->greaterThan($end_of_day)) {
-                    $extra_time = $end_of_day->diffInMinutes($check_out);
-                    $extra_hours = intdiv($extra_time, 60);
-                    $extra_minutes = $extra_time % 60;
+                // 2. Calcula el tiempo extra trabajado DESPUÉS de su hora de salida oficial
+                if ($check_out->greaterThan($end_of_shift)) {
+                    $total_extra_minutes += $end_of_shift->diffInMinutes($check_out);
                 }
             }
 
-            // Ajusta si los minutos exceden 60
-            if ($extra_minutes >= 60) {
-                $extra_hours += intdiv($extra_minutes, 60);
-                $extra_minutes = $extra_minutes % 60;
-            }
+            // Convertir el total de minutos extra acumulados a horas y minutos
+            $extra_hours = intdiv($total_extra_minutes, 60);
+            $extra_minutes = $total_extra_minutes % 60;
 
             // Actualiza los campos de horas y minutos extra
             $this->update([
                 'extra_hours' => $extra_hours,
                 'extra_minutes' => $extra_minutes,
             ]);
+
+            // Inicializar/reiniciar el flujo de aprobación
+            app(\App\Services\ExtraHourApprovalService::class)->initializeWorkflow($this);
         }
     }
 
     public function calculateLate()
     {
         $toleranceMinutes = 15;
-        $baseTime = Carbon::createFromTime(9, 0); // 09:00 AM
+
+        // Obtener límites del turno usando el método unificado
+        [$baseTime, $endTime] = $this->getShiftBoundaries();
+        // Para el cálculo de retardo solo nos interesa la hora de entrada (baseTime)
 
         // Verifica si existe una hora de entrada (check_in) y limpia el valor
         if (!empty($this->check_in)) {
             try {
                 $checkInTime = Carbon::createFromFormat('H:i', trim($this->check_in));
 
+                // CORRECCIÓN: Extracción segura de la fecha para evitar "Double time specification"
+                $safeDate = Carbon::parse($this->date)->toDateString();
+
+                // Normalizamos con la fecha segura
+                $baseDateTime = Carbon::parse($safeDate . ' ' . $baseTime->format('H:i'));
+                $checkInDateTime = Carbon::parse($safeDate . ' ' . $checkInTime->format('H:i'));
+
+                // Si el turno empieza de noche (ej. 18:00+) y la llegada es de mañana (ej. < 12:00), cruzó medianoche
+                if ($baseTime->hour >= 18 && $checkInTime->hour < 12) {
+                    $checkInDateTime->addDay();
+                }
+
                 // Calcula el límite de tiempo permitido incluyendo la tolerancia
-                $allowedTime = $baseTime->copy()->addMinutes($toleranceMinutes);
+                $allowedDateTime = $baseDateTime->copy()->addMinutes($toleranceMinutes);
 
                 // Calcula minutos tarde si check_in es después de la hora permitida
-                if ($checkInTime->greaterThan($allowedTime)) {
-                    $lateMinutes = $allowedTime->diffInMinutes($checkInTime);
+                if ($checkInDateTime->greaterThan($allowedDateTime)) {
+                    $lateMinutes = $allowedDateTime->diffInMinutes($checkInDateTime);
 
                     // Actualiza el campo 'late' en el modelo
                     $this->update([
@@ -123,11 +240,85 @@ class PayrollUser extends Pivot
                 logger()->error('Al calcular retardo. Formato de hora inválido en check_in', [
                     'check_in' => $this->check_in,
                 ]);
-                
+
                 $this->update([
                     'late' => 0,
                 ]);
             }
         }
+    }
+
+    /**
+     * Registra el inicio de una pausa (comida/break).
+     * Se llama cuando el usuario pausa desde la web o cuando se detecta
+     * una salida por comida desde BioTime.
+     */
+    public function startBreak($time = null)
+    {
+        $breakStart = $time ?? now()->format('H:i');
+        
+        $this->update([
+            'break_start' => $breakStart,
+            'break_end' => null,
+            'break_minutes' => null,
+        ]);
+        
+        Log::info('Break iniciado', [
+            'payroll_user_id' => $this->id,
+            'user_id' => $this->user_id,
+            'break_start' => $breakStart,
+        ]);
+    }
+
+    /**
+     * Registra el fin de una pausa (comida/break).
+     * Calcula la duración total en minutos.
+     */
+    public function endBreak($time = null)
+    {
+        if (!$this->break_start) {
+            Log::warning('Intento de finalizar break sin inicio registrado', [
+                'payroll_user_id' => $this->id,
+            ]);
+            return;
+        }
+
+        $breakEnd = $time ?? now()->format('H:i');
+        
+        try {
+            // Normalizar: MySQL TIME column devuelve "HH:MM:SS", pero solo necesitamos HH:MM
+            // Extraemos solo HH:MM para evitar el error "Trailing data" de Carbon
+            $breakStartStr = substr(trim($this->break_start), 0, 5);
+            $breakEndStr = substr(trim($breakEnd), 0, 5);
+            
+            $breakStartCarbon = Carbon::createFromFormat('H:i', $breakStartStr);
+            $breakEndCarbon = Carbon::createFromFormat('H:i', $breakEndStr);
+            
+            // Si la hora de fin es menor que la de inicio (cruzó medianoche)
+            if ($breakEndCarbon->lessThan($breakStartCarbon)) {
+                $breakEndCarbon->addDay();
+            }
+            
+            $breakMinutes = $breakStartCarbon->diffInMinutes($breakEndCarbon);
+        } catch (\Exception $e) {
+            Log::error('Error al calcular duración de break', [
+                'break_start' => $this->break_start,
+                'break_end' => $breakEnd,
+                'error' => $e->getMessage(),
+            ]);
+            $breakMinutes = 0;
+        }
+
+        $this->update([
+            'break_end' => $breakEnd,
+            'break_minutes' => $breakMinutes,
+        ]);
+        
+        Log::info('Break finalizado', [
+            'payroll_user_id' => $this->id,
+            'user_id' => $this->user_id,
+            'break_end' => $breakEnd,
+            'break_minutes' => $breakMinutes,
+        ]);
     }
 }

@@ -4,8 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Department;
 use App\Models\JobPosition;
+use App\Models\Payroll;
 use App\Models\PayrollUser;
+use App\Models\TimeEntry;
 use App\Models\User;
+use App\Models\Holiday;
+use App\Models\UserVacationAdjustment; // NUEVO MODELO
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -15,12 +20,101 @@ class UserController extends Controller
 {
     public function index()
     {
-        // Optimización: Cargar solo campos necesarios para la lista
+        // Rango de la semana actual
+        $startOfWeek = now()->startOfWeek();
+        $endOfWeek = now()->endOfWeek();
+
         $users = User::latest()
             ->whereNotIn('org_props->position', ['Soporte DTW'])
-            ->get();
+            // Sumar segundos de las tareas de la semana actual
+            ->withSum(['timeEntries as current_week_seconds' => function ($query) use ($startOfWeek, $endOfWeek) {
+                $query->whereBetween('start_time', [$startOfWeek, $endOfWeek]);
+            }], 'total_duration_seconds')
+            ->get()
+            ->map(function ($user) {
+                // Formatear segundos a "Xh Ym"
+                $seconds = $user->current_week_seconds ?? 0;
+                $h = floor($seconds / 3600);
+                $m = floor(($seconds % 3600) / 60);
+
+                // Agregamos el atributo formateado
+                $user->weekly_time_formatted = "{$h}h {$m}m";
+
+                return $user;
+            });
 
         return inertia('User/Index', compact('users'));
+    }
+
+    public function myPayrolls()
+    {
+        $user = auth()->user();
+
+        $payrolls = Payroll::whereHas('users', function ($q) use ($user) {
+            $q->where('user_id', $user->id);
+        })
+            ->orderBy('start_date', 'desc')
+            ->get();
+
+        // --- NUEVO: Cargar Solicitudes de Vacaciones del Usuario ---
+        $vacationRequests = \App\Models\VacationRequest::where('user_id', $user->id)
+            ->with('reviewer:id,name') // Traer nombre de quien autoriza/rechaza
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Calcular días disponibles "reales" (Saldo actual - Solicitudes pendientes/aprobadas futuras)
+        $currentBalance = $user->org_props['vacations'] ?? 0;
+        $lockedDays = \App\Models\VacationRequest::where('user_id', $user->id)
+            ->whereIn('status', ['Pendiente', 'Aprobada'])
+            ->where('start_date', '>=', now()->toDateString())
+            ->sum('days_requested');
+
+        $vacationDetails = [
+            'total_balance' => round($currentBalance, 2),
+            'locked_days' => $lockedDays,
+            'available_days' => max(0, round($currentBalance - $lockedDays, 2)), // No mostrar negativos si hay error
+        ];
+        // -----------------------------------------------------------
+
+        if ($payrolls->isEmpty()) {
+            return inertia('User/MyPayrolls', [
+                'payrolls' => [],
+                'vacationRequests' => $vacationRequests,
+                'vacationDetails' => $vacationDetails
+            ]);
+        }
+
+        $allAttendances = PayrollUser::whereIn('payroll_id', $payrolls->pluck('id'))
+            ->where('user_id', $user->id)
+            ->get()
+            ->groupBy('payroll_id');
+
+        $minDate = $payrolls->min('start_date');
+        $maxDate = $payrolls->max('start_date')->copy()->addDays(14);
+        $allHolidays = Holiday::whereBetween('date', [$minDate, $maxDate])->get();
+
+        $processedPayrolls = $payrolls->map(function ($payroll) use ($user, $allAttendances, $allHolidays) {
+            $rawAttendances = $allAttendances->get($payroll->id);
+
+            $endDate = $payroll->start_date->copy()->addDays(14);
+            $payrollHolidays = $allHolidays->filter(function ($holiday) use ($payroll, $endDate) {
+                return $holiday->date >= $payroll->start_date && $holiday->date <= $endDate;
+            });
+
+            return [
+                'id' => $payroll->id,
+                'biweekly' => $payroll->biweekly,
+                'start_date' => $payroll->start_date,
+                'is_active' => $payroll->is_active,
+                'incidences' => $payroll->getProcessedAttendances($user->id, $rawAttendances, $payrollHolidays),
+            ];
+        });
+
+        return inertia('User/MyPayrolls', [
+            'payrolls' => $processedPayrolls,
+            'vacationRequests' => $vacationRequests, // Pasamos a la vista
+            'vacationDetails' => $vacationDetails    // Pasamos a la vista
+        ]);
     }
 
     public function create()
@@ -28,8 +122,9 @@ class UserController extends Controller
         $roles = Role::all();
         $departments = Department::latest()->get();
         $job_positions = JobPosition::latest()->get();
+        $users = User::where('is_active', true)->orderBy('name')->get(['id', 'name']);
 
-        return inertia('User/Create', compact('roles' ,'departments', 'job_positions'));
+        return inertia('User/Create', compact('roles', 'departments', 'job_positions', 'users'));
     }
 
     public function edit(User $user)
@@ -38,8 +133,12 @@ class UserController extends Controller
         $user_roles = $user->roles->pluck('id');
         $departments = Department::latest()->get();
         $job_positions = JobPosition::latest()->get();
+        $users = User::where('is_active', true)
+            ->where('id', '!=', $user->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
-        return inertia('User/Edit', compact('user', 'roles', 'user_roles','departments', 'job_positions'));
+        return inertia('User/Edit', compact('user', 'roles', 'user_roles', 'departments', 'job_positions', 'users'));
     }
 
     public function reactivation(User $user)
@@ -66,6 +165,7 @@ class UserController extends Controller
             'org_props.entry_date' => 'required|date',
             'org_props.position' => 'required|string|max:255',
             'org_props.department' => 'required|string|max:255',
+            'org_props.work_shift' => 'required|string|max:255',
             'org_props.phone' => 'nullable|string|max:255',
             'org_props.biweekly_complement' => 'nullable|numeric|min:1',
             'org_props.month_complement' => 'nullable|numeric|min:1',
@@ -74,6 +174,7 @@ class UserController extends Controller
             'org_props.vacations' => 'nullable',
             'org_props.updated_date_vacations' => 'nullable',
             'roles' => 'required|array|min:1',
+            'employees_in_charge' => 'nullable|array',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ], [
             'org_props.entry_date.required' => 'Campo obligatorio.',
@@ -81,16 +182,13 @@ class UserController extends Controller
             'org_props.email.required' => 'Campo obligatorio.',
         ]);
 
-        // agregar propiedades de vacaciones
         $validated['org_props']['vacations'] = 0;
         $validated['org_props']['updated_date_vacations'] = now()->toDateString();
 
         $user = User::create($validated + ['password' => bcrypt('123456')]);
 
-        // guardar foto de perfil en caso de haberse seleccionado una
         if ($request->hasFile('image')) {
             $this->storeProfilePhoto($request, $user);
-            // convertir a int los roles para que no ocurra error al guardar
             $roles = array_map('intval', $request->roles);
             $user->syncRoles($roles);
         } else {
@@ -105,11 +203,11 @@ class UserController extends Controller
         $users = User::get(['id', 'name']);
         $user->load(['media']);
 
-        // Obtener vacaciones y agruparlas por año
+        // Historial general de vacaciones por año (usado previamente)
         $vacations = PayrollUser::where(['user_id' => $user->id, 'incidence' => 'Vacaciones'])
             ->get()
             ->groupBy(function ($vacation) {
-                return $vacation->date->format('Y'); // Agrupar por año
+                return $vacation->date->format('Y');
             })
             ->map(function ($vacations, $year) {
                 return [
@@ -122,14 +220,120 @@ class UserController extends Controller
                 ];
             })->values()->all();
 
-        return inertia('User/Show', compact('user', 'users', 'vacations'));
+        $employeesInCharge = [];
+        if (!empty($user->employees_in_charge)) {
+            $employeesInCharge = User::whereIn('id', $user->employees_in_charge)->get(['id', 'name', 'profile_photo_path', 'org_props']);
+        }
+
+        // ====================================================================
+        // NUEVA LÓGICA: PANEL DE VACACIONES AVANZADO (CÁLCULO HISTÓRICO COMPLETO)
+        // ====================================================================
+        $entryDate = Carbon::parse($user->org_props['entry_date'] ?? now());
+        $currentDate = now();
+        $history = [];
+
+        // Determinar cuántos ciclos anuales ha completado o iniciado
+        $yearsElapsed = (int) $entryDate->diffInYears($currentDate);
+        $anniversaryThisYear = $entryDate->copy()->year($currentDate->year);
+
+        // El total de ciclos que vamos a generar (Años completados + el año en curso)
+        $totalCycles = $currentDate->lt($anniversaryThisYear) ? $yearsElapsed : $yearsElapsed + 1;
+
+        // Si es su primer año (no ha llegado a su primer aniversario), forzamos al menos 1 ciclo
+        if ($totalCycles == 0) $totalCycles = 1;
+
+        for ($i = 0; $i < $totalCycles; $i++) {
+            // Fechas del periodo $i
+            $periodStart = $entryDate->copy()->addYears($i);
+            $periodEnd = $periodStart->copy()->addYear()->subDay();
+
+            $vacationDaysPerYear = match (true) {
+                $i === 0 => 12,
+                $i === 1 => 14,
+                $i === 2 => 16,
+                $i === 3 => 18,
+                $i === 4 => 20,
+                $i >= 5 && $i <= 9 => 22,
+                $i >= 10 && $i <= 14 => 24,
+                $i >= 15 && $i <= 19 => 26,
+                $i >= 20 && $i <= 24 => 28,
+                $i >= 25 && $i <= 29 => 30,
+                default => 12,
+            };
+
+            // Días tomados en este periodo
+            $takenInPeriod = PayrollUser::where('user_id', $user->id)
+                ->where('incidence', 'Vacaciones')
+                ->whereBetween('date', [$periodStart, $periodEnd])
+                ->orderBy('date', 'desc')
+                ->get();
+
+            // Ajustes manuales en este periodo
+            $adjustments = UserVacationAdjustment::where('user_id', $user->id)
+                ->whereBetween('date', [$periodStart, $periodEnd])
+                ->orderBy('date', 'desc')
+                ->get();
+
+            $history[] = [
+                'period_start' => $periodStart->toDateString(),
+                'period_end' => $periodEnd->toDateString(),
+                'years_worked' => $i,
+                'days_per_year' => $vacationDaysPerYear,
+                'taken_in_period' => $takenInPeriod,
+                'adjustments' => $adjustments,
+            ];
+        }
+
+        $vacationDetails = [
+            'current_balance' => round($user->org_props['vacations'] ?? 0, 2),
+            'history' => $history, // Enviamos el array con todos los años
+        ];
+
+        return inertia('User/Show', compact('user', 'users', 'vacations', 'employeesInCharge', 'vacationDetails'));
+    }
+
+    // --- NUEVO: GUARDAR AJUSTES MANUALES DE VACACIONES ---
+    public function storeVacationAdjustment(Request $request, User $user)
+    {
+        $request->validate([
+            'days' => 'required|numeric|not_in:0', // Permite negativos y positivos pero no 0
+            'notes' => 'required|string|max:255',
+            'date' => 'required|date',
+        ]);
+
+        UserVacationAdjustment::create([
+            'user_id' => $user->id,
+            'days' => (float) $request->days,
+            'notes' => $request->notes,
+            'date' => $request->date,
+        ]);
+
+        // Actualizar el saldo directamente en la propiedad org_props del usuario
+        $props = $user->org_props;
+        $props['vacations'] = ($props['vacations'] ?? 0) + (float) $request->days;
+        $user->update(['org_props' => $props]);
+
+        return back();
+    }
+
+    // --- NUEVO: REVERTIR (ELIMINAR) UN AJUSTE MANUAL ---
+    public function destroyVacationAdjustment(User $user, UserVacationAdjustment $adjustment)
+    {
+        // Revertir el saldo regresándolo a como estaba
+        $props = $user->org_props;
+        $props['vacations'] = ($props['vacations'] ?? 0) - (float) $adjustment->days;
+        $user->update(['org_props' => $props]);
+
+        $adjustment->delete();
+
+        return back();
     }
 
     public function update(Request $request, User $user)
     {
         $validated = $request->validate([
             'code' => 'nullable|string|max:10',
-            'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
+            'name' => 'required|string|max:255|unique:users,name,' . $user->id,
             'email' => 'nullable',
             'phone' => 'nullable|string|max:15',
             'birthdate' => 'nullable|date',
@@ -141,6 +345,7 @@ class UserController extends Controller
             'org_props.entry_date' => 'required|date',
             'org_props.position' => 'required|string|max:255',
             'org_props.department' => 'required|string|max:255',
+            'org_props.work_shift' => 'required|string|max:255',
             'org_props.phone' => 'nullable|string|max:255',
             'org_props.email' => 'nullable|string|max:255',
             'org_props.vacations' => 'nullable',
@@ -149,6 +354,7 @@ class UserController extends Controller
             'org_props.month_complement' => 'nullable|numeric|min:1',
             'org_props.net_salary' => 'nullable|numeric|min:1',
             'roles' => 'required|array|min:1',
+            'employees_in_charge' => 'nullable|array',
         ], [
             'org_props.entry_date.required' => 'Campo obligatorio.',
             'org_props.position.required' => 'Campo obligatorio.',
@@ -170,7 +376,7 @@ class UserController extends Controller
     {
         $validated = $request->validate([
             'code' => 'nullable|string|max:10',
-            'name' => 'required|string|max:255|unique:users,name,' . $user->id, //ignora si es el mismo para este id
+            'name' => 'required|string|max:255|unique:users,name,' . $user->id,
             'email' => 'nullable',
             'phone' => 'nullable|string|max:15',
             'birthdate' => 'nullable|date',
@@ -182,6 +388,7 @@ class UserController extends Controller
             'org_props.entry_date' => 'nullable|date',
             'org_props.position' => 'nullable|string|max:255',
             'org_props.department' => 'nullable|string|max:255',
+            'org_props.work_shift' => 'required|string|max:255',
             'org_props.phone' => 'nullable|string|max:255',
             'org_props.email' => 'nullable|string|max:255',
             'org_props.vacations' => 'nullable',
@@ -190,6 +397,7 @@ class UserController extends Controller
             'org_props.month_complement' => 'nullable|numeric|min:1',
             'org_props.net_salary' => 'nullable|numeric|min:1',
             'roles' => 'required|array|min:1',
+            'employees_in_charge' => 'nullable|array',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ], [
             'org_props.entry_date.required' => 'Campo obligatorio.',
@@ -198,7 +406,6 @@ class UserController extends Controller
         ]);
 
         $user->update($request->all());
-        // convertir a int los roles para que no ocurra error
         $roles = array_map('intval', $request->roles);
         $user->syncRoles($roles);
 
@@ -215,11 +422,8 @@ class UserController extends Controller
 
     public function storeProfilePhoto($request, User $user)
     {
-        // Guarda la imagen en el sistema de archivos.
         $path = $request->file('image')->store('public/profile-photos');
-        // Elimina el prefijo 'public' de la ruta.
         $path = str_replace('public/', '', $path);
-        // Actualiza la propiedad 'profile_photo_path' del usuario.
         $user->update([
             'profile_photo_path' => $path,
         ]);
@@ -245,14 +449,12 @@ class UserController extends Controller
     public function toggleHomeOffice(User $user)
     {
         $user->update(['home_office' => !$user->home_office]);
-        // CORRECCIÓN: Retornar back() para que Inertia refresque las props en el frontend
         return back();
     }
 
     public function massiveDelete(Request $request)
     {
         foreach ($request->items_ids as $id) {
-            // evitar eliminar al usuario autenticado
             if ($id != auth()->id()) {
                 $item = User::find($id);
                 $item?->delete();
@@ -307,14 +509,17 @@ class UserController extends Controller
     public function getNextAttendance()
     {
         $next = auth()->user()->getNextAttendance();
-
         return response()->json(compact('next'));
     }
 
-    public function setAttendance()
+    public function setAttendance(Request $request)
     {
         $user = auth()->user();
-        $next = $user->setAttendance();
+
+        // Obtenemos la ubicación, puede venir nula si el usuario denegó permisos de GPS
+        $location = $request->input('location');
+
+        $next = $user->setAttendance($location);
 
         return response()->json(compact('next'));
     }
@@ -322,7 +527,6 @@ class UserController extends Controller
     public function getPauseStatus()
     {
         $status = auth()->user()->paused;
-
         return response()->json(compact('status'));
     }
 
@@ -337,5 +541,41 @@ class UserController extends Controller
             : "Se ha reanudado tu tiempo laboral";
 
         return response()->json(['message' => $message, 'status' => $is_paused]);
+    }
+
+    public function getPerformance(Request $request, User $user)
+    {
+        $range = $request->input('range', 'today'); // 'today', 'week', 'month', 'custom'
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+
+        $query = TimeEntry::with(['project', 'task.department'])
+            ->where('user_id', $user->id)
+            ->whereNotNull('end_time') // Solo tiempos finalizados
+            ->orderBy('start_time', 'desc');
+
+        switch ($range) {
+            case 'today':
+                $query->whereDate('start_time', Carbon::today());
+                break;
+            case 'week':
+                $query->whereBetween('start_time', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()]);
+                break;
+            case 'month':
+                $query->whereMonth('start_time', Carbon::now()->month)
+                    ->whereYear('start_time', Carbon::now()->year);
+                break;
+            case 'custom':
+                if ($startDate && $endDate) {
+                    $start = Carbon::parse($startDate)->startOfDay();
+                    $end = Carbon::parse($endDate)->endOfDay();
+                    $query->whereBetween('start_time', [$start, $end]);
+                }
+                break;
+        }
+
+        $entries = $query->get();
+
+        return response()->json(['items' => $entries]);
     }
 }

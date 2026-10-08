@@ -9,6 +9,7 @@ import TextInput from '@/Components/TextInput.vue';
 import InputError from '@/Components/InputError.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
+import { Clock } from '@element-plus/icons-vue';
 
 const props = defineProps({
     users: Array,
@@ -33,10 +34,12 @@ const filteredUsers = computed(() => {
     const lowerSearch = search.value.toLowerCase();
     
     return props.users.filter(user => 
+        user.code?.toLowerCase().includes(lowerSearch) ||
         user.name?.toLowerCase().includes(lowerSearch) ||
         user.email?.toLowerCase().includes(lowerSearch) ||
         user.org_props?.department?.toLowerCase().includes(lowerSearch) ||
-        user.org_props?.position?.toLowerCase().includes(lowerSearch)
+        user.org_props?.position?.toLowerCase().includes(lowerSearch) ||
+        user.org_props?.work_shift?.toLowerCase().includes(lowerSearch) // Permite buscar por turno
     );
 });
 
@@ -90,7 +93,7 @@ const toggleHomeOffice = (user) => {
         onSuccess: () => {
             ElNotification.success({
                 title: 'Actualizado',
-                message: `Acceso remoto ${user.home_office ? 'habilitado' : 'deshabilitado'} para ${user.name}`
+                message: `Acceso remoto ${!user.home_office ? 'habilitado' : 'deshabilitado'} para ${user.name}`
             });
         },
         onError: () => {
@@ -107,7 +110,7 @@ const openInactivateModal = (user) => {
 };
 
 const submitInactivate = () => {
-    inactivateForm.put(route('users.inactivate', userToInactivate.value.id), {
+    inactivateForm.post(route('users.inactivate', userToInactivate.value.id), {
         onSuccess: () => {
             ElNotification.success({
                 title: 'Usuario dado de baja',
@@ -120,17 +123,56 @@ const submitInactivate = () => {
         }
     });
 };
+
+// Helper para diseño de turnos
+const getShiftBadgeStyle = (shift) => {
+    if (!shift) {
+        return {
+            class: 'bg-gray-50 text-gray-500 border border-gray-200',
+            icon: 'fa-solid fa-circle-question'
+        };
+    }
+    if (shift.startsWith('Turno 1')) {
+        return {
+            class: 'bg-orange-50 text-orange-600 border border-orange-200',
+            icon: 'fa-solid fa-sun'
+        };
+    }
+    if (shift.startsWith('Turno 2')) {
+        return {
+            class: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
+            icon: 'fa-solid fa-moon'
+        };
+    }
+    if (shift.startsWith('Turno 3')) {
+        return {
+            class: 'bg-blue-50 text-blue-600 border border-blue-200',
+            icon: 'fa-solid fa-clock'
+        };
+    }
+    // Fallback para valores antiguos como "Diurno" o "Nocturno"
+    if (shift === 'Diurno') {
+        return {
+            class: 'bg-orange-50 text-orange-600 border border-orange-200',
+            icon: 'fa-solid fa-sun'
+        };
+    }
+    return {
+        class: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
+        icon: 'fa-solid fa-moon'
+    };
+};
 </script>
 
 <template>
     <div class="px-2">
         <!-- Toolbar -->
         <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
-            <div class="relative w-full sm:w-72">
+            <div class="relative w-full sm:w-80">
                 <input 
                     v-model="search" 
                     type="text" 
-                    placeholder="Buscar por nombre, correo o puesto..." 
+                    placeholder="Buscar por código, nombre, turno o puesto..." 
                     class="w-full pl-10 pr-4 py-2 rounded-lg border-gray-300 focus:border-[#1676A2] focus:ring-[#1676A2] text-sm shadow-sm"
                 >
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-sm"></i>
@@ -167,7 +209,13 @@ const submitInactivate = () => {
             >
                 <el-table-column v-if="$page.props.auth.user.permissions?.includes('Eliminar usuarios')" type="selection" width="40" />
                 
-                <el-table-column label="Usuario" min-width="200">
+                <el-table-column label="Código" width="90">
+                    <template #default="scope">
+                        <span class="font-semibold text-gray-600 text-sm">{{ scope.row.code || 'N/A' }}</span>
+                    </template>
+                </el-table-column>
+
+                <el-table-column label="Usuario" min-width="180">
                     <template #default="scope">
                         <div class="flex items-center gap-3">
                             <img :src="scope.row.profile_photo_url" class="h-9 w-9 rounded-full object-cover border border-gray-200" alt="">
@@ -179,7 +227,7 @@ const submitInactivate = () => {
                     </template>
                 </el-table-column>
 
-                <el-table-column label="Puesto / Departamento" min-width="180">
+                <el-table-column label="Puesto / Departamento" min-width="170">
                     <template #default="scope">
                         <div>
                             <p class="text-sm text-gray-700 font-medium">{{ scope.row.org_props?.position || 'N/A' }}</p>
@@ -188,7 +236,28 @@ const submitInactivate = () => {
                     </template>
                 </el-table-column>
 
-                <!-- Columna Home Office (Nueva) -->
+                <!-- NUEVA COLUMNA: TURNO -->
+                <el-table-column label="Turno" min-width="140">
+                    <template #default="scope">
+                        <span 
+                            class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold tracking-wide"
+                            :class="getShiftBadgeStyle(scope.row.org_props?.work_shift).class"
+                        >
+                            <i :class="getShiftBadgeStyle(scope.row.org_props?.work_shift).icon"></i>
+                            {{ scope.row.org_props?.work_shift || 'Diurno' }}
+                        </span>
+                    </template>
+                </el-table-column>
+
+                <el-table-column label="Tiempo (Semana)" width="130" align="center">
+                    <template #default="scope">
+                        <div class="flex items-center justify-center gap-1.5 text-xs font-bold text-[#1676A2] bg-blue-50 px-2 py-1 rounded-full border border-blue-100">
+                            <el-icon><Clock /></el-icon>
+                            {{ scope.row.weekly_time_formatted }}
+                        </div>
+                    </template>
+                </el-table-column>
+
                 <el-table-column label="Acceso Remoto" width="130" align="center">
                     <template #default="scope">
                         <div @click.stop>
@@ -198,13 +267,15 @@ const submitInactivate = () => {
                                 inline-prompt
                                 active-text="Sí"
                                 inactive-text="No"
+                                :active-value="true"
+                                :inactive-value="false"
                                 style="--el-switch-on-color: #1676A2;"
                             />
                         </div>
                     </template>
                 </el-table-column>
 
-                <el-table-column align="right" width="120">
+                <el-table-column align="right" width="100">
                     <template #default="scope">
                         <div class="flex items-center justify-end gap-1">
                             <!-- Botón Editar -->
@@ -217,7 +288,7 @@ const submitInactivate = () => {
                                 <i class="fa-solid fa-pen-to-square"></i>
                             </button>
 
-                            <!-- Botón Dar de Baja (Nuevo) -->
+                            <!-- Botón Dar de Baja -->
                             <button 
                                 v-if="$page.props.auth.user.permissions.includes('Inactivar usuarios')"
                                 @click.stop="openInactivateModal(scope.row)" 
@@ -285,7 +356,7 @@ const submitInactivate = () => {
                         :disabled="inactivateForm.processing"
                         class="!bg-red-600 hover:!bg-red-700 border-transparent"
                     >
-                        Confirmar Baja
+                        Confirmar baja
                     </PrimaryButton>
                 </div>
             </template>

@@ -8,6 +8,16 @@ import DialogModal from '@/Components/DialogModal.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
 import { ElNotification } from "element-plus";
+import { 
+    Search, 
+    Plus, 
+    MoreFilled, 
+    View, 
+    Delete, 
+    EditPen,
+    Printer, 
+    Document
+} from '@element-plus/icons-vue';
 
 const props = defineProps({
     products: Array,
@@ -18,7 +28,10 @@ const search = ref('');
 const currentPage = ref(1);
 const itemsPerPage = ref(10);
 const showImportModal = ref(false);
+const showPrintModal = ref(false); // Estado del modal de impresión
 const searchInput = ref(null);
+const selectedItems = ref([]); 
+const productsToPrint = ref([]); // Lista para configurar cantidades
 
 const importForm = useForm({
     file: null,
@@ -43,12 +56,33 @@ const paginatedProducts = computed(() => {
     return filteredProducts.value.slice(start, end);
 });
 
-// Helpers
-const getCoverImage = (product) => {
-    return product.media?.find(img => img.collection_name === 'default')?.original_url;
+// Methods
+const handleSelectionChange = (val) => {
+    selectedItems.value = val;
 };
 
-// Methods
+// Abre el modal y prepara los datos
+const openPrintModal = () => {
+    productsToPrint.value = selectedItems.value.map(item => ({
+        id: item.id,
+        name: item.name,
+        part_number: item.part_number_supplier,
+        quantity: 1 // Cantidad por defecto
+    }));
+    showPrintModal.value = true;
+};
+
+// Genera la URL y abre la pestaña de impresión
+const confirmPrint = () => {
+    // Preparamos el array de objetos {id, quantity}
+    const params = productsToPrint.value.map(p => ({ id: p.id, quantity: p.quantity }));
+    
+    // Usamos route() enviando 'products' como parámetro query string
+    const url = route('products.print-barcodes', { products: params });
+    window.open(url, '_blank');
+    showPrintModal.value = false;
+};
+
 const handleRowClick = (row) => {
     router.visit(route('products.show', row.id));
 };
@@ -109,16 +143,13 @@ const importProducts = () => {
 };
 
 onMounted(() => {
-    // Foco en buscador
     nextTick(() => {
         searchInput.value?.focus();
     });
 
-    // Abrir modal si viene en URL (para deep linking)
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.has('openImportModal')) {
         showImportModal.value = true;
-        // Limpiar URL
         urlParams.delete('openImportModal');
         const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
         window.history.replaceState({}, '', newUrl);
@@ -139,16 +170,34 @@ onMounted(() => {
                     </div>
                     
                     <div class="flex items-center gap-3 w-full sm:w-auto">
+                        
+                        <!-- Botón Imprimir (Abre Modal) -->
+                        <transition name="fade">
+                            <el-button 
+                                v-if="selectedItems.length > 0"
+                                type="warning" 
+                                plain 
+                                @click="openPrintModal"
+                            >
+                                <el-icon class="mr-2"><Printer /></el-icon>
+                                Imprimir ({{ selectedItems.length }})
+                            </el-button>
+                        </transition>
+
                         <!-- Buscador -->
-                        <div class="relative w-full sm:w-72">
-                            <input 
+                        <div class="relative w-full sm:w-64">
+                            <el-input 
                                 v-model="search" 
                                 type="text" 
                                 ref="searchInput"
                                 placeholder="Buscar producto..." 
-                                class="w-full pl-10 pr-4 py-2 rounded-lg border-gray-300 focus:border-[#1676A2] focus:ring-[#1676A2] text-sm shadow-sm"
+                                class="w-full"
+                                clearable
                             >
-                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-sm"></i>
+                                <template #prefix>
+                                    <el-icon><Search /></el-icon>
+                                </template>
+                            </el-input>
                         </div>
 
                         <!-- Botón Crear / Dropdown Acciones -->
@@ -159,19 +208,20 @@ onMounted(() => {
                                 type="primary" 
                                 @click="router.visit(route('products.create'))" 
                                 @command="handleDropdownCommand"
+                                color="#1676A2"
                                 class="!bg-[#1676A2] !border-[#1676A2]"
                             >
-                                <span class="flex items-center gap-2"><i class="fa-solid fa-plus"></i> Crear Producto</span>
+                                <span class="flex items-center gap-2"><el-icon><Plus /></el-icon> Crear Producto</span>
                                 <template #dropdown>
                                     <el-dropdown-menu>
                                         <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Importar productos')" command="import">
-                                            <i class="fa-solid fa-file-import mr-2"></i> Importar Excel
+                                            <el-icon><Document /></el-icon> Importar Excel
                                         </el-dropdown-item>
                                         <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Exportar productos')" command="export">
-                                            <i class="fa-solid fa-file-export mr-2"></i> Exportar Excel
+                                            <el-icon><Document /></el-icon> Exportar Excel
                                         </el-dropdown-item>
                                         <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Importar productos')" command="template" divided>
-                                            <i class="fa-solid fa-download mr-2"></i> Descargar Plantilla
+                                            <el-icon><Document /></el-icon> Descargar Plantilla
                                         </el-dropdown-item>
                                     </el-dropdown-menu>
                                 </template>
@@ -184,31 +234,30 @@ onMounted(() => {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <el-table 
                         :data="paginatedProducts" 
+                        @selection-change="handleSelectionChange"
                         @row-click="handleRowClick"
                         style="width: 100%"
                         class="cursor-pointer"
+                        row-key="id" 
                         :row-class-name="'hover:bg-gray-50 transition-colors'"
                     >
-                        <!-- Imagen y Nombre -->
+                        <!-- Columna de Selección Persistente -->
+                        <el-table-column 
+                            type="selection" 
+                            width="55" 
+                            :reserve-selection="true" 
+                        />
+
+                        <!-- Producto (Sin imagen) -->
                         <el-table-column label="Producto" min-width="250">
                             <template #default="scope">
-                                <div class="flex items-center gap-4 py-2">
-                                    <!-- <div class="w-12 h-12 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center shrink-0 overflow-hidden">
-                                        <img v-if="getCoverImage(scope.row)" 
-                                             :src="getCoverImage(scope.row)" 
-                                             class="w-full h-full object-contain mix-blend-multiply" 
-                                             alt="Cover"
-                                        >
-                                        <i v-else class="fa-regular fa-image text-gray-300 text-lg"></i>
-                                    </div> -->
-                                    <div class="min-w-0">
-                                        <p class="font-bold text-gray-800 text-sm truncate" :title="scope.row.name">
-                                            {{ scope.row.name }}
-                                        </p>
-                                        <p class="text-xs text-gray-500 truncate" :title="scope.row.part_number_supplier">
-                                            NP: {{ scope.row.part_number_supplier || 'N/A' }}
-                                        </p>
-                                    </div>
+                                <div class="py-2">
+                                    <p class="font-bold text-gray-800 text-sm truncate" :title="scope.row.name">
+                                        {{ scope.row.name }}
+                                    </p>
+                                    <p class="text-xs text-gray-500 truncate" :title="scope.row.part_number_supplier">
+                                        NP: {{ scope.row.part_number_supplier || 'N/A' }}
+                                    </p>
                                 </div>
                             </template>
                         </el-table-column>
@@ -248,7 +297,7 @@ onMounted(() => {
                                         class="p-2 text-gray-400 hover:text-[#1676A2] hover:bg-blue-50 rounded-full transition-colors"
                                         title="Editar"
                                     >
-                                        <i class="fa-solid fa-pen-to-square"></i>
+                                        <el-icon><EditPen /></el-icon>
                                     </button>
 
                                     <el-popconfirm 
@@ -262,7 +311,7 @@ onMounted(() => {
                                     >
                                         <template #reference>
                                             <button @click.stop class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" title="Eliminar">
-                                                <i class="fa-solid fa-trash"></i>
+                                                <el-icon><Delete /></el-icon>
                                             </button>
                                         </template>
                                     </el-popconfirm>
@@ -289,6 +338,40 @@ onMounted(() => {
 
             </div>
         </main>
+
+        <!-- Modal de Impresión -->
+        <el-dialog v-model="showPrintModal" title="Configurar Impresión de Códigos" width="600px">
+            <div class="mb-4 text-sm text-gray-600">
+                Ajusta la cantidad de etiquetas a imprimir por cada producto seleccionado.
+            </div>
+            
+            <div class="border rounded-lg overflow-hidden border-gray-200">
+                <el-table :data="productsToPrint" style="width: 100%" max-height="400">
+                    <el-table-column prop="part_number" label="N/P" show-overflow-tooltip />
+                    <el-table-column label="Copias" align="center">
+                        <template #default="scope">
+                            <el-input-number 
+                                v-model="scope.row.quantity" 
+                                :min="1" 
+                                :max="100"
+                                size="small"
+                                style="width: 100px"
+                            />
+                        </template>
+                    </el-table-column>
+                </el-table>
+            </div>
+
+            <template #footer>
+                <div class="flex justify-end gap-2">
+                    <SecondaryButton @click="showPrintModal = false">Cancelar</SecondaryButton>
+                    <PrimaryButton @click="confirmPrint" class="!bg-[#1676A2]">
+                        <el-icon class="mr-2"><Printer /></el-icon>
+                        Generar Etiquetas
+                    </PrimaryButton>
+                </div>
+            </template>
+        </el-dialog>
 
         <!-- Modal de Importación -->
         <DialogModal :show="showImportModal" @close="showImportModal = false">
@@ -339,5 +422,15 @@ onMounted(() => {
 :deep(.el-dropdown-menu__item:not(.is-disabled):focus) {
     background-color: #f0f9ff;
     color: #1676A2;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

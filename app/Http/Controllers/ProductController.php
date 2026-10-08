@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 
 class ProductController extends Controller
 {
@@ -50,41 +51,69 @@ class ProductController extends Controller
         $lastSubcategoryId = collect($request->subcategory_id)->last();
         $product = null;
 
-        // Usar una transacción para asegurar la atomicidad y prevenir condiciones de carrera.
-        DB::transaction(function () use ($request, $lastSubcategoryId, &$product) {
-            // Se bloquea la tabla para obtener un conteo preciso y evitar que otros procesos interfieran.
-            $count = Product::where('subcategory_id', $lastSubcategoryId)->lockForUpdate()->count();
-            $consecutivo = $count + 1;
+        // Máximo de reintentos en caso de colisión de part_number (medida de seguridad adicional
+        // por si algún escenario de concurrencia extremo logra evadir el lock).
+        $maxAttempts = 5;
 
-            // --- Recrear la lógica de generación de número de parte ---
-            
-            // 1. Obtener la clave de la categoría
-            $category = Category::find($request->category_id);
-            $categoryKey = $category->key ?? '';
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                DB::transaction(function () use ($request, $lastSubcategoryId, &$product) {
+                    // Bloquear la subcategoría (siempre existe por FK) para serializar el acceso
+                    // y evitar que dos usuarios calculen el mismo consecutivo simultáneamente.
+                    // A diferencia de lockear las filas de products (que pueden ser 0),
+                    // la subcategoría siempre existe y su bloqueo garantiza exclusión mutua.
+                    Subcategory::where('id', $lastSubcategoryId)->lockForUpdate()->first();
 
-            // 2. Concatenar las claves de las subcategorías
-            $subcategoryKeys = '';
-            foreach ($request->subcategory_id as $subId) {
-                $sub = Subcategory::find($subId);
-                $subcategoryKeys .= $sub->key ?? '';
+                    // Obtener el máximo consecutivo actual en la subcategoría
+                    $maxConsecutivo = Product::where('subcategory_id', $lastSubcategoryId)->max('consecutivo');
+                    $consecutivo = ($maxConsecutivo ?? 0) + 1;
+
+                    // --- Recrear la lógica de generación de número de parte ---
+                    
+                    // 1. Obtener la clave de la categoría
+                    $category = Category::find($request->category_id);
+                    $categoryKey = $category->key ?? '';
+
+                    // 2. Concatenar las claves de las subcategorías
+                    $subcategoryKeys = '';
+                    foreach ($request->subcategory_id as $subId) {
+                        $sub = Subcategory::find($subId);
+                        $subcategoryKeys .= $sub->key ?? '';
+                    }
+
+                    // 3. Formatear el consecutivo a 3 dígitos (ej. 1 -> 001)
+                    $formattedConsecutivo = str_pad($consecutivo, 3, '0', STR_PAD_LEFT);
+
+                    // 4. Concatenar las claves de las características (filtrando valores nulos)
+                    $featureKeysString = is_array($request->features_keys) ? implode('', array_filter($request->features_keys)) : '';
+
+                    // 5. Ensamblar el número de parte final
+                    $partNumber = $categoryKey . $subcategoryKeys . '-' . $formattedConsecutivo . $featureKeysString;
+                    
+                    $productData = $request->except(['imageCover', 'subcategory_id', 'part_number']);
+                    $productData['subcategory_id'] = $lastSubcategoryId;
+                    $productData['part_number'] = $partNumber;
+                    $productData['consecutivo'] = $consecutivo;
+                    
+                    $product = Product::create($productData);
+                });
+
+                // Si llegamos aquí, la transacción fue exitosa → salimos del bucle
+                break;
+
+            } catch (\Illuminate\Database\QueryException $e) {
+                // Si es una violación de unique constraint en part_number (código 23000),
+                // otro request insertó justo antes con el mismo consecutivo; reintentamos.
+                if ($e->getCode() == 23000 && str_contains($e->getMessage(), 'part_number')) {
+                    if ($attempt >= $maxAttempts) {
+                        throw $e;
+                    }
+                    // Reintentar en la siguiente iteración del bucle
+                    continue;
+                }
+                throw $e;
             }
-
-            // 3. Formatear el consecutivo a 3 dígitos (ej. 1 -> 001)
-            $formattedConsecutivo = str_pad($consecutivo, 3, '0', STR_PAD_LEFT);
-
-            // 4. Concatenar las claves de las características (filtrando valores nulos)
-            $featureKeysString = is_array($request->features_keys) ? implode('', array_filter($request->features_keys)) : '';
-
-            // 5. Ensamblar el número de parte final
-            $partNumber = $categoryKey . $subcategoryKeys . '-' . $formattedConsecutivo . $featureKeysString;
-            
-            $productData = $request->except(['imageCover', 'subcategory_id', 'part_number']);
-            $productData['subcategory_id'] = $lastSubcategoryId;
-            $productData['part_number'] = $partNumber;
-            $productData['consecutivo'] = $consecutivo;
-            
-            $product = Product::create($productData);
-        });
+        }
 
 
         // Guardar la imagen de categoria temporalmente (fuera de la transacción)
@@ -128,14 +157,13 @@ class ProductController extends Controller
             'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
             'features_keys' => 'nullable|array',
-            'part_number' => 'required|string|max:17',
             'part_number_supplier' => 'nullable|string|max:20',
             'location' => 'nullable|string|max:100',
             'currency' => 'required|string|max:255',
             'line_cost' => 'nullable|numeric|min:0|max:99999',
         ]);
 
-        $product->update($request->except(['imageCover', 'subcategory_id']) +
+        $product->update($request->except(['imageCover', 'subcategory_id', 'part_number', 'consecutivo']) +
             ['subcategory_id' => collect($request->subcategory_id)->last()]); //guarda el ultimo id del arreglo de subcategorías
 
         // media -------------------------
@@ -161,14 +189,13 @@ class ProductController extends Controller
             'description' => 'nullable|string|max:34',
             'features' => 'nullable|array',
             'features_keys' => 'nullable|array',
-            'part_number' => 'required|string|max:17',
             'part_number_supplier' => 'nullable|string|max:20',
             'location' => 'nullable|string|max:100',
             'currency' => 'required|string|max:255',
             'line_cost' => 'nullable|numeric|min:0|max:99999',
         ]);
 
-        $product->update($request->except(['imageCover', 'subcategory_id']) +
+        $product->update($request->except(['imageCover', 'subcategory_id', 'part_number', 'consecutivo']) +
             ['subcategory_id' => collect($request->subcategory_id)->last()]); //guarda el ultimo id del arreglo de subcategorías
 
         // media ------------
@@ -274,9 +301,30 @@ class ProductController extends Controller
         // Si hay errores, devolverlos al cliente
         if ($errorsBag) {
             return response()->json(['errors' => $errorsBag], 400);
-        } else {
-            // Si no hay errores, proceder a guardar en la base de datos
-            $this->storeProductsFromFile($worksheet);
+        }
+
+        // Intentar guardar los productos con reintentos en caso de colisión de part_number
+        $maxAttempts = 5;
+        $imported = false;
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                $this->storeProductsFromFile($worksheet);
+                $imported = true;
+                break;
+            } catch (\Illuminate\Database\QueryException $e) {
+                if ($e->getCode() == 23000 && str_contains($e->getMessage(), 'part_number')) {
+                    if ($attempt >= $maxAttempts) {
+                        throw $e;
+                    }
+                    continue;
+                }
+                throw $e;
+            }
+        }
+
+        if (!$imported) {
+            throw new \RuntimeException("No se pudo completar la importación después de {$maxAttempts} intentos.");
         }
     }
 
@@ -339,107 +387,122 @@ class ProductController extends Controller
         $columnNames = [];
         $productNameColumnIndex = null;
 
-        foreach ($worksheet->getRowIterator() as $row) {
-            if ($row->getRowIndex() < 3) {
-                continue; // Saltar las primeras 2 filas
-            }
-
-            $cellIterator = $row->getCellIterator();
-            $cellIterator->setIterateOnlyExistingCells(false);
-
-            if ($row->getRowIndex() == 3) {
-                // Obtener los nombres de columna de la cuarta fila del archivo Excel
-                foreach ($cellIterator as $cell) {
-                    $columnNames[] = $cell->getValue();
+        // Envolver toda la importación en una transacción para atomicidad y prevenir
+        // condiciones de carrera con creación simultánea de productos.
+        DB::transaction(function () use ($worksheet, &$columnNames, &$productNameColumnIndex) {
+            foreach ($worksheet->getRowIterator() as $row) {
+                if ($row->getRowIndex() < 3) {
+                    continue; // Saltar las primeras 2 filas
                 }
 
-                // Buscar la posición de la columna 'Número de parte de fabricante'
-                $productNameColumnIndex = array_search('Número de parte de fabricante', $columnNames);
-                continue;
+                $cellIterator = $row->getCellIterator();
+                $cellIterator->setIterateOnlyExistingCells(false);
+
+                if ($row->getRowIndex() == 3) {
+                    // Obtener los nombres de columna de la cuarta fila del archivo Excel
+                    foreach ($cellIterator as $cell) {
+                        $columnNames[] = $cell->getValue();
+                    }
+
+                    // Buscar la posición de la columna 'Número de parte de fabricante'
+                    $productNameColumnIndex = array_search('Número de parte de fabricante', $columnNames);
+                    continue;
+                }
+
+                $data = [];
+                foreach ($cellIterator as $cell) {
+                    $data[] = $cell->getValue();
+                }
+
+                // Obtener la categoría principal
+                $categoryName = $data[0];
+                $category = Category::where('name', $categoryName)->firstOrFail();
+                $categoryKey = $category->key;
+
+                // Obtener la subcategoría final
+                $subCategoryName = $data[$productNameColumnIndex - 1];
+                $firstSubcategory = Subcategory::where('name', $data[$productNameColumnIndex - 2])->first();
+                $subcategory = Subcategory::where('name', $subCategoryName)
+                    ->where('prev_subcategory_id', $firstSubcategory->id)
+                    ->firstOrFail();
+
+                // --- Bloquear la subcategoría para serializar el acceso ---
+                Subcategory::where('id', $subcategory->id)->lockForUpdate()->first();
+
+                // Obtener el path de la subcategoría desde el encabezado antes de 'Nombre del producto'
+                $subCategoryHeader = $columnNames[$productNameColumnIndex - 1];
+                $path = str_replace('.', '', explode(' ', $subCategoryHeader)[1]);
+
+                // Calcular consecutivo por subcategoría (como en store()), no globalmente
+                $maxConsecutivo = Product::where('subcategory_id', $subcategory->id)->max('consecutivo');
+                $consecutive = ($maxConsecutivo ?? 0) + 1;
+                $partNumber = $categoryKey . $path . '-' . str_pad($consecutive, 3, '0', STR_PAD_LEFT);
+
+                // Obtener las características después de 'Ubicación en almacén'
+                $features = [];
+                for ($i = $productNameColumnIndex + 3; $i < count($columnNames); $i += 2) {
+                    $features[] = [
+                        'name' => $columnNames[$i],
+                        'value' => $data[$i],
+                        'measure_unit' => $data[$i + 1]
+                    ];
+                }
+
+                // Recorrer hasta llegar al nivel más alto (primer nivel de subcategoría)
+                $currentSubcategory = $subcategory;
+                $subcategoryStack = [];
+                while ($currentSubcategory !== null) {
+                    array_unshift($subcategoryStack, $currentSubcategory->name);
+                    $currentSubcategory = Subcategory::find($currentSubcategory->prev_subcategory_id);
+                }
+
+                // Guardar el producto en la base de datos
+                Product::create([
+                    'part_number_supplier' => $data[$productNameColumnIndex],
+                    'description' => $data[$productNameColumnIndex + 1],
+                    'location' => $data[$productNameColumnIndex + 2],
+                    'part_number' => $partNumber,
+                    'consecutivo' => $consecutive,
+                    'bread_crumbles' => $subcategoryStack,
+                    'features' => $features,
+                    'subcategory_id' => $subcategory->id,
+                ]);
             }
-
-            $data = [];
-            foreach ($cellIterator as $cell) {
-                $data[] = $cell->getValue(); // Asignar el valor al array asociativo usando el nombre de columna
-            }
-
-            // Obtener la categoría principal
-            $categoryName = $data[0]; // Primer valor de la primer columna
-            $category = Category::where('name', $categoryName)->firstOrFail();
-            $categoryKey = $category->key;
-
-            // Obtener el path de la subcategoría desde el encabezado antes de 'Nombre del producto'
-            $subCategoryHeader = $columnNames[$productNameColumnIndex - 1];
-            $path = str_replace('.', '', explode(' ', $subCategoryHeader)[1]);
-
-            // Obtener el último ID de Product y generar el partNumber
-            $lastProduct = Product::latest('id')->first();
-            $consecutive = $lastProduct ? $lastProduct->id + 1 : 1;
-            $partNumber = $categoryKey . $path . '-' . $consecutive;
-
-            // Obtener las características después de 'Ubicación en almacén'
-            $features = [];
-            for ($i = $productNameColumnIndex + 3; $i < count($columnNames); $i += 2) {
-                $features[] = [
-                    'name' => $columnNames[$i],
-                    'value' => $data[$i],
-                    'measure_unit' => $data[$i + 1]
-                ];
-            }
-
-            // Obtener el ID de la subcategoría final antes de 'Nombre del producto'
-            $subCategoryName = $data[$productNameColumnIndex - 1];
-            $firstSubcategory = Subcategory::where('name', $data[$productNameColumnIndex - 2])->first(); //obtiene la primera subcategoría
-            $subcategory = Subcategory::where('name', $subCategoryName)->where('prev_subcategory_id', $firstSubcategory->id)->firstOrFail(); //obtiene la ultima subcatogoría la cual tiene los productos que coincida con la subcategoría previa
-
-            // Primero, recorre hasta llegar al nivel más alto (primer nivel de subcategoría)
-            $currentSubcategory = $subcategory;
-            $subcategoryStack = [];
-            while ($currentSubcategory !== null) {
-                array_unshift($subcategoryStack, $currentSubcategory->name);
-                $currentSubcategory = Subcategory::find($currentSubcategory->prev_subcategory_id);
-            }
-
-            // Guardar el producto en la base de datos
-            Product::create([
-                'part_number_supplier' => $data[$productNameColumnIndex],
-                'description' => $data[$productNameColumnIndex + 1], // Asumimos que la columna 'Descripción' está inmediatamente después de 'Número de parte de fabricantes'
-                'location' => $data[$productNameColumnIndex + 2], // Asumimos que la columna 'Ubicación en almacén' está inmediatamente después de 'Descripción'
-                'part_number' => $partNumber,
-                'bread_crumbles' => $subcategoryStack,
-                'features' => $features,
-                'subcategory_id' => $subcategory->id,
-            ]);
-        }
+        });
     }
 
-    public function printBarcodes()
+    public function printBarcodes(Request $request)
     {
-        // Decodifica el string JSON de la solicitud. El segundo parámetro `true` convierte objetos a arrays asociativos.
-        $products_with_quantity = json_decode(request('products'), true);
+        // Laravel parsea automáticamente el query param 'products' como array
+        $productsData = $request->input('products', []);
 
-        // Obtiene un array con los IDs de los productos
-        $product_ids = array_column($products_with_quantity, 'id');
+        // Obtenemos los IDs de los productos solicitados
+        $ids = collect($productsData)->pluck('id')->toArray();
+        
+        // Consultamos la info base de la BD
+        $dbProducts = Product::whereIn('id', $ids)->get()->keyBy('id');
+        
+        $productsToPrint = collect();
+        
+        // Construimos la colección final repitiendo según la cantidad solicitada
+        foreach ($productsData as $item) {
+            // Asegurarse de que $item sea un array (en caso de que venga como objeto)
+            $itemId = is_array($item) ? $item['id'] : $item;
+            $quantity = is_array($item) ? ($item['quantity'] ?? 1) : 1;
 
-        // Carga los productos desde la base de datos para mejorar el rendimiento
-        $product_models = Product::whereIn('id', $product_ids)
-                                 ->get(['id', 'name', 'part_number'])
-                                 ->keyBy('id');
-
-        // Crea la colección final de productos para imprimir, duplicándolos según la cantidad especificada
-        $products = collect();
-        foreach ($products_with_quantity as $product_data) {
-            // Verifica si el producto existe en los modelos cargados
-            if (isset($product_models[$product_data['id']])) {
-                $product_model = $product_models[$product_data['id']];
-                // Agrega el modelo del producto a la colección la cantidad de veces necesaria
-                for ($i = 0; $i < $product_data['quantity']; $i++) {
-                    $products->push($product_model);
+            if (isset($dbProducts[$itemId])) {
+                $productModel = $dbProducts[$itemId];
+                
+                // Agregamos N copias del producto a la lista
+                for ($i = 0; $i < $quantity; $i++) {
+                    $productsToPrint->push($productModel);
                 }
             }
         }
 
-        return inertia('Product/BarcodeTemplate', compact('products'));
+        return Inertia::render('Product/BarcodeTemplate', [
+            'products' => $productsToPrint
+        ]);
     }
 
     public function getConsecutivo($subcategory_id)
@@ -456,5 +519,14 @@ class ProductController extends Controller
         // Si no existe un producto mayor, regresar el primero
         return $next ?? Product::orderBy('id', 'asc')->first();
     }
-    
+
+    // Devuelve el producto con su jerarquía e imágenes.
+    // Utilizado en LandingPage/ShowProduct (carga diferida desde la vista).
+    public function fetchShowData(Product $product)
+    {
+        $product->load(['media', 'subcategory.category.subcategories']);
+
+        return response()->json(compact('product'));
+    }
+
 }

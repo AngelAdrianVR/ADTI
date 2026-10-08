@@ -1,19 +1,52 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
+import ExtraTimeManagementModal from './Partials/ExtraTimeManagementModal.vue';
+import { useApprovalHierarchy } from '@/Composables/payroll/useApprovalHierarchy.js';
 import { format, addDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { ElMessage } from 'element-plus';
 
 const props = defineProps({
-    payrolls: Array
+    payrolls: Array,
+    users: {
+        type: Array,
+        default: () => []
+    },
+    // Grupos de autorización de la catorcena en curso (para saber si el usuario es aprobador)
+    currentPayrollApprovalGroups: {
+        type: Array,
+        default: () => []
+    }
+});
+
+// ─── ¿El usuario actual es aprobador de tiempo extra? ───
+const page = usePage();
+const authUserId = computed(() => page.props?.auth?.user?.id || null);
+const approvalGroupsRef = computed(() => props.currentPayrollApprovalGroups || []);
+const hierarchy = useApprovalHierarchy(approvalGroupsRef, authUserId);
+
+// El botón de "Gestionar horas extra" solo aparece para aprobadores.
+// Con jerarquía configurada: solo quienes son aprobadores en algún nivel.
+// Sin jerarquía (modo directo): quienes tengan el permiso pueden aprobar directamente.
+const canManageExtraTime = computed(() => {
+    if (!page.props?.auth?.user?.permissions?.includes('Aprobar tiempo extra')) return false;
+    if (approvalGroupsRef.value.length === 0) return true; // modo directo (sin grupos)
+    return hierarchy.isCurrentUserApprover.value;
 });
 
 // State
 const search = ref('');
 const currentPage = ref(1);
 const itemsPerPage = ref(10);
+
+// Modal de gestión de horas extra (abre la catorcena en curso sin entrar a ella)
+const showExtraTimeModal = ref(false);
+const openExtraTimeManager = () => {
+    showExtraTimeModal.value = true;
+};
 
 // Computed: Filtrado por búsqueda
 const filteredPayrolls = computed(() => {
@@ -54,10 +87,194 @@ const handlePageChange = (val) => {
     currentPage.value = val;
 };
 
-// Crear nueva nómina (Opcional, si tienes la ruta)
-const createPayroll = () => {
-    // Lógica para crear nómina si existe
-    // router.visit(route('payrolls.create'));
+// ─── MODAL: Reporte de personal en trabajo externo ───
+const canViewExternalReport = computed(() => (page.props?.auth?.user?.permissions || []).includes('Ver incidencias'));
+const canReceipts = computed(() => (page.props?.auth?.user?.permissions || []).includes('Ver pre-nominas'));
+const showReportsMenu = computed(() => canReceipts.value || canViewExternalReport.value);
+const handleReportCommand = (command) => {
+    if (command === 'receipts') openReceiptsModal();
+    if (command === 'external') openExternalReportModal();
+};
+const showExternalReportModal = ref(false);
+const reportPeriodType = ref('monthly');
+const reportYear = ref(new Date().getFullYear());
+const reportMonth = ref(new Date().getMonth() + 1);
+const reportPeriodIndex = ref(1);
+const reportDateRange = ref(null);
+
+const reportPeriodOptions = computed(() => {
+    if (reportPeriodType.value === 'bimonthly') return { count: 6, label: 'Bimestre' };
+    if (reportPeriodType.value === 'quadrimester') return { count: 3, label: 'Cuatrimestre' };
+    return { count: 0, label: '' };
+});
+
+const capitalizeFirst = (value) => (value ? value.charAt(0).toUpperCase() + value.slice(1) : value);
+
+// Meses (1-12) que abarca un bimestre/cuatrimestre según su índice dentro del año.
+const periodMonthsRange = (index) => {
+    if (reportPeriodType.value === 'bimonthly') {
+        const start = ((index - 1) * 2) + 1;
+        return [start, start + 1];
+    }
+    if (reportPeriodType.value === 'quadrimester') {
+        const start = ((index - 1) * 4) + 1;
+        return [start, start + 3];
+    }
+    return [index, index];
+};
+
+const monthName = (month) =>
+    new Date(reportYear.value, month - 1, 1).toLocaleString('es-MX', { month: 'long' });
+
+// Rótulo de cada opción: "Bimestre 2 (Marzo – Abril)" / "Cuatrimestre 3 (Septiembre – Diciembre)"
+const reportPeriodOptionLabel = (index) => {
+    const label = reportPeriodOptions.value.label;
+    const [from, to] = periodMonthsRange(index);
+    return `${label} ${index} (${capitalizeFirst(monthName(from))} – ${capitalizeFirst(monthName(to))})`;
+};
+
+const openExternalReportModal = () => {
+    reportPeriodType.value = 'monthly';
+    reportYear.value = new Date().getFullYear();
+    reportMonth.value = new Date().getMonth() + 1;
+    reportPeriodIndex.value = 1;
+    reportDateRange.value = null;
+    showExternalReportModal.value = true;
+};
+
+const generateExternalReport = () => {
+    const params = { period_type: reportPeriodType.value };
+    if (reportPeriodType.value === 'custom') {
+        if (!reportDateRange.value || !reportDateRange.value[0] || !reportDateRange.value[1]) {
+            ElMessage.warning('Selecciona el rango de fechas del periodo personalizado.');
+            return;
+        }
+        params.start_date = reportDateRange.value[0];
+        params.end_date = reportDateRange.value[1];
+    } else {
+        params.year = reportYear.value;
+        if (reportPeriodType.value === 'monthly') {
+            params.month = reportMonth.value;
+        } else {
+            params.period_index = reportPeriodIndex.value;
+        }
+    }
+    window.open(route('payrolls.external-work-report', params), '_blank');
+};
+
+
+// ─── MODAL: Generar Recibos por Rango ───
+const showReceiptsModal = ref(false);
+const dateRange = ref(null);
+const userSearch = ref('');
+const selectedUsers = ref([]);
+
+// Computed: departamentos y usuarios agrupados
+const groupedDepartments = computed(() => {
+    const depts = {};
+    props.users.forEach(u => {
+        const dept = u.department || 'General';
+        if (!depts[dept]) depts[dept] = [];
+        depts[dept].push(u);
+    });
+    return Object.entries(depts)
+        .map(([name, users]) => ({
+            name,
+            users: users.sort((a, b) => a.name.localeCompare(b.name)),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+});
+
+// Filtro por búsqueda dentro del modal
+const filteredUsers = computed(() => {
+    if (!userSearch.value) return props.users;
+    const term = userSearch.value.toLowerCase();
+    return props.users.filter(u =>
+        u.name.toLowerCase().includes(term) || (u.code || '').toLowerCase().includes(term)
+    );
+});
+
+// Usuarios visibles de un departamento según búsqueda (para contadores y checkboxes maestros)
+const getDeptVisibleUsers = (deptName) => {
+    const deptUsers = groupedDepartments.value.find(d => d.name === deptName)?.users || [];
+    if (!userSearch.value) return deptUsers;
+    const term = userSearch.value.toLowerCase();
+    return deptUsers.filter(u =>
+        u.name.toLowerCase().includes(term) || (u.code || '').toLowerCase().includes(term)
+    );
+};
+
+// Checar si un departamento está completamente seleccionado (de los visibles)
+const isDeptSelected = (deptName) => {
+    const visible = getDeptVisibleUsers(deptName);
+    return visible.length > 0 && visible.every(u => selectedUsers.value.includes(u.id));
+};
+
+// Checar si un departamento está parcialmente seleccionado
+const isDeptIndeterminate = (deptName) => {
+    const visible = getDeptVisibleUsers(deptName);
+    const count = visible.filter(u => selectedUsers.value.includes(u.id)).length;
+    return count > 0 && count < visible.length;
+};
+
+// Atajo: seleccionar / deseleccionar todo el departamento
+const toggleDept = (deptName) => {
+    const visible = getDeptVisibleUsers(deptName);
+    const allSelected = isDeptSelected(deptName);
+    if (allSelected) {
+        selectedUsers.value = selectedUsers.value.filter(id => !visible.some(u => u.id === id));
+    } else {
+        const ids = visible.map(u => u.id);
+        selectedUsers.value = [...new Set([...selectedUsers.value, ...ids])];
+    }
+};
+
+// Atajo global: seleccionar / limpiar todo (según búsqueda)
+const toggleSelectAllFiltered = () => {
+    const visibleIds = filteredUsers.value.map(u => u.id);
+    const allSelected = visibleIds.every(id => selectedUsers.value.includes(id));
+    if (allSelected) {
+        selectedUsers.value = selectedUsers.value.filter(id => !visibleIds.includes(id));
+    } else {
+        selectedUsers.value = [...new Set([...selectedUsers.value, ...visibleIds])];
+    }
+};
+
+const allFilteredSelected = computed(() => {
+    return filteredUsers.value.length > 0 && filteredUsers.value.every(u => selectedUsers.value.includes(u.id));
+});
+
+// Abrir modal y resetear estado
+const openReceiptsModal = () => {
+    userSearch.value = '';
+    dateRange.value = null;
+    selectedUsers.value = [];
+    showReceiptsModal.value = true;
+};
+
+// Generar recibos por rango
+const generateRangeReceipts = () => {
+    if (!dateRange.value || !dateRange.value[0] || !dateRange.value[1]) {
+        ElMessage.warning('Selecciona un rango de fechas válido.');
+        return;
+    }
+    if (selectedUsers.value.length === 0) {
+        ElMessage.warning('Selecciona al menos un usuario.');
+        return;
+    }
+    const [start, end] = dateRange.value;
+    // Validar rango máximo de 31 días (equivalente al backend)
+    const daysDiff = Math.round((parseISO(end) - parseISO(start)) / (1000 * 60 * 60 * 24)) + 1;
+    if (daysDiff > 31) {
+        ElMessage.warning('El rango máximo permitido es de 31 días.');
+        return;
+    }
+    const url = route('payrolls.receipts-by-range', {
+        start_date: start,
+        end_date: end,
+        user_ids: selectedUsers.value,
+    });
+    window.open(url, '_blank');
 };
 </script>
 
@@ -74,6 +291,14 @@ const createPayroll = () => {
                     </div>
                     
                     <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <!-- Botón: Gestionar horas extra (solo aprobadores) -->
+                        <PrimaryButton 
+                            v-if="canManageExtraTime"
+                            @click="openExtraTimeManager"
+                            class="!bg-indigo-600 hover:!bg-indigo-700 whitespace-nowrap"
+                        >
+                            <i class="fa-solid fa-stopwatch mr-2"></i> Gestionar horas extra
+                        </PrimaryButton>
                         <!-- Buscador -->
                         <div class="relative w-full sm:w-64">
                             <input 
@@ -84,6 +309,26 @@ const createPayroll = () => {
                             >
                             <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-sm"></i>
                         </div>
+                        <!-- Menú desplegable: Recibo / Reporte -->
+                        <el-dropdown v-if="showReportsMenu" trigger="click" placement="bottom-end" @command="handleReportCommand">
+                            <el-button type="primary" class="!bg-teal-600 !border-teal-600 hover:!bg-teal-700 whitespace-nowrap">
+                                <i class="fa-solid fa-file-signature mr-2"></i>
+                                Recibo / Reporte
+                                <i class="fa-solid fa-chevron-down ml-1 text-xs"></i>
+                            </el-button>
+                            <template #dropdown>
+                                <el-dropdown-menu>
+                                    <el-dropdown-item v-if="canReceipts" command="receipts">
+                                        <i class="fa-solid fa-file-signature mr-2 text-teal-600"></i>
+                                        Generar Recibos
+                                    </el-dropdown-item>
+                                    <el-dropdown-item v-if="canViewExternalReport" command="external">
+                                        <i class="fa-solid fa-earth-americas mr-2 text-orange-600"></i>
+                                        Reporte personal externo
+                                    </el-dropdown-item>
+                                </el-dropdown-menu>
+                            </template>
+                        </el-dropdown>
                     </div>
                 </div>
 
@@ -121,7 +366,7 @@ const createPayroll = () => {
                             </template>
                         </el-table-column>
 
-                        <el-table-column label="Estatus" width="150" align="center">
+                        <el-table-column label="Estatus" width="120" align="center">
                             <template #default="scope">
                                 <div v-if="scope.row.is_active" class="flex items-center justify-center gap-1 text-green-600 bg-green-50 px-2 py-1 rounded text-xs font-bold">
                                     <span class="relative flex h-2 w-2">
@@ -136,9 +381,66 @@ const createPayroll = () => {
                             </template>
                         </el-table-column>
 
-                        <el-table-column align="right" width="80">
-                            <template #default>
-                                <i class="fa-solid fa-chevron-right text-gray-300"></i>
+                        <!-- NUEVA COLUMNA: Configuración de horas extra -->
+                        <el-table-column label="Config. H.E." width="170" align="center">
+                            <template #default="scope">
+                                <div class="flex items-center justify-center gap-1.5">
+                                    <!-- Indicador de costos -->
+                                    <el-tooltip :content="scope.row.extra_hour_costs_count > 0 ? 'Costos configurados' : 'Sin costos configurados'" placement="top">
+                                        <span 
+                                            class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] border"
+                                            :class="scope.row.extra_hour_costs_count > 0 
+                                                ? 'bg-green-50 text-green-600 border-green-200' 
+                                                : 'bg-gray-50 text-gray-300 border-gray-200'"
+                                        >
+                                            <i class="fa-solid fa-dollar-sign"></i>
+                                        </span>
+                                    </el-tooltip>
+                                    <!-- Indicador de grupos de aprobación -->
+                                    <el-tooltip :content="scope.row.approval_groups_count > 0 ? 'Grupos de autorización configurados' : 'Sin grupos de autorización'" placement="top">
+                                        <span 
+                                            class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] border"
+                                            :class="scope.row.approval_groups_count > 0 
+                                                ? 'bg-indigo-50 text-indigo-600 border-indigo-200' 
+                                                : 'bg-gray-50 text-gray-300 border-gray-200'"
+                                        >
+                                            <i class="fa-solid fa-users-gear"></i>
+                                        </span>
+                                    </el-tooltip>
+                                    <!-- Badge resumen -->
+                                    <span 
+                                        v-if="scope.row.extra_hour_costs_count > 0 || scope.row.approval_groups_count > 0"
+                                        class="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                                        :class="scope.row.extra_hour_costs_count > 0 && scope.row.approval_groups_count > 0 
+                                            ? 'bg-green-100 text-green-700 border border-green-200' 
+                                            : 'bg-amber-100 text-amber-700 border border-amber-200'"
+                                    >
+                                        {{ scope.row.extra_hour_costs_count > 0 && scope.row.approval_groups_count > 0 ? 'Completo' : 'Parcial' }}
+                                    </span>
+                                    <span 
+                                        v-else
+                                        class="text-[9px] text-gray-300 italic"
+                                    >
+                                        Sin config.
+                                    </span>
+                                </div>
+                            </template>
+                        </el-table-column>
+
+                        <el-table-column align="right" width="120" fixed="right">
+                            <template #default="scope">
+                                <div class="flex items-center gap-1 justify-end">
+                                    <el-tooltip content="Configurar horas extra" placement="top">
+                                        <Link 
+                                            :href="route('payrolls.extra-hours-config', scope.row.id)"
+                                            @click.stop
+                                            class="w-7 h-7 flex items-center justify-center rounded-full text-indigo-500 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                                        >
+                                            <i class="fa-solid fa-gear text-xs"></i>
+                                        </Link>
+                                    </el-tooltip>
+                                    <i class="fa-solid fa-chevron-right text-gray-300 ml-1"></i>
+                                </div>
                             </template>
                         </el-table-column>
                     </el-table>
@@ -156,6 +458,228 @@ const createPayroll = () => {
                 </div>
 
             </div>
+
+            <!-- Modal: Generar Recibos por Rango -->
+            <el-dialog
+                v-model="showReceiptsModal"
+                title="Generar Recibos por Rango de Fechas"
+                width="680px"
+                class="!rounded-xl"
+            >
+                <div class="space-y-5">
+                    <!-- Rango de fechas -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                            <i class="fa-regular fa-calendar mr-1 text-teal-600"></i>
+                            Rango de fechas
+                        </label>
+                        <el-date-picker
+                            v-model="dateRange"
+                            type="daterange"
+                            range-separator="al"
+                            start-placeholder="Fecha inicial"
+                            end-placeholder="Fecha final"
+                            value-format="YYYY-MM-DD"
+                            format="DD MMM YYYY"
+                            class="w-full"
+                            :clearable="true"
+                        />
+                        <p class="text-xs text-gray-400 mt-1">Máximo 31 días. Puede combinar dos catorcenas.</p>
+                    </div>
+
+                    <!-- Selector de usuarios -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label class="block text-sm font-medium text-gray-700">
+                                <i class="fa-solid fa-users mr-1 text-teal-600"></i>
+                                Colaboradores
+                            </label>
+                            <span class="text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded-full">
+                                {{ selectedUsers.length }} seleccionados
+                            </span>
+                        </div>
+
+                        <!-- Búsqueda + atajos -->
+                        <div class="flex items-center gap-2 mb-2">
+                            <el-input
+                                v-model="userSearch"
+                                placeholder="Buscar por nombre o código..."
+                                clearable
+                                size="small"
+                                class="flex-1"
+                            >
+                                <template #prefix><i class="fa-solid fa-magnifying-glass text-gray-400"></i></template>
+                            </el-input>
+                            <el-button size="small" @click="toggleSelectAllFiltered">
+                                <i class="fa-solid" :class="allFilteredSelected ? 'fa-square-check text-teal-600' : 'fa-square'"></i>
+                                {{ allFilteredSelected ? 'Quitar todos' : 'Seleccionar todos' }}
+                            </el-button>
+                        </div>
+
+                        <!-- Listado agrupado por departamento -->
+                        <div class="max-h-80 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                            <div v-for="dept in groupedDepartments" :key="dept.name">
+                                <!-- Header del departamento -->
+                                <div class="flex items-center justify-between px-3 py-2 bg-gray-50 sticky top-0 z-10">
+                                    <div class="flex items-center gap-2">
+                                        <el-checkbox
+                                            :model-value="isDeptSelected(dept.name)"
+                                            :indeterminate="isDeptIndeterminate(dept.name)"
+                                            @change="toggleDept(dept.name)"
+                                        />
+                                        <span class="font-semibold text-sm text-gray-700">{{ dept.name }}</span>
+                                    </div>
+                                    <span class="text-[10px] text-gray-500 font-bold bg-white border border-gray-200 px-1.5 py-0.5 rounded-full">
+                                        {{ getDeptVisibleUsers(dept.name).filter(u => selectedUsers.includes(u.id)).length }}/{{ getDeptVisibleUsers(dept.name).length }}
+                                    </span>
+                                </div>
+                                <!-- Usuarios del departamento -->
+                                <div class="px-3 py-1.5">
+                                    <label
+                                        v-for="u in getDeptVisibleUsers(dept.name)"
+                                        :key="u.id"
+                                        class="flex items-center gap-2.5 py-1.5 px-1 rounded hover:bg-gray-50 cursor-pointer transition-colors"
+                                    >
+                                        <el-checkbox
+                                            :model-value="selectedUsers.includes(u.id)"
+                                            @change="
+                                                selectedUsers.includes(u.id)
+                                                    ? selectedUsers = selectedUsers.filter(id => id !== u.id)
+                                                    : selectedUsers = [...selectedUsers, u.id]
+                                            "
+                                        />
+                                        <span class="w-6 text-center text-[10px] font-mono text-gray-400">{{ u.id }}</span>
+                                        <span class="text-sm text-gray-800 truncate">{{ u.name }}</span>
+                                        <span v-if="u.code" class="text-[10px] text-gray-400 font-mono ml-auto">{{ u.code }}</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <template #footer>
+                    <div class="flex justify-end gap-2">
+                        <el-button @click="showReceiptsModal = false">Cancelar</el-button>
+                        <el-button
+                            type="primary"
+                            @click="generateRangeReceipts"
+                            class="!bg-teal-600 !border-teal-600 hover:!bg-teal-700"
+                        >
+                            <i class="fa-solid fa-file-signature mr-2"></i>
+                            Generar Recibos
+                        </el-button>
+                    </div>
+                </template>
+            </el-dialog>
+
+            <!-- Modal: Reporte de personal en trabajo externo -->
+            <el-dialog
+                v-model="showExternalReportModal"
+                title="Reporte de personal en trabajo externo"
+                width="560px"
+                class="!rounded-xl"
+            >
+                <div class="space-y-5">
+                    <div class="flex items-start gap-2 text-sm text-gray-600 bg-orange-50 border border-orange-100 rounded-lg p-3">
+                        <i class="fa-solid fa-earth-americas text-orange-500 mt-0.5"></i>
+                        <p>
+                            El reporte incluye los días donde se registró vinculación de proyecto marcada como
+                            <b>trabajo externo</b>, mostrando empleado, fecha, entrada/salida, ubicación y proyectos vinculados.
+                        </p>
+                    </div>
+
+                    <!-- Tipo de periodo -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fa-solid fa-calendar-days mr-1 text-orange-600"></i>
+                            Tipo de periodo
+                        </label>
+                        <el-radio-group v-model="reportPeriodType" class="w-full grid grid-cols-4 gap-1">
+                            <el-radio-button value="monthly">Mensual</el-radio-button>
+                            <el-radio-button value="bimonthly">Bimestral</el-radio-button>
+                            <el-radio-button value="quadrimester">Cuatrimestral</el-radio-button>
+                            <el-radio-button value="custom">Personalizado</el-radio-button>
+                        </el-radio-group>
+                    </div>
+
+                    <!-- Año (común a todos excepto personalizado) -->
+                    <div v-if="reportPeriodType !== 'custom'">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Año</label>
+                        <el-select v-model="reportYear" class="w-full" filterable>
+                            <el-option v-for="y in 12" :key="y" :label="String(new Date().getFullYear() - y + 1)" :value="new Date().getFullYear() - y + 1" />
+                        </el-select>
+                    </div>
+
+                    <!-- Mensual -->
+                    <div v-if="reportPeriodType === 'monthly'">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Mes</label>
+                        <el-select v-model="reportMonth" class="w-full">
+                            <el-option
+                                v-for="m in 12"
+                                :key="m"
+                                :label="new Date(reportYear, m - 1, 1).toLocaleString('es-MX', { month: 'long' })"
+                                :value="m"
+                            />
+                        </el-select>
+                    </div>
+
+                    <!-- Bimestral / Cuatrimestral -->
+                    <div v-if="reportPeriodOptions.count > 0">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                            {{ reportPeriodOptions.label }}
+                        </label>
+                        <el-select v-model="reportPeriodIndex" class="w-full">
+                            <el-option
+                                v-for="i in reportPeriodOptions.count"
+                                :key="i"
+                                :label="reportPeriodOptionLabel(i)"
+                                :value="i"
+                            />
+                        </el-select>
+                    </div>
+
+                    <!-- Personalizado -->
+                    <div v-if="reportPeriodType === 'custom'">
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5">Rango de fechas</label>
+                        <el-date-picker
+                            v-model="reportDateRange"
+                            type="daterange"
+                            range-separator="al"
+                            start-placeholder="Fecha inicial"
+                            end-placeholder="Fecha final"
+                            value-format="YYYY-MM-DD"
+                            format="DD MMM YYYY"
+                            class="w-full"
+                            :clearable="true"
+                        />
+                    </div>
+                </div>
+
+                <template #footer>
+                    <div class="flex justify-end gap-2">
+                        <el-button @click="showExternalReportModal = false">Cancelar</el-button>
+                        <el-button
+                            type="primary"
+                            @click="generateExternalReport"
+                            class="!bg-orange-600 !border-orange-600 hover:!bg-orange-700"
+                        >
+                            <i class="fa-solid fa-file-export mr-2"></i>
+                            Generar reporte
+                        </el-button>
+                    </div>
+                </template>
+            </el-dialog>
+
+
+            <!-- Modal: Gestión de tiempo extra (abre la catorcena en curso) -->
+            <ExtraTimeManagementModal
+                v-model="showExtraTimeModal"
+                :payrollUsers="[]"
+                :payrollId="null"
+                :approvalGroups="[]"
+                :payrollStartDate="''"
+            />
         </main>
     </AppLayout>
 </template>
@@ -171,5 +695,10 @@ const createPayroll = () => {
     font-weight: 600;
     text-transform: uppercase;
     font-size: 0.75rem;
+}
+
+/* Formato del selector de rango: capitalizar mes para mostrar "28 Jul 2026" */
+:deep(.el-date-editor--daterange .el-range-input) {
+    text-transform: capitalize;
 }
 </style>

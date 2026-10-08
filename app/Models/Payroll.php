@@ -36,8 +36,35 @@ class Payroll extends Model
                 'incidence',
                 'additionals',
                 'checked_in_platform',
+                // Nuevos campos
+                'approved_extra_hours',
+                'approved_extra_minutes',
+                'approved_by',
+                'approved_at',
+                // Campos de pausa/comida
+                'break_start',
+                'break_end',
+                'break_minutes',
             ])
             ->withTimestamps();
+    }
+
+    // Relación: Costos de hora extra configurados para esta nómina
+    public function extraHourCosts()
+    {
+        return $this->hasMany(ExtraHourCost::class);
+    }
+
+    // Relación: Niveles de autorización de horas extra (retrocompatibilidad)
+    public function approvalLevels()
+    {
+        return $this->hasMany(ExtraHourApprovalLevel::class)->orderBy('level');
+    }
+
+    // Relación: Grupos de aprobación (nuevo sistema con empleados asignados)
+    public function approvalGroups()
+    {
+        return $this->hasMany(ExtraHourApprovalGroup::class);
     }
 
     public static function getCurrent()

@@ -1,275 +1,632 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { useForm } from '@inertiajs/vue3';
+import { useForm, router, usePage } from '@inertiajs/vue3';
 import { format, isSameDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import DialogModal from '@/Components/DialogModal.vue';
-import InputLabel from '@/Components/InputLabel.vue';
-import TextInput from '@/Components/TextInput.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import SecondaryButton from '@/Components/SecondaryButton.vue';
-import { ElNotification } from 'element-plus';
+import { ElNotification, ElMessageBox } from 'element-plus';
+import { useIncidencesApproval } from '@/Composables/payroll/useIncidencesApproval.js';
+import IncidencesDayCard from '@/Components/MyComponents/Payroll/IncidencesDayCard.vue';
 
 const props = defineProps({
-    payrollUser: Object,
-    payroll: Object
+    payrollUser: { type: Object, required: true },
+    payroll: { type: Object, required: true },
+    canEdit: { type: Boolean, default: true },
+    approvalGroups: { type: Array, default: () => [] },
+    projects: { type: Array, default: () => [] },
+    departments: { type: Array, default: () => [] },
 });
 
-// State
-const isOpen = ref(false); // Controla el acordeón
+const emit = defineEmits(['edit-comment']);
+
+const page = usePage();
+
+// ─── Jerarquía ───
+const approval = useIncidencesApproval(computed(() => props.approvalGroups));
+const payrollId = computed(() => props.payroll.id);
+
+// ─── Control de visibilidad de montos ───
+// Solo los usuarios con rol "Super admin" pueden ver montos de dinero
+const canSeeMoney = computed(() => {
+    const roles = page.props?.auth?.user?.roles || [];
+    return roles.includes('Super admin');
+});
+
+// ─── State ───
+const isOpen = ref(false);
 const showAttendanceModal = ref(false);
-const incidences = ref(['Falta injustificada', 'Falta justificada', 'Incapacidad', 'Permiso sin goce', 'Permiso con goce', 'Vacaciones', 'Descanso', 'Día festivo']);
+const showApproveModal = ref(false);
+const showProjectModal = ref(false);
+const incidences = ref(['Falta injustificada', 'Falta justificada', 'Incapacidad', 'Permiso sin goce', 'Permiso con goce', 'Vacaciones', 'Descanso', 'Día festivo', 'Salió de Viaje']);
 
-const form = useForm({
-    date: null,
-    check_in: null,
-    check_out: null,
-    incidence: null,
-    user_id: props.payrollUser.user.id,
-    payroll_id: props.payroll.id,
-});
+// ─── Drag-to-scroll ───
+const scrollContainer = ref(null);
+const isDragging = ref(false);
+const dragStartX = ref(0);
+const dragScrollLeft = ref(0);
 
-// Computed Stats
+const onDragStart = (e) => {
+    // En modo selección el clic marca días, no arrastra el carrusel
+    if (selectionMode.value) return;
+    isDragging.value = true;
+    dragStartX.value = e.pageX - scrollContainer.value.offsetLeft;
+    dragScrollLeft.value = scrollContainer.value.scrollLeft;
+    scrollContainer.value.style.cursor = 'grabbing';
+    scrollContainer.value.style.userSelect = 'none';
+};
+
+const onDragMove = (e) => {
+    if (!isDragging.value) return;
+    e.preventDefault();
+    const x = e.pageX - scrollContainer.value.offsetLeft;
+    const walk = (x - dragStartX.value) * 1.5; // Multiplicador para velocidad
+    scrollContainer.value.scrollLeft = dragScrollLeft.value - walk;
+};
+
+const onDragEnd = () => {
+    isDragging.value = false;
+    if (scrollContainer.value) {
+        scrollContainer.value.style.cursor = 'grab';
+        scrollContainer.value.style.userSelect = '';
+    }
+};
+
+const form = useForm({ date: null, check_in: null, check_out: null, break_start: null, break_end: null, incidence: null, user_id: props.payrollUser.user.id, payroll_id: props.payroll.id });
+const approveForm = useForm({ payroll_user_id: null, status: 'approved', approved_extra_hours: 0, approved_extra_minutes: 0, comments: '' });
+const projectForm = useForm({ date: null, user_id: props.payrollUser.user.id, projects: [] });
+
+// ─── Selección múltiple de días (eliminar tiempo extra en lote) ───
+const selectionMode = ref(false);
+const selectedDates = ref([]);
+const bulkClearForm = useForm({ user_id: props.payrollUser.user.id, dates: [], payroll_id: props.payroll.id });
+
+// Clave de día (YYYY-MM-DD) para comparar fechas sin importar la hora
+const dayKey = (day) => String(day.date).slice(0, 10);
+
+// Un día es elegible cuando tiene tiempo extra registrado (pendiente o aprobado)
+const hasDayExtraTime = (day) => (day.extra_hours || 0) > 0 || (day.extra_minutes || 0) > 0;
+
+const eligibleDaysCount = computed(() => props.payrollUser.incidences.filter(hasDayExtraTime).length);
+
+const isDaySelected = (day) => selectedDates.value.includes(dayKey(day));
+
+const selectedDays = computed(() => props.payrollUser.incidences.filter(day => isDaySelected(day)));
+
+// Minutos extra que se eliminarán (usa el valor aprobado si existe, si no el solicitado)
+const selectedExtraMinutes = computed(() => selectedDays.value.reduce((total, day) => {
+    const h = Number(day.approved_extra_hours ?? day.extra_hours) || 0;
+    const m = Number(day.approved_extra_minutes ?? day.extra_minutes) || 0;
+    return total + (h * 60) + m;
+}, 0));
+
+const selectedExtraTimeText = computed(() => `${Math.floor(selectedExtraMinutes.value / 60)}h ${selectedExtraMinutes.value % 60}m`);
+
+const toggleSelectionMode = () => {
+    selectionMode.value = !selectionMode.value;
+    if (!selectionMode.value) selectedDates.value = [];
+};
+
+const toggleDaySelection = (day) => {
+    if (!hasDayExtraTime(day)) return;
+    const key = dayKey(day);
+    selectedDates.value = isDaySelected(day)
+        ? selectedDates.value.filter(date => date !== key)
+        : [...selectedDates.value, key];
+};
+
+const selectAllEligibleDays = () => {
+    selectedDates.value = props.payrollUser.incidences.filter(hasDayExtraTime).map(dayKey);
+};
+
+const clearDaySelection = () => { selectedDates.value = []; };
+
+// Elimina el tiempo extra de todos los días seleccionados en una sola petición
+const clearSelectedExtraTime = async () => {
+    if (selectedDays.value.length === 0) return;
+
+    try {
+        await ElMessageBox.confirm(
+            `Se eliminará el tiempo extra de ${selectedDays.value.length} día(s) (${selectedExtraTimeText.value}). También se borran las aprobaciones registradas. ¿Continuar?`,
+            'Eliminar tiempo extra',
+            { confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', type: 'warning' }
+        );
+    } catch (e) {
+        return; // Cancelado por el usuario
+    }
+
+    bulkClearForm.dates = [...selectedDates.value];
+    bulkClearForm.put(route('payroll-users.clear-extra-time'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            ElNotification.success(`Tiempo extra eliminado en ${bulkClearForm.dates.length} día(s)`);
+            selectionMode.value = false;
+            selectedDates.value = [];
+            bulkClearForm.reset();
+        },
+        onError: (errors) => ElNotification.error(errors?.dates || errors?.date || 'Error al eliminar el tiempo extra'),
+    });
+};
+
+// ─── Formateador de dinero con separadores de miles ───
+const formatMoney = (value) => {
+    if (value === null || value === undefined || value === 0) return '0.00';
+    return Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+// ─── Stats ───
 const stats = computed(() => {
-    let totalMinutes = 0;
-    let extraMinutes = 0;
-    let lateMinutes = 0;
-
+    let extraMinutesApproved = 0, extraMinutesPending = 0, lateMinutes = 0, breakMinutes = 0, breakCount = 0;
+    let extraAmountApproved = 0, extraAmountPending = 0;
     props.payrollUser.incidences.forEach(day => {
-        // Calcular tiempo trabajado simple (estimado) si hay entrada y salida
-        if (day.check_in && day.check_out) {
-            // Lógica simple de visualización, el cálculo real está en backend
+        if (day.approved_at) {
+            // Solo contar aprobados con horas reales (> 0)
+            if ((day.approved_extra_hours || 0) > 0 || (day.approved_extra_minutes || 0) > 0) {
+                extraMinutesApproved += (day.approved_extra_hours || 0) * 60 + (day.approved_extra_minutes || 0);
+                extraAmountApproved += (day.extra_amount || 0);
+            }
+        } else if (day.extra_hours || day.extra_minutes) {
+            // Usar el "acuerdo" ajustado por niveles anteriores si existe
+            const effectiveHours = day.proposed_extra_hours ?? day.extra_hours;
+            const effectiveMinutes = day.proposed_extra_minutes ?? day.extra_minutes;
+            extraMinutesPending += (effectiveHours || 0) * 60 + (effectiveMinutes || 0);
+            extraAmountPending += (day.extra_amount || 0);
         }
-        
-        // Sumar extras
-        if (day.extra_hours || day.extra_minutes) {
-            extraMinutes += (day.extra_hours || 0) * 60 + (day.extra_minutes || 0);
-        }
-
-        // Sumar retardos
-        if (day.late) {
-            lateMinutes += day.late;
+        if (day.late) lateMinutes += day.late;
+        if (day.break_minutes) {
+            breakMinutes += day.break_minutes;
+            breakCount++;
         }
     });
-
-    const formatMins = (mins) => {
-        const h = Math.floor(mins / 60);
-        const m = mins % 60;
-        return `${h}h ${m}m`;
-    };
-
+    const fmt = m => `${Math.floor(m / 60)}h ${m % 60}m`;
     return {
-        extra: formatMins(extraMinutes),
-        late: formatMins(lateMinutes),
-        // Puedes agregar más stats aquí si el backend los provee
+        extraApproved: fmt(extraMinutesApproved),
+        extraPending: fmt(extraMinutesPending),
+        late: fmt(lateMinutes),
+        breakTime: fmt(breakMinutes),
+        breakCount,
+        extraAmountApproved: extraAmountApproved,
+        extraAmountPending: extraAmountPending,
     };
 });
 
-// Methods
-const toggleAccordion = () => {
-    isOpen.value = !isOpen.value;
-};
+// ─── GPS ───
+const isValidLocation = (loc) => loc?.includes(',') && !loc.includes('denegada') && !loc.includes('Soportado') && !loc.includes('disponible') && !loc.includes('agotado');
+const getLocationError = (loc) => (loc && !isValidLocation(loc)) ? loc : null;
 
-const formatDate = (date) => {
-    return format(new Date(date), 'dd MMM', { locale: es });
-};
-
-const getDayName = (date) => {
-    return format(new Date(date), 'EEEE', { locale: es });
-};
-
-const getIncidenceColor = (incidence) => {
-    if (!incidence) return 'bg-white';
-    if (incidence.check_in && incidence.check_out) return 'bg-green-50 border-green-200';
-    if (incidence.incidence === 'Falta injustificada') return 'bg-red-50 border-red-200';
-    if (incidence.incidence === 'Vacaciones') return 'bg-blue-50 border-blue-200';
-    if (incidence.incidence === 'Descanso') return 'bg-gray-50 border-gray-200';
-    return 'bg-amber-50 border-amber-200';
-};
+// ─── Handlers ───
+const toggleAccordion = () => { isOpen.value = !isOpen.value; };
 
 const handleCommand = (command) => {
     const [action, date] = command.split('|');
     form.date = date.split('T')[0];
 
     if (action === 'edit_time') {
-        const register = props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(date)));
-        if (register) {
-            form.check_in = register.check_in?.substring(0, 5) || null;
-            form.check_out = register.check_out?.substring(0, 5) || null;
-        } else {
-            form.check_in = null;
-            form.check_out = null;
-        }
+        const r = props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(date)));
+        form.check_in = r?.check_in?.substring(0, 5) || null;
+        form.check_out = r?.check_out?.substring(0, 5) || null;
+        form.break_start = r?.break_start?.substring(0, 5) || null;
+        form.break_end = r?.break_end?.substring(0, 5) || null;
         showAttendanceModal.value = true;
-    } else if (action === 'remove_late') {
-        removeLate();
+    } else if (action === 'remove_late') removeLate();
+    else if (action === 'edit_comment') {
+        const r = props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(date)));
+        emit('edit-comment', { userId: props.payrollUser.user.id, userName: props.payrollUser.user.name, date: form.date, comments: r?.comment?.comments || '' });
+    } else if (action === 'approve_extra_time') {
+        const r = props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(date)));
+        approveForm.payroll_user_id = r?.id || null;
+        const proposedHours = (r?.proposed_extra_hours ?? r?.extra_hours) || 0;
+        const proposedMinutes = (r?.proposed_extra_minutes ?? r?.extra_minutes) || 0;
+        approveForm.approved_extra_hours = proposedHours;
+        approveForm.approved_extra_minutes = proposedMinutes;
+        approveForm.comments = r?.comment?.comments || '';
+        showApproveModal.value = true;
+    } else if (action === 'revert_extra_time') {
+        const r = props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(date)));
+        if (r && r.id) {
+            router.delete(route('payrolls.extra-hours-revert'), {
+                data: { payroll_user_id: r.id },
+                preserveScroll: true,
+                onSuccess: () => ElNotification.success('Resolución revertida'),
+                onError: (errors) => ElNotification.error(errors?.payroll_user_id || 'Error al revertir la resolución'),
+            });
+        }
+    } else if (action === 'clear_extra_time') {
+        router.put(route('payroll-users.clear-extra-time'), { date: form.date, user_id: props.payrollUser.user.id, payroll_id: props.payroll.id }, { preserveScroll: true, onSuccess: () => ElNotification.success('Tiempo extra eliminado') });
+    } else if (action === 'link_project' || action === 'change_project') {
+        openProjectModal();
+    } else if (action === 'unlink_project') {
+        projectForm.date = form.date;
+        projectForm.projects = [];
+        submitProjects();
     } else {
-        // Es una incidencia directa
         form.incidence = action;
         setIncidence();
     }
 };
 
-const setIncidence = () => {
-    form.put(route('payroll-users.set-incidence'), {
-        onSuccess: () => {
-            ElNotification.success('Incidencia actualizada');
-            form.reset();
-        },
-        onError: () => ElNotification.error('Error al actualizar'),
+const setIncidence = () => form.put(route('payroll-users.set-incidence'), { onSuccess: () => { ElNotification.success('Incidencia actualizada'); form.reset(); }, onError: () => ElNotification.error('Error al actualizar') });
+const updateAttendance = () => form.put(route('payroll-users.update-attendance'), { onSuccess: () => { ElNotification.success('Asistencia actualizada'); showAttendanceModal.value = false; form.reset(); } });
+const removeLate = () => form.put(route('payroll-users.remove-late'), { onSuccess: () => ElNotification.success('Retardo eliminado') });
+const submitApproveExtraTime = () => {
+    approveForm.status = 'approved';
+    approveForm.post(route('payrolls.extra-hours-decide', { payroll: payrollId.value }), { preserveScroll: true, onSuccess: () => { ElNotification.success('Tiempo extra aprobado'); showApproveModal.value = false; approveForm.reset(); } });
+};
+const submitRejectExtraTime = () => {
+    approveForm.status = 'rejected';
+    approveForm.post(route('payrolls.extra-hours-decide', { payroll: payrollId.value }), { preserveScroll: true, onSuccess: () => { ElNotification.success('Tiempo extra rechazado'); showApproveModal.value = false; approveForm.reset(); } });
+};
+
+// ─── Vincular proyectos (MÚLTIPLES por día) ───
+const openProjectModal = () => {
+    projectForm.date = form.date;
+    projectForm.clearErrors();
+    const r = props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(form.date)));
+    const existing = (r?.projects && r.projects.length) ? r.projects : [];
+    projectForm.projects = existing.map(p => ({
+        project_id: p.project_id,
+        work_type: p.work_type || 'internal',
+        department_id: p.department_id || null,
+        extra_hours: p.extra_hours ?? null,
+        extra_minutes: p.extra_minutes ?? null,
+    }));
+    if (projectForm.projects.length === 0) {
+        // Primer proyecto: se pre-carga TODO el tiempo extra del día para facilitar el cuadre.
+        const def = defaultExtraForDay();
+        projectForm.projects.push({
+            project_id: null,
+            work_type: 'internal',
+            department_id: null,
+            extra_hours: def.hours,
+            extra_minutes: def.minutes,
+        });
+    }
+    showProjectModal.value = true;
+};
+
+// Tiempo extra efectivo del día seleccionado (aprobado o, si no, el propuesto/solicitado)
+const dayExtraMinutes = computed(() => {
+    const d = selectedDayForProjects.value;
+    if (!d) return 0;
+    const h = Number(d.approved_extra_hours ?? d.extra_hours ?? 0) || 0;
+    const m = Number(d.approved_extra_minutes ?? d.extra_minutes ?? 0) || 0;
+    return (h * 60) + m;
+});
+
+const defaultExtraForDay = () => {
+    const totalMins = dayExtraMinutes.value;
+    return { hours: Math.floor(totalMins / 60), minutes: totalMins % 60 };
+};
+
+const addProjectRow = () => {
+    projectForm.projects.push({ project_id: null, work_type: 'internal', department_id: null, extra_hours: null, extra_minutes: null });
+};
+
+// Reparte el tiempo extra total del día en partes iguales entre los proyectos
+// ya seleccionados (el residuo se asigna a las primeras filas).
+const splitEvenly = () => {
+    const totalMins = dayExtraMinutes.value;
+    const filledIndexes = projectForm.projects.map((r, i) => (r.project_id ? i : -1)).filter(i => i >= 0);
+    if (totalMins <= 0 || filledIndexes.length === 0) return;
+
+    const share = Math.floor(totalMins / filledIndexes.length);
+    let remainder = totalMins % filledIndexes.length;
+
+    projectForm.projects.forEach((r, index) => {
+        if (!r.project_id) {
+            r.extra_hours = null;
+            r.extra_minutes = null;
+            return;
+        }
+        let mins = share;
+        if (remainder > 0) {
+            mins += 1;
+            remainder -= 1;
+        }
+        r.extra_hours = Math.floor(mins / 60);
+        r.extra_minutes = mins % 60;
     });
 };
 
-const updateAttendance = () => {
-    form.put(route('payroll-users.update-attendance'), {
-        onSuccess: () => {
-            ElNotification.success('Asistencia actualizada');
-            showAttendanceModal.value = false;
-            form.reset();
-        },
-    });
+const filledProjectsCount = computed(() => projectForm.projects.filter(r => r.project_id).length);
+
+const removeProjectRow = (index) => {
+    projectForm.projects.splice(index, 1);
+    if (projectForm.projects.length === 0) addProjectRow();
 };
 
-const removeLate = () => {
-    form.put(route('payroll-users.remove-late'), {
-        onSuccess: () => ElNotification.success('Retardo eliminado'),
+// Proyectos disponibles: se excluyen los ya elegidos en otras filas del día
+const availableProjectsForRow = (index) => {
+    const selectedIds = projectForm.projects.map(r => r.project_id).filter(Boolean);
+    return props.projects.filter(p => p.id === projectForm.projects[index]?.project_id || !selectedIds.includes(p.id));
+};
+
+const selectedDayForProjects = computed(() => {
+    if (!projectForm.date) return null;
+    return props.payrollUser.incidences.find(i => isSameDay(parseISO(i.date), parseISO(projectForm.date))) || null;
+});
+
+const dayExtraApprovedText = computed(() => {
+    const d = selectedDayForProjects.value;
+    if (!d) return '0h 0m';
+    const h = d.approved_extra_hours ?? d.extra_hours ?? 0;
+    const m = d.approved_extra_minutes ?? d.extra_minutes ?? 0;
+    return `${h}h ${m}m`;
+});
+
+const hasDayExtraApproved = computed(() => {
+    const d = selectedDayForProjects.value;
+    return !!d && (((d.approved_extra_hours ?? d.extra_hours ?? 0) > 0) || ((d.approved_extra_minutes ?? d.extra_minutes ?? 0) > 0));
+});
+
+const projectsExtraTotalText = computed(() => {
+    let h = 0;
+    let m = 0;
+    projectForm.projects.forEach(r => {
+        h += Number(r.extra_hours) || 0;
+        m += Number(r.extra_minutes) || 0;
+    });
+    h += Math.floor(m / 60);
+    m = m % 60;
+    return `${h}h ${m}m`;
+});
+
+const projectsExtraOverflow = computed(() => {
+    const d = selectedDayForProjects.value;
+    if (!d || !hasDayExtraApproved.value) return false;
+    const dayMins = ((d.approved_extra_hours ?? d.extra_hours ?? 0) * 60) + (d.approved_extra_minutes ?? d.extra_minutes ?? 0);
+    let h = 0;
+    let m = 0;
+    projectForm.projects.forEach(r => {
+        h += Number(r.extra_hours) || 0;
+        m += Number(r.extra_minutes) || 0;
+    });
+    return ((h * 60) + m) > dayMins;
+});
+
+const submitProjects = () => {
+    projectForm.projects = projectForm.projects.filter(r => r.project_id);
+    projectForm.put(route('payroll-users.set-projects'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            ElNotification.success('Proyectos actualizados');
+            showProjectModal.value = false;
+            projectForm.reset();
+        },
+        onError: (errors) => ElNotification.error(errors?.projects || 'Error al actualizar proyectos'),
     });
 };
 </script>
 
 <template>
     <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden transition-all duration-300">
-        
-        <!-- Header (Resumen Compacto) -->
-        <div 
-            @click="toggleAccordion" 
-            class="p-4 flex flex-col md:flex-row items-center justify-between cursor-pointer hover:bg-gray-50 select-none gap-4"
-        >
-            <!-- Info Usuario -->
+
+        <!-- Header -->
+        <div @click="toggleAccordion" class="p-4 flex flex-col md:flex-row items-center justify-between cursor-pointer hover:bg-gray-50 select-none gap-4">
             <div class="flex items-center gap-4 w-full md:w-1/3">
                 <div class="relative">
-                    <img 
-                        :src="payrollUser.user.profile_photo_url" 
-                        class="h-10 w-10 rounded-full object-cover border border-gray-200" 
-                        alt="Avatar"
-                    >
+                    <img :src="payrollUser.user.profile_photo_url" class="h-10 w-10 rounded-full object-cover border border-gray-200" alt="Avatar">
                     <span v-if="payrollUser.user.paused" class="absolute -bottom-1 -right-1 flex h-3 w-3">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
                     </span>
                 </div>
                 <div>
-                    <h3 class="text-sm font-bold text-gray-800 leading-tight">{{ payrollUser.user.name }}</h3>
-                    <p class="text-xs text-gray-500">{{ payrollUser.user.org_props.department }}</p>
+                    <h3 class="text-sm font-bold text-gray-800 leading-tight flex items-center flex-wrap gap-2">
+                        {{ payrollUser.user.name }}
+                        <span v-if="!payrollUser.user.has_attendances" class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-50 text-red-600 border border-red-100 uppercase tracking-wider" title="Sin registros de asistencia en esta catorcena">
+                            <i class="fa-solid fa-triangle-exclamation mr-1"></i> Sin Asistencia
+                        </span>
+                    </h3>
+                    <p class="text-xs text-gray-500">{{ payrollUser.user.org_props?.department || 'General' }}</p>
                 </div>
             </div>
-
-            <!-- Stats (Compacto) -->
-            <div class="flex items-center gap-6 text-xs text-gray-600 w-full md:w-auto justify-end">
-                <div class="flex flex-col items-end">
-                    <span class="uppercase text-[10px] text-gray-400 font-bold">Retardos</span>
-                    <span :class="stats.late !== '0h 0m' ? 'text-red-500 font-bold' : ''">{{ stats.late }}</span>
-                </div>
-                <div class="flex flex-col items-end">
-                    <span class="uppercase text-[10px] text-gray-400 font-bold">Extras</span>
-                    <span :class="stats.extra !== '0h 0m' ? 'text-green-600 font-bold' : ''">{{ stats.extra }}</span>
-                </div>
-                
-                <i 
-                    class="fa-solid fa-chevron-down text-gray-400 transition-transform duration-300 ml-2"
-                    :class="{'rotate-180': isOpen}"
-                ></i>
+            <div class="flex items-center gap-4 lg:gap-6 text-xs text-gray-600 w-full md:w-auto justify-end">
+                <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-gray-400 font-bold">Retardos</span><span :class="stats.late !== '0h 0m' ? 'text-red-500 font-bold' : ''">{{ stats.late }}</span></div>
+                <div v-if="stats.breakCount > 0" class="flex flex-col items-end"><span class="uppercase text-[10px] text-orange-400 font-bold">Comidas</span><span class="text-orange-600 font-bold">{{ stats.breakTime }}</span></div>
+                <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-gray-400 font-bold">T. E. (Pend)</span><span :class="stats.extraPending !== '0h 0m' ? 'text-amber-500 font-bold' : ''">{{ stats.extraPending }}</span><span v-if="canSeeMoney && stats.extraAmountPending > 0" class="text-[9px] text-amber-600 font-bold">${{ formatMoney(stats.extraAmountPending) }}</span><span v-else-if="canSeeMoney && stats.extraPending !== '0h 0m'" class="text-[8px] text-amber-400 italic">Sin costo</span></div>
+                <div class="flex flex-col items-end"><span class="uppercase text-[10px] text-green-600 font-bold">T. E. (Aprob)</span><span :class="stats.extraApproved !== '0h 0m' ? 'text-green-600 font-bold' : ''">{{ stats.extraApproved }}</span><span v-if="canSeeMoney && stats.extraAmountApproved > 0" class="text-[9px] text-green-700 font-bold">${{ formatMoney(stats.extraAmountApproved) }}</span><span v-else-if="canSeeMoney && stats.extraApproved !== '0h 0m'" class="text-[8px] text-green-500 italic">Sin costo</span></div>
+                <i class="fa-solid fa-chevron-down text-gray-400 transition-transform duration-300 ml-2" :class="{'rotate-180': isOpen}"></i>
             </div>
         </div>
 
-        <!-- Body (Detalle 14 Días) -->
+        <!-- Body -->
         <div v-show="isOpen" class="border-t border-gray-100 bg-gray-50/50 p-4">
-            
-            <!-- Grid de Días (Horizontal Scroll en móvil) -->
-            <div class="overflow-x-auto pb-2">
+            <!-- Selección múltiple de días para eliminar tiempo extra en lote -->
+            <div v-if="canEdit && eligibleDaysCount > 0" class="flex flex-wrap items-center gap-2 mb-3">
+                <el-button v-if="!selectionMode" size="small" plain type="primary" @click="toggleSelectionMode">
+                    <i class="fa-solid fa-list-check mr-2"></i> Seleccionar varios días
+                </el-button>
+                <template v-else>
+                    <span class="text-[11px] font-bold uppercase tracking-wide text-gray-500 flex items-center gap-1.5">
+                        <i class="fa-solid fa-hand-pointer text-indigo-500"></i>
+                        {{ selectedDays.length }} de {{ eligibleDaysCount }} día(s) · {{ selectedExtraTimeText }}
+                    </span>
+                    <el-button size="small" plain @click="selectAllEligibleDays">Seleccionar todos</el-button>
+                    <el-button size="small" plain :disabled="selectedDays.length === 0" @click="clearDaySelection">Limpiar</el-button>
+                    <el-button size="small" type="danger" :disabled="selectedDays.length === 0" :loading="bulkClearForm.processing" @click="clearSelectedExtraTime">
+                        <i class="fa-solid fa-trash-can mr-2"></i> Eliminar tiempo extra ({{ selectedDays.length }})
+                    </el-button>
+                    <el-button size="small" plain @click="toggleSelectionMode">Cancelar</el-button>
+                </template>
+            </div>
+            <p v-if="selectionMode" class="text-[10px] text-gray-400 mb-2">
+                Toca los días con tiempo extra para marcarlos o desmarcarlos. Solo se pueden seleccionar días con T.E. registrado.
+            </p>
+            <div
+                ref="scrollContainer"
+                class="overflow-x-auto pb-2"
+                :class="selectionMode ? 'cursor-default' : 'cursor-grab'"
+                @mousedown="onDragStart"
+                @mousemove="onDragMove"
+                @mouseup="onDragEnd"
+                @mouseleave="onDragEnd"
+            >
                 <div class="flex gap-2 min-w-max">
-                    <div 
-                        v-for="(day, index) in payrollUser.incidences" 
-                        :key="index" 
-                        class="flex flex-col w-28 border rounded-lg bg-white overflow-hidden shadow-sm transition-all hover:shadow-md"
-                        :class="getIncidenceColor(day)"
-                    >
-                        <!-- Fecha Header -->
-                        <div class="text-center py-1.5 text-[10px] uppercase font-bold tracking-wider border-b border-gray-100" :class="day.check_in ? 'bg-gray-50 text-gray-600' : 'bg-white text-gray-400'">
-                            {{ getDayName(day.date) }} <span class="text-gray-800">{{ formatDate(day.date) }}</span>
+                    <IncidencesDayCard
+                        v-for="(day, index) in payrollUser.incidences" :key="index"
+                        :day="day" :canEdit="canEdit" :incidences="incidences"
+                        :canManageIncidence="approval.canManageIncidence"
+                        :canRevertIncidence="approval.canRevertIncidence"
+                        :getIncidencePermission="approval.getIncidencePermission"
+                        :getDayApprovalSummary="approval.getDayApprovalSummary"
+                        :getApprovalStatusBadge="approval.getApprovalStatusBadge"
+                        :isValidLocation="isValidLocation"
+                        :getLocationError="getLocationError"
+                        :projects="projects"
+                        :canSeeMoney="canSeeMoney"
+                        :selectionMode="selectionMode"
+                        :isSelected="isDaySelected(day)"
+                        :canSelect="hasDayExtraTime(day)"
+                        @command="handleCommand"
+                        @toggle-select="toggleDaySelection"
+                    />
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Modificar Asistencia -->
+        <el-dialog v-model="showAttendanceModal" title="Modificar asistencia" width="400px" class="!rounded-xl" destroy-on-close>
+            <div class="mb-5 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-100 flex gap-2 items-start">
+                <i class="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
+                <p>Al borrar las horas registradas y guardar cambios, se marcará como falta en automático.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-6 py-2">
+                <div><label class="block text-sm font-semibold text-gray-700 mb-2">Hora de entrada</label><el-time-picker v-model="form.check_in" format="HH:mm" value-format="HH:mm" placeholder="00:00" class="!w-full" clearable /></div>
+                <div><label class="block text-sm font-semibold text-gray-700 mb-2">Hora de salida</label><el-time-picker v-model="form.check_out" format="HH:mm" value-format="HH:mm" placeholder="00:00" class="!w-full" clearable /></div>
+            </div>
+
+            <!-- Tiempo de comida / Break -->
+            <div class="mt-4 pt-4 border-t border-dashed border-gray-200">
+                <div class="flex items-center gap-2 mb-3">
+                    <i class="fa-solid fa-utensils text-orange-500 text-sm"></i>
+                    <span class="text-sm font-semibold text-gray-700">Tiempo de comida</span>
+                    <span class="text-[10px] text-gray-400">(opcional)</span>
+                </div>
+                <div class="grid grid-cols-2 gap-6">
+                    <div><label class="block text-sm font-semibold text-gray-700 mb-2">Inicio de comida</label><el-time-picker v-model="form.break_start" format="HH:mm" value-format="HH:mm" placeholder="12:00" class="!w-full" clearable /></div>
+                    <div><label class="block text-sm font-semibold text-gray-700 mb-2">Fin de comida</label><el-time-picker v-model="form.break_end" format="HH:mm" value-format="HH:mm" placeholder="13:00" class="!w-full" clearable /></div>
+                </div>
+                <p class="text-[10px] text-gray-400 mt-2">Si ambos campos están vacíos, se eliminará el registro de comida. Si solo llenas el inicio, se dejará como pausa en curso.</p>
+            </div>
+            <template #footer>
+                <div class="flex justify-end gap-2 pt-2">
+                    <el-button @click="showAttendanceModal = false">Cancelar</el-button>
+                    <el-button type="primary" @click="updateAttendance" :loading="form.processing" class="!bg-indigo-600 !border-indigo-600">Guardar cambios</el-button>
+                </div>
+            </template>
+        </el-dialog>
+
+        <!-- Modal: Gestionar Tiempo Extra -->
+        <el-dialog v-model="showApproveModal" title="Gestionar Tiempo Extra" width="450px" class="!rounded-xl" destroy-on-close>
+            <div class="mb-5 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-100 flex gap-2 items-start">
+                <i class="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
+                <p>Ajusta el tiempo a aprobar, o rechaza el tiempo extra. Puedes agregar una justificación.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-6 mb-5">
+                <div><label class="block text-sm font-semibold text-gray-700 mb-2">Horas aprobadas</label><el-input-number v-model="approveForm.approved_extra_hours" :min="0" class="!w-full" controls-position="right" /><span v-if="approveForm.errors.approved_extra_hours" class="text-xs text-red-500 mt-1 block">{{ approveForm.errors.approved_extra_hours }}</span></div>
+                <div><label class="block text-sm font-semibold text-gray-700 mb-2">Minutos aprobados</label><el-input-number v-model="approveForm.approved_extra_minutes" :min="0" :max="59" class="!w-full" controls-position="right" /><span v-if="approveForm.errors.approved_extra_minutes" class="text-xs text-red-500 mt-1 block">{{ approveForm.errors.approved_extra_minutes }}</span></div>
+            </div>
+            <div><label class="block text-sm font-semibold text-gray-700 mb-2">Comentarios o Justificación (Opcional)</label><el-input v-model="approveForm.comments" type="textarea" :rows="3" placeholder="Ej. Se autoriza por cierre de inventario de almacén." /><span v-if="approveForm.errors.comments" class="text-xs text-red-500 mt-1 block">{{ approveForm.errors.comments }}</span></div>
+            <template #footer>
+                <div class="flex justify-between items-center w-full pt-2">
+                    <el-button type="danger" plain @click="submitRejectExtraTime" :loading="approveForm.processing"><i class="fa-solid fa-xmark mr-2"></i> Rechazar</el-button>
+                    <div class="flex gap-2">
+                        <el-button @click="showApproveModal = false">Cancelar</el-button>
+                        <el-button type="primary" @click="submitApproveExtraTime" :loading="approveForm.processing" class="!bg-indigo-600 !border-indigo-600"><i class="fa-solid fa-check mr-2"></i> Aprobar</el-button>
+                    </div>
+                </div>
+            </template>
+        </el-dialog>
+
+        <!-- Modal: Vincular Proyectos (múltiples por día) -->
+        <el-dialog v-model="showProjectModal" :title="`Proyectos del día ${projectForm.date || ''}`" width="760px" class="!rounded-xl" destroy-on-close>
+            <div class="mb-4 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-100 flex gap-2 items-start">
+                <i class="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
+                <p>Vincula uno o varios proyectos al día laborado. En cada uno indica si fue <b>interno</b> o <b>externo</b>, el departamento imputable y el tiempo extra invertido. La suma por proyecto debe coincidir con el total del día para cuadrar las métricas.</p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3 mb-4">
+                <div class="flex items-center gap-2 text-xs bg-gray-50 rounded-lg border border-gray-100 px-3 py-2">
+                    <span class="text-gray-400 uppercase font-bold text-[10px]">T.E. del día:</span>
+                    <span class="font-bold text-amber-600">{{ dayExtraApprovedText }}</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs bg-gray-50 rounded-lg border border-gray-100 px-3 py-2">
+                    <span class="text-gray-400 uppercase font-bold text-[10px]">Suma proyectos:</span>
+                    <span class="font-bold" :class="projectsExtraOverflow ? 'text-red-500' : 'text-teal-600'">{{ projectsExtraTotalText }}</span>
+                </div>
+                <div v-if="projectsExtraOverflow" class="flex-1 flex items-center gap-2 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-lg px-3 py-2">
+                    <i class="fa-solid fa-triangle-exclamation shrink-0"></i>
+                    <span>La suma excede el tiempo extra del día; ajusta los valores para no inflar métricas.</span>
+                </div>
+            </div>
+
+            <div class="space-y-3 max-h-[52vh] overflow-y-auto pr-1">
+                <div v-for="(row, index) in projectForm.projects" :key="index" class="border border-gray-200 rounded-xl p-3 bg-white">
+                    <div class="flex items-start gap-3">
+                        <div class="flex-1">
+                            <label class="block text-[11px] font-bold text-gray-500 uppercase mb-1">Proyecto</label>
+                            <el-select v-model="row.project_id" placeholder="Selecciona un proyecto..." filterable class="w-full">
+                                <el-option v-for="project in availableProjectsForRow(index)" :key="project.id" :label="`${project.name} (${project.client})`" :value="project.id" />
+                            </el-select>
                         </div>
-
-                        <!-- Contenido Día -->
-                        <div class="flex-1 p-2 flex flex-col justify-center items-center text-xs gap-1 min-h-[80px] relative group">
-                            
-                            <!-- Dropdown de Acciones (Esquina) -->
-                            <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10" v-if="payroll.is_active">
-                                <el-dropdown trigger="click" @command="handleCommand" size="small">
-                                    <button class="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600">
-                                        <i class="fa-solid fa-ellipsis-vertical"></i>
-                                    </button>
-                                    <template #dropdown>
-                                        <el-dropdown-menu>
-                                            <el-dropdown-item :command="`edit_time|${day.date}`">
-                                                <i class="fa-regular fa-clock mr-2"></i> Editar Horas
-                                            </el-dropdown-item>
-                                            <el-dropdown-item v-if="day.late" :command="`remove_late|${day.date}`">
-                                                <i class="fa-solid fa-eraser mr-2"></i> Quitar Retardo
-                                            </el-dropdown-item>
-                                            <el-dropdown-item divided disabled>Incidencias</el-dropdown-item>
-                                            <el-dropdown-item v-for="inc in incidences" :key="inc" :command="`${inc}|${day.date}`">
-                                                {{ inc }}
-                                            </el-dropdown-item>
-                                        </el-dropdown-menu>
-                                    </template>
-                                </el-dropdown>
+                        <el-button circle plain type="danger" size="small" class="!mt-5" :disabled="projectForm.projects.length === 1" @click="removeProjectRow(index)">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </el-button>
+                    </div>
+                    <div class="grid grid-cols-12 gap-3 mt-3">
+                        <div class="col-span-5">
+                            <label class="block text-[11px] font-bold text-gray-500 uppercase mb-1">Tipo de trabajo</label>
+                            <el-radio-group v-model="row.work_type" class="w-full">
+                                <el-radio-button value="internal"><i class="fa-solid fa-building mr-1"></i>Interno</el-radio-button>
+                                <el-radio-button value="external"><i class="fa-solid fa-earth-americas mr-1"></i>Externo</el-radio-button>
+                            </el-radio-group>
+                        </div>
+                        <div class="col-span-3">
+                            <label class="block text-[11px] font-bold text-gray-500 uppercase mb-1">Departamento</label>
+                            <el-select v-model="row.department_id" placeholder="Opcional" clearable filterable class="w-full">
+                                <el-option v-for="dept in departments" :key="dept.id" :label="dept.name" :value="dept.id" />
+                            </el-select>
+                        </div>
+                        <div class="col-span-4">
+                            <label class="block text-[11px] font-bold text-gray-500 uppercase mb-1">Tiempo extra</label>
+                            <div class="flex items-center gap-1">
+                                <el-input-number v-model="row.extra_hours" :min="0" :max="23" :controls="false" class="!flex-1" placeholder="0" />
+                                <span class="text-gray-400 text-xs">h</span>
+                                <el-input-number v-model="row.extra_minutes" :min="0" :max="59" :controls="false" class="!flex-1" placeholder="0" />
+                                <span class="text-gray-400 text-xs">m</span>
                             </div>
-
-                            <!-- Estado / Horas -->
-                            <template v-if="day.check_in">
-                                <div class="text-gray-800 font-mono font-bold">{{ day.check_in.substring(0, 5) }} - {{ day.check_out?.substring(0, 5) || '??' }}</div>
-                                <div v-if="day.late" class="text-[10px] text-red-500 bg-red-50 px-1.5 rounded border border-red-100">
-                                    Retardo: {{ day.late }}m
-                                </div>
-                                <div v-if="day.extra_hours || day.extra_minutes" class="text-[10px] text-green-600 bg-green-50 px-1.5 rounded border border-green-100">
-                                    Extra: {{ day.extra_hours }}h {{ day.extra_minutes }}m
-                                </div>
-                            </template>
-                            <template v-else>
-                                <span class="text-center font-medium" :class="day.incidence === 'Falta injustificada' ? 'text-red-500' : 'text-gray-400'">
-                                    {{ day.incidence || '-' }}
-                                </span>
-                            </template>
-
                         </div>
                     </div>
                 </div>
             </div>
 
-        </div>
+            <div class="mt-4 flex flex-col sm:flex-row gap-2">
+                <el-button type="primary" plain class="flex-1" @click="addProjectRow">
+                    <i class="fa-solid fa-plus mr-2"></i> Agregar otro proyecto al día
+                </el-button>
+                <el-button
+                    type="success"
+                    plain
+                    class="flex-1"
+                    :disabled="dayExtraMinutes <= 0 || filledProjectsCount < 1"
+                    @click="splitEvenly"
+                >
+                    <i class="fa-solid fa-scale-balanced mr-2"></i> Repartir tiempo extra equitativamente
+                </el-button>
+            </div>
 
-        <!-- Modal Editar Asistencia -->
-        <DialogModal :show="showAttendanceModal" @close="showAttendanceModal = false">
-            <template #title>
-                Modificar Asistencia
-            </template>
-            <template #content>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <InputLabel value="Entrada" />
-                        <TextInput type="time" v-model="form.check_in" class="w-full mt-1" />
-                    </div>
-                    <div>
-                        <InputLabel value="Salida" />
-                        <TextInput type="time" v-model="form.check_out" class="w-full mt-1" />
-                    </div>
+            <template #footer>
+                <div class="flex justify-end gap-2 pt-2">
+                    <el-button @click="showProjectModal = false">Cancelar</el-button>
+                    <el-button type="primary" @click="submitProjects" :loading="projectForm.processing" class="!bg-indigo-600 !border-indigo-600">
+                        <i class="fa-solid fa-diagram-project mr-2"></i> Guardar proyectos
+                    </el-button>
                 </div>
             </template>
-            <template #footer>
-                <SecondaryButton @click="showAttendanceModal = false" class="mr-2">Cancelar</SecondaryButton>
-                <PrimaryButton @click="updateAttendance" :disabled="form.processing">Guardar</PrimaryButton>
-            </template>
-        </DialogModal>
-
+        </el-dialog>
     </div>
 </template>
+
+<style scoped>
+:deep(.el-input__wrapper) { border-radius: 0.5rem; box-shadow: 0 0 0 1px #e5e7eb inset; }
+:deep(.el-input__wrapper.is-focus) { box-shadow: 0 0 0 1px #4f46e5 inset !important; }
+</style>

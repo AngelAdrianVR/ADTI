@@ -1,7 +1,13 @@
 <template>
     <AppLayout title="Nuevo producto">
         <div class="px-3 md:px-16 py-8">
-            <Back :to="route('products.index')" />
+            <el-button
+                @click="$inertia.visit(route('products.index'))"
+                circle
+                class="!border-gray-200 !text-gray-500 hover:!text-indigo-600 hover:!border-indigo-300 !shadow-sm"
+            >
+                <i class="fa-solid fa-angle-left text-base"></i>
+            </el-button>
             <form @submit.prevent="store"
                 class="rounded-lg border border-grayD9 lg:p-5 p-3 lg:w-2/3 xl:w-1/2 mx-auto mt-2 lg:grid lg:grid-cols-2 gap-x-3">
 
@@ -338,7 +344,6 @@ import InputError from "@/Components/InputError.vue";
 import InputFilePreview from "@/Components/MyComponents/InputFilePreview.vue";
 import FileUploader from "@/Components/MyComponents/FileUploader.vue";
 import DialogModal from "@/Components/DialogModal.vue";
-import Back from "@/Components/MyComponents/Back.vue";
 import { useForm } from "@inertiajs/vue3";
 import axios from 'axios';
 
@@ -406,7 +411,6 @@ export default {
         DialogModal,
         InputLabel,
         InputError,
-        Back,
     },
     props: {
         categories: Array,

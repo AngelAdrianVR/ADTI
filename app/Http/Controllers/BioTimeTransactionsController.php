@@ -8,16 +8,21 @@ use Illuminate\Http\Request;
 class BioTimeTransactionsController extends Controller
 {
     /**
-     * Obtiene el conteo total de TODAS las transacciones procesadas.
-     * El script de Python usa esto como "cursor" para saber cuántos
-     * registros de BioTime ya ha procesado.
+     * Obtiene el conteo total de las transacciones procesadas.
+     * Si se envían fechas, cuenta solo las de esa ventana de tiempo.
      */
-    public function getTotalProcessedCount()
+    public function getTotalProcessedCount(Request $request)
     {
-        // Suma la columna 'quantity' de todos los registros en la tabla
-        $total_count = BioTimeTransactions::sum('quantity');
+        $query = BioTimeTransactions::query();
+
+        // Si el script de Python envía un rango de fechas (Ventana Deslizante)
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $query->whereBetween('date', [$request->start_date, $request->end_date]);
+        }
+
+        // Suma la columna 'quantity' de los registros filtrados
+        $total_count = $query->sum('quantity');
         
-        // Devuelve el conteo total. El script de Python espera la clave 'transactions'.
         return response()->json(['transactions' => $total_count]);
     }
 }

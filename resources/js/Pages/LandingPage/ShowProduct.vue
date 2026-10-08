@@ -9,6 +9,9 @@
                 <img class="hidden md:block absolute top-20 right-0" src="@/../../public/images/home_decoration3.png" alt="">
             </figure> -->
 
+            <Loading v-if="loading" class="mt-4 lg:mt-20" />
+
+            <div v-else-if="product">
             <!-- bread crumbles -->
             <div class="text-sm text-gray99 mb-9 mx-2 md:mx-6">
                 <div class="flex items-center space-x-3 overflow-x-auto whitespace-nowrap scrollbar-hide w-2/3 md:w-full">
@@ -74,34 +77,65 @@
                     </div>
                 </section>
             </div>
+            </div>
+
+            <div v-else class="text-center text-gray-500 py-20">
+                No se pudo cargar el producto.
+            </div>
         </main>
     </PublicLayout>
 </template>
 
 <script>
 import PublicLayout from '@/Layouts/PublicLayout.vue';
+import Loading from "@/Components/MyComponents/Loading.vue";
 import FileView from '@/Components/MyComponents/FileView.vue';
 import Back from "@/Components/MyComponents/Back.vue";
+import axios from 'axios';
 
 export default {
 data() {
     return {
-
+        product: null, //producto recuperado en la petición del mounted
+        loading: true
     }
 },
 components:{
     PublicLayout,
     FileView,
-    Back
+    Back,
+    Loading
 },
 props:{
-    product: Object
+    product_id: Number
 },
 methods:{
+    async fetchProduct() {
+        this.loading = true;
+        try {
+            const response = await axios.get(route('products.fetch-show', this.product_id));
+            if ( response.status === 200 ) {
+                this.product = response.data.product;
+            }
+        } catch (error) {
+            console.log(error);
+            this.$notify({
+                title: "Error",
+                message: "No se pudo cargar el producto.",
+                type: "error",
+                position: "bottom-right",
+            });
+        } finally {
+            this.loading = false;
+        }
+    },
     getSubcategoryRoute(subcategory) {
         const subcategory_id = this.product.subcategory?.category?.subcategories.find(sb => sb.name === subcategory)?.id;
         this.$inertia.get(route('public.show-subcategory', subcategory_id));
     }
+},
+mounted() {
+    this.fetchProduct();
 }
 };
 </script>

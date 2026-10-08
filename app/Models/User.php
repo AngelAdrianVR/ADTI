@@ -8,7 +8,6 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\Log;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Jetstream\HasProfilePhoto;
 use Laravel\Sanctum\HasApiTokens;
@@ -45,6 +44,7 @@ class User extends Authenticatable implements HasMedia
         'profile_photo_path',
         'home_office',
         'paused',
+        'employees_in_charge', // Nuevo campo
     ];
 
     /**
@@ -77,6 +77,7 @@ class User extends Authenticatable implements HasMedia
             'password' => 'hashed',
             'org_props' => 'array',
             'home_office' => 'boolean',
+            'employees_in_charge' => 'array', // Cast automático a array
         ];
     }
 
@@ -89,32 +90,71 @@ class User extends Authenticatable implements HasMedia
                 'id',
                 'date',
                 'check_in',
+                'check_in_location',
                 'check_out',
+                'check_out_location',
                 'late',
                 'extra_hours',
                 'extra_minutes',
                 'incidence',
                 'additionals',
                 'checked_in_platform',
+                // Nuevos campos
+                'approved_extra_hours',
+                'approved_extra_minutes',
+                'approved_by',
+                'approved_at',
+                // Campos de pausa/comida
+                'break_start',
+                'break_end',
+                'break_minutes',
             ])
             ->withTimestamps();
+    }
+
+    // --- Relación de Solicitudes de Vacaciones ---
+    public function vacationRequests()
+    {
+        return $this->hasMany(VacationRequest::class);
     }
 
     // methods ------------------------------------------------------------------------------------
     //metodo que recupera la siguiente insidencia
     public function getNextAttendance()
     {
-        $next = '';
-        $today_attendance = PayrollUser::where('user_id', $this->id)->whereDate('date', today())->first();
-        if (is_null($today_attendance)) {
-            $next = 'Registrar entrada';
-        } elseif (is_null($today_attendance->check_out)) {
-            $next = 'Registrar salida';
-        } else {
-            $next = 'Día terminado';
+        $now = now();
+        $today = $now->toDateString();
+
+        // 1. Buscar si hay un turno "abierto" reciente (menos de 18 horas desde el check-in)
+        // Esto soluciona los turnos nocturnos que cruzan la medianoche
+        $open_attendance = PayrollUser::where('user_id', $this->id)
+            ->whereNotNull('check_in')
+            ->whereNull('check_out')
+            ->orderBy('date', 'desc')
+            ->first();
+
+        if ($open_attendance) {
+            // CORRECCIÓN: Extraer la fecha de forma segura
+            $safeDate = Carbon::parse($open_attendance->date)->toDateString();
+            $checkInDateTime = Carbon::parse($safeDate . ' ' . trim($open_attendance->check_in));
+            
+            // Si el check-in fue hace menos de 18 horas, sigue siendo válido para darle salida
+            if ($checkInDateTime->diffInHours($now) < 18) {
+                return 'Registrar salida';
+            }
         }
 
-        return $next;
+        // 2. Si no hay turno abierto válido, revisar si ya cerró el turno de hoy
+        $last_closed = PayrollUser::where('user_id', $this->id)
+            ->where('date', $today)
+            ->orderBy('date', 'desc')
+            ->first();
+
+        if ($last_closed && !is_null($last_closed->check_out)) {
+            return 'Día terminado';
+        }
+
+        return 'Registrar entrada';
     }
 
     public function updateVacations()
@@ -148,13 +188,63 @@ class User extends Authenticatable implements HasMedia
         $org_props['updated_date_vacations'] = now()->toDateString();
         $this->org_props = $org_props;
         $this->save();
+
+        // --- NUEVO: Registrar el devengo en el historial ---
+        UserVacationAdjustment::create([
+            'user_id' => $this->id,
+            'days' => $weeklyVacationDays,
+            'notes' => 'Devengo proporcional semanal (Automático)',
+            'date' => now()->toDateString(),
+        ]);
     }
 
-    public function setAttendance()
+    public function setAttendance($location = null)
     {
-        $next = '';
-        $now_time = now()->isoFormat('HH:mm');
-        $today_attendance = PayrollUser::firstOrCreate(['date' => today()->toDateString(), 'user_id' => $this->id], [
+        $now = now();
+        $now_time = $now->isoFormat('HH:mm');
+        $today_date = $now->toDateString();
+
+        // 1. Buscar turno abierto reciente (soporte universal para cruzar medianoche)
+        $open_attendance = PayrollUser::where('user_id', $this->id)
+            ->whereNotNull('check_in')
+            ->whereNull('check_out')
+            ->orderBy('date', 'desc')
+            ->first();
+
+        if ($open_attendance) {
+            // CORRECCIÓN: Extraer la fecha de forma segura
+            $safeDate = Carbon::parse($open_attendance->date)->toDateString();
+            $checkInDateTime = Carbon::parse($safeDate . ' ' . trim($open_attendance->check_in));
+            
+            // Si pasaron menos de 18 horas, es una salida válida de su turno
+            if ($checkInDateTime->diffInHours($now) < 18) {
+                // Prevenir doble clic rápido accidental (menos de 3 minutos)
+                if ($checkInDateTime->diffInMinutes($now) <= 3) {
+                    return 'Registrar salida';
+                }
+
+                // Si hay un break abierto (sin end), cerrarlo antes de marcar la salida
+                if ($open_attendance->break_start && !$open_attendance->break_end) {
+                    $open_attendance->endBreak($now_time);
+                }
+
+                $open_attendance->update([
+                    'check_out' => $now_time,
+                    'check_out_location' => $location,
+                ]);
+                $open_attendance->calculateExtraTime();
+                $this->update(['paused' => null]);
+                
+                return 'Día terminado';
+            }
+            // Si pasaron más de 18 horas, asumimos que olvidó checar y procedemos a dar nueva entrada
+        }
+
+        // 2. Si no es salida de un turno previo, registramos nueva entrada para el día actual
+        $today_attendance = PayrollUser::firstOrCreate([
+            'date' => $today_date, 
+            'user_id' => $this->id
+        ], [
             'payroll_id' => Payroll::firstWhere('is_active', true)->id,
             'checked_in_platform' => true,
             'late' => 0,
@@ -163,30 +253,60 @@ class User extends Authenticatable implements HasMedia
         if (is_null($today_attendance->check_in)) {
             $today_attendance->update([
                 'check_in' => $now_time,
+                'check_in_location' => $location,
             ]);
             $today_attendance->calculateLate();
-            $next = 'Registrar salida';
-        } elseif (is_null($today_attendance->check_out)) {
-            $today_attendance->update([
-                'check_out' => $now_time,
-            ]);
-            $today_attendance->calculateExtraTime();
-            $next = 'Día terminado';
+            $this->update(['paused' => null]);
+            
+            return 'Registrar salida';
         }
 
-        $this->update(['paused' => null]);
-
-        return $next;
+        return 'Día terminado';
     }
 
     public function setPause()
     {
+        $today = now()->toDateString();
+        $nowTime = now()->format('H:i');
+        $activePayroll = Payroll::firstWhere('is_active', true);
+
+        // Si no hay nómina activa, solo alternar el estado paused sin registrar break
+        if (!$activePayroll) {
+            if ($this->paused) {
+                $this->update(['paused' => null]);
+                return false;
+            } else {
+                $time = now()->isoFormat('h:mm a');
+                $this->update(['paused' => $time]);
+                return $time;
+            }
+        }
+
+        // Buscar o crear el registro de asistencia de hoy
+        $todayAttendance = PayrollUser::firstOrCreate(
+            ['date' => $today, 'user_id' => $this->id],
+            [
+                'payroll_id' => $activePayroll->id,
+                'checked_in_platform' => true,
+            ]
+        );
+
         if ($this->paused) {
+            // --- REANUDAR (fin del break) ---
             $this->update(['paused' => null]);
+
+            // Registrar fin del break en payroll_user
+            $todayAttendance->endBreak($nowTime);
+
             return false;
         } else {
+            // --- PAUSAR (inicio del break) ---
             $time = now()->isoFormat('h:mm a');
             $this->update(['paused' => $time]);
+
+            // Registrar inicio del break en payroll_user
+            $todayAttendance->startBreak($nowTime);
+
             return $time;
         }
     }
