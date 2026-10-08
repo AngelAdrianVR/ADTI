@@ -7,6 +7,7 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DialogModal from '@/Components/DialogModal.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
+import ProductExcelModal from './Partials/ProductExcelModal.vue';
 import { ElNotification } from "element-plus";
 import { 
     Search, 
@@ -29,6 +30,8 @@ const currentPage = ref(1);
 const itemsPerPage = ref(10);
 const showImportModal = ref(false);
 const showPrintModal = ref(false); // Estado del modal de impresión
+const showExcelModal = ref(false); // Estado del modal de exportación / plantilla
+const excelModalMode = ref('export'); // 'export' = exportar productos | 'template' = descargar plantilla
 const searchInput = ref(null);
 const selectedItems = ref([]); 
 const productsToPrint = ref([]); // Lista para configurar cantidades
@@ -116,10 +119,23 @@ const handleDropdownCommand = (command) => {
     if (command === 'import') {
         showImportModal.value = true;
     } else if (command === 'export') {
-        window.open(route('products.export'), '_blank');
+        // El modal filtra por categoría / subcategoría antes de generar el archivo Excel
+        openExcelModal('export');
     } else if (command === 'template') {
-        window.open(route('products.import-template'), '_blank');
+        // Las plantillas se generan por subcategoría (misma ruta que usa el catálogo)
+        openExcelModal('template');
     }
+};
+
+const openExcelModal = (mode) => {
+    excelModalMode.value = mode;
+    showExcelModal.value = true;
+};
+
+// Cierra el modal de importación y abre el selector de subcategoría para la plantilla
+const openTemplateModal = () => {
+    showImportModal.value = false;
+    openExcelModal('template');
 };
 
 const importProducts = () => {
@@ -220,9 +236,9 @@ onMounted(() => {
                                         <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Exportar productos')" command="export">
                                             <el-icon><Document /></el-icon> Exportar Excel
                                         </el-dropdown-item>
-                                        <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Importar productos')" command="template" divided>
+                                        <!-- <el-dropdown-item v-if="$page.props.auth.user.permissions.includes('Importar productos')" command="template" divided>
                                             <el-icon><Document /></el-icon> Descargar Plantilla
-                                        </el-dropdown-item>
+                                        </el-dropdown-item> -->
                                     </el-dropdown-menu>
                                 </template>
                             </el-dropdown>
@@ -382,9 +398,9 @@ onMounted(() => {
                 <div class="space-y-4">
                     <p class="text-sm text-gray-600">
                         Sube un archivo Excel (.xlsx) con la estructura correcta para cargar productos masivamente.
-                        <a :href="route('products.import-template')" target="_blank" class="text-[#1676A2] hover:underline font-medium">
+                        <button type="button" @click="openTemplateModal" class="text-[#1676A2] hover:underline font-medium">
                             Descargar plantilla aquí.
-                        </a>
+                        </button>
                     </p>
                     
                     <div class="flex items-center justify-center w-full">
@@ -413,6 +429,13 @@ onMounted(() => {
                 </PrimaryButton>
             </template>
         </DialogModal>
+
+        <!-- Modal de Exportación / Plantilla (filtro por categoría y subcategoría) -->
+        <ProductExcelModal
+            :show="showExcelModal"
+            :mode="excelModalMode"
+            @close="showExcelModal = false"
+        />
 
     </AppLayout>
 </template>
