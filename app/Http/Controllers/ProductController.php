@@ -10,6 +10,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -527,6 +534,368 @@ class ProductController extends Controller
         $product->load(['media', 'subcategory.category.subcategories']);
 
         return response()->json(compact('product'));
+    }
+
+    // -----------------------------------------------------------------
+    // EXPORTACIÓN A EXCEL
+    // -----------------------------------------------------------------
+
+    /**
+     * Árbol de categorías -> subcategorías (con el total de productos de cada rama)
+     * que alimenta el modal de exportación / descarga de plantilla de Product/Index.
+     */
+    public function exportOptions()
+    {
+        $categories = Category::orderBy('name')->get(['id', 'name', 'key']);
+        $subcategories = Subcategory::get(['id', 'name', 'key', 'category_id', 'prev_subcategory_id']);
+        $productsCount = Product::selectRaw('subcategory_id, COUNT(*) as total')
+            ->groupBy('subcategory_id')
+            ->pluck('total', 'subcategory_id');
+
+        $tree = $categories->map(function ($category) use ($subcategories, $productsCount) {
+            $children = $this->buildSubcategoryTree($subcategories, $category->id, null, $productsCount);
+
+            return [
+                'id' => $category->id,
+                // La clave del nodo se prefija porque los ids de categorías y subcategorías
+                // viven en tablas distintas y pueden coincidir (el-tree exige claves únicas).
+                'node_key' => 'category-' . $category->id,
+                'label' => $category->name,
+                'key' => $category->key,
+                'type' => 'category',
+                'products_count' => collect($children)->sum('products_count'),
+                'children' => $children,
+            ];
+        })->values();
+
+        return response()->json(['categories' => $tree]);
+    }
+
+    /**
+     * Construye recursivamente el árbol de subcategorías de una categoría.
+     * Cada nodo lleva su total de productos (incluyendo los de sus hijos).
+     */
+    private function buildSubcategoryTree($subcategories, $categoryId, $parentId, $productsCount)
+    {
+        return $subcategories
+            ->filter(fn($subcategory) => (int) $subcategory->category_id === (int) $categoryId
+                && $subcategory->prev_subcategory_id == $parentId)
+            ->values()
+            ->map(function ($subcategory) use ($subcategories, $productsCount) {
+                $children = $this->buildSubcategoryTree($subcategories, $subcategory->category_id, $subcategory->id, $productsCount);
+
+                return [
+                    'id' => $subcategory->id,
+                    'node_key' => 'subcategory-' . $subcategory->id,
+                    'label' => $subcategory->name,
+                    'key' => $subcategory->key,
+                    'type' => 'subcategory',
+                    'products_count' => (int) ($productsCount[$subcategory->id] ?? 0) + collect($children)->sum('products_count'),
+                    'children' => $children,
+                ];
+            })
+            ->all();
+    }
+
+    /**
+     * Exporta el catálogo de productos a un archivo Excel (.xlsx).
+     *
+     * Filtros opcionales (query string):
+     * - category_ids[]:    categorías completas (incluye todas sus subcategorías).
+     * - subcategory_ids[]: subcategorías concretas (incluye sus subcategorías hijas).
+     * - include_features:  1/0 incluir columnas de características (default 1).
+     * - include_costs:     1/0 incluir columnas de moneda y costo (default 1).
+     * Sin filtros se exporta el catálogo completo.
+     */
+    public function export(Request $request)
+    {
+        $subcategoryIds = $this->resolveExportSubcategoryIds($request);
+        $includeFeatures = $request->boolean('include_features', true);
+        $includeCosts = $request->boolean('include_costs', true);
+
+        $products = Product::with(['subcategory:id,name,category_id' => ['category:id,name']])
+            ->when(!is_null($subcategoryIds), fn($query) => $query->whereIn('subcategory_id', $subcategoryIds))
+            ->orderBy('subcategory_id')
+            ->orderBy('id')
+            ->get([
+                'id',
+                'name',
+                'description',
+                'part_number',
+                'part_number_supplier',
+                'location',
+                'line_cost',
+                'currency',
+                'features',
+                'bread_crumbles',
+                'subcategory_id',
+            ]);
+
+        // Características definidas en las subcategorías implicadas: marcan el orden
+        // de las columnas (el mismo orden en el que se definieron en el catálogo).
+        $subcategories = Subcategory::whereIn('id', $products->pluck('subcategory_id')->unique()->filter()->all())
+            ->get(['id', 'features'])
+            ->keyBy('id');
+
+        $featureColumns = $includeFeatures ? $this->collectFeatureColumns($products, $subcategories) : [];
+
+        $headers = [
+            'Categoría',
+            'Ruta de subcategorías',
+            'Nombre del producto',
+            'Número de parte interno',
+            'Número de parte de fabricante',
+            'Descripción',
+            'Ubicación en almacén',
+        ];
+
+        if ($includeCosts) {
+            $headers[] = 'Moneda';
+            $headers[] = 'Costo';
+        }
+
+        $headers = array_merge($headers, $featureColumns);
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Productos');
+
+        foreach ($headers as $index => $header) {
+            $sheet->setCellValue(Coordinate::stringFromColumnIndex($index + 1) . '1', $header);
+        }
+
+        $rowIndex = 2;
+
+        foreach ($products as $product) {
+            $featureValues = $includeFeatures ? $this->productFeatureValues($product, $subcategories) : [];
+
+            $row = [
+                $product->subcategory?->category?->name,
+                $this->breadcrumbsToPath($product),
+                $product->name,
+                $product->part_number,
+                $product->part_number_supplier,
+                $product->description,
+                $product->location,
+            ];
+
+            if ($includeCosts) {
+                $row[] = $product->currency;
+                $row[] = (float) $product->line_cost;
+            }
+
+            foreach ($featureColumns as $column) {
+                $row[] = $featureValues[$column] ?? null;
+            }
+
+            foreach ($row as $colIndex => $value) {
+                $cell = Coordinate::stringFromColumnIndex($colIndex + 1) . $rowIndex;
+
+                // Los valores de texto se escriben como texto explícito para evitar que Excel
+                // interprete números de parte como fórmulas o notación científica.
+                if (!is_string($value) && is_numeric($value)) {
+                    $sheet->setCellValue($cell, $value);
+                } else {
+                    $sheet->setCellValueExplicit($cell, (string) ($value ?? ''), DataType::TYPE_STRING);
+                }
+            }
+
+            $rowIndex++;
+        }
+
+        // --- Formato de la hoja ---
+        $highestColumn = $sheet->getHighestColumn();
+        $lastColumnIndex = Coordinate::columnIndexFromString($highestColumn);
+
+        if ($lastColumnIndex > 0) {
+            $sheet->getStyle('A1:' . $highestColumn . '1')->applyFromArray([
+                'fill' => [
+                    'fillType' => Fill::FILL_SOLID,
+                    'startColor' => ['argb' => 'FFDDEBF7'],
+                ],
+                'font' => [
+                    'bold' => true,
+                    'color' => ['argb' => 'FF1676A2'],
+                ],
+                'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_CENTER,
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                ],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['argb' => 'FFB7D3E3'],
+                    ],
+                ],
+            ]);
+
+            foreach (range(1, $lastColumnIndex) as $colIndex) {
+                $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($colIndex))->setAutoSize(true);
+            }
+        }
+
+        $sheet->freezePane('A2');
+
+        $filename = 'productos_' . now()->format('Ymd_His') . '.xlsx';
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    /**
+     * Convierte las categorías / subcategorías seleccionadas en la lista final de
+     * subcategorías a exportar, incluyendo siempre las subcategorías hijas.
+     * Devuelve null cuando no hay selección (es decir, exportar todo el catálogo).
+     */
+    private function resolveExportSubcategoryIds(Request $request)
+    {
+        $categoryIds = collect((array) $request->input('category_ids', []))
+            ->filter(fn($id) => $id !== null && $id !== '')
+            ->map(fn($id) => (int) $id);
+        $subcategoryIds = collect((array) $request->input('subcategory_ids', []))
+            ->filter(fn($id) => $id !== null && $id !== '')
+            ->map(fn($id) => (int) $id);
+
+        if ($categoryIds->isEmpty() && $subcategoryIds->isEmpty()) {
+            return null;
+        }
+
+        $allSubcategories = Subcategory::get(['id', 'category_id', 'prev_subcategory_id']);
+
+        // Selección inicial: subcategorías de las categorías completas + subcategorías sueltas.
+        $selected = $allSubcategories->whereIn('category_id', $categoryIds)
+            ->pluck('id')
+            ->merge($subcategoryIds)
+            ->unique()
+            ->values();
+
+        // El catálogo es un árbol: al elegir un nodo se exporta también todo lo que cuelga de él.
+        $pending = $selected->all();
+
+        while (!empty($pending)) {
+            $parentId = array_pop($pending);
+
+            foreach ($allSubcategories->where('prev_subcategory_id', $parentId) as $child) {
+                if (!$selected->contains($child->id)) {
+                    $selected->push($child->id);
+                    $pending[] = $child->id;
+                }
+            }
+        }
+
+        return $selected->sort()->values()->all();
+    }
+
+    /**
+     * Lista ordenada y sin duplicados de las columnas de características a exportar:
+     * primero las definidas en cada subcategoría (orden del catálogo) y después las
+     * que existan únicamente en los productos (por ejemplo, productos importados).
+     */
+    private function collectFeatureColumns($products, $subcategories)
+    {
+        $columns = [];
+
+        foreach ($products as $product) {
+            $definition = $subcategories[$product->subcategory_id]->features ?? [];
+
+            foreach ([$definition, $product->features ?? []] as $featureSet) {
+                foreach ($featureSet as $feature) {
+                    if (!is_array($feature)) {
+                        continue;
+                    }
+
+                    $column = $this->featureColumnName($feature['name'] ?? null, $feature['measure_unit'] ?? null);
+
+                    if ($column && !in_array($column, $columns, true)) {
+                        $columns[] = $column;
+                    }
+                }
+            }
+        }
+
+        return $columns;
+    }
+
+    /**
+     * Etiqueta de la columna de una característica: "Nombre (unidad)".
+     */
+    private function featureColumnName($name, $measureUnit = null)
+    {
+        if (!$name) {
+            return null;
+        }
+
+        return $measureUnit ? "{$name} ({$measureUnit})" : $name;
+    }
+
+    /**
+     * Valores de las características de un producto indexados por etiqueta de columna.
+     * El valor se busca por nombre y, si el producto no lo guarda (datos antiguos),
+     * se toma por posición (las características se guardan en el orden del catálogo).
+     */
+    private function productFeatureValues(Product $product, $subcategories)
+    {
+        $values = [];
+        $definition = $subcategories[$product->subcategory_id]->features ?? [];
+
+        foreach ($definition as $index => $feature) {
+            if (!is_array($feature)) {
+                continue;
+            }
+
+            $column = $this->featureColumnName($feature['name'] ?? null, $feature['measure_unit'] ?? null);
+
+            if ($column) {
+                $values[$column] = $this->featureValue($product, $feature['name'] ?? null, $index);
+            }
+        }
+
+        foreach ($product->features ?? [] as $feature) {
+            if (!is_array($feature)) {
+                continue;
+            }
+
+            $column = $this->featureColumnName($feature['name'] ?? null, $feature['measure_unit'] ?? null);
+
+            // Solo rellena las columnas que la definición de la subcategoría no pudo resolver.
+            if ($column && ($values[$column] ?? null) === null) {
+                $values[$column] = $feature['value'] ?? null;
+            }
+        }
+
+        return $values;
+    }
+
+    /**
+     * Valor de una característica del producto: primero por nombre y después por posición.
+     */
+    private function featureValue(Product $product, $name, $index)
+    {
+        $features = $product->features ?? [];
+
+        if ($name) {
+            foreach ($features as $feature) {
+                if (is_array($feature) && ($feature['name'] ?? null) === $name) {
+                    return $feature['value'] ?? null;
+                }
+            }
+        }
+
+        $feature = $features[$index] ?? null;
+
+        return is_array($feature) ? ($feature['value'] ?? null) : null;
+    }
+
+    /**
+     * Ruta legible de la jerarquía del producto, tomada de los breadcrumbs guardados.
+     */
+    private function breadcrumbsToPath(Product $product)
+    {
+        return implode(' > ', array_filter((array) ($product->bread_crumbles ?? [])));
     }
 
 }
