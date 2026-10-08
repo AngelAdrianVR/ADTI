@@ -92,6 +92,10 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::get('subcategories-get-products/{subcategory}', [SubcategoryController::class, 'getSubcategoryProducts'])->name('subcategories.get-products');
 
     Route::get('products-print-barcodes', [ProductController::class, 'printBarcodes'])->name('products.print-barcodes');
+    Route::get('products-export-options', [ProductController::class, 'exportOptions'])->name('products.export-options');
+    // GET para exportaciones con filtros cortos y POST para el modal: la selección del
+    // árbol viaja en el cuerpo porque cientos de subcategorías no caben en la URL.
+    Route::match(['get', 'post'], 'products-export', [ProductController::class, 'export'])->name('products.export');
     Route::resource('products', ProductController::class);
     Route::post('products/update-with-media/{product}', [ProductController::class, 'updateWithMedia'])->name('products.update-with-media');
     Route::post('products/massive-delete', [ProductController::class, 'massiveDelete'])->name('products.massive-delete');
