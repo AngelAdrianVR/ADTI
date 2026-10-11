@@ -4,8 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\BulkDecideExtraHourRequest;
 use App\Http\Requests\DecideExtraHourRequest;
-use App\Models\ExtraHourApprovalGroup;
-use App\Models\ExtraHourApprovalLevel;
 use App\Models\ExtraHourCost;
 use App\Models\Payroll;
 use App\Models\PayrollUser;
@@ -195,74 +193,74 @@ class PayrollExtraHoursController extends Controller
     {
         $request->validate([
             'groups' => 'required|array',
+            'groups.*.id' => 'nullable|integer',
             'groups.*.name' => 'nullable|string|max:100',
             'groups.*.employee_ids' => 'required|array|min:1',
             'groups.*.employee_ids.*' => 'required|integer|exists:users,id',
             'groups.*.levels' => 'required|array|min:1',
+            'groups.*.levels.*.id' => 'nullable|integer',
             'groups.*.levels.*.name' => 'nullable|string|max:100',
             'groups.*.levels.*.approver_ids' => 'required|array|min:1',
             'groups.*.levels.*.approver_ids.*' => 'required|integer|exists:users,id',
         ]);
 
-        // Validar que un empleado no estรฉ duplicado entre grupos
-        $allEmployeeIds = [];
+        // Un colaborador solo puede pertenecer a UN grupo de aprobacion. Si por
+        // alguna via llega repetido en varios grupos (p. ej. un cliente que aun no
+        // resuelve el "mover" en pantalla), se CONSERVA unicamente en el ultimo
+        // grupo que lo incluye (el destino del cambio) y se retira de los
+        // anteriores. Antes se devolvia withErrors, pero la pantalla no mostraba
+        // el mensaje y parecia que si se habia guardado; ahora la operacion se
+        // resuelve sola, igual que "agregar al nuevo = quitar del antiguo".
+        $groupIndexByEmployee = [];
         foreach ($request->groups as $gi => $groupData) {
             foreach ($groupData['employee_ids'] as $empId) {
-                if (in_array($empId, $allEmployeeIds)) {
-                    return back()->withErrors(['error' => "El empleado ID {$empId} no puede estar en mรกs de un grupo de aprobaciรณn."]);
-                }
-                $allEmployeeIds[] = $empId;
+                $groupIndexByEmployee[(int) $empId] = $gi;
             }
         }
 
-        DB::transaction(function () use ($request, $payroll) {
-            // Eliminar grupos existentes (cascade elimina niveles, pivotes y decisiones)
-            $payroll->approvalGroups()->each(function ($group) {
-                $group->delete();
-            });
+        $groups = collect($request->groups)
+            ->map(function ($groupData, $gi) use ($groupIndexByEmployee) {
+                $groupData['employee_ids'] = array_values(array_filter(
+                    $groupData['employee_ids'],
+                    fn ($empId) => $groupIndexByEmployee[(int) $empId] === $gi
+                ));
 
-            // Crear nuevos grupos
-            foreach ($request->groups as $groupData) {
-                $group = ExtraHourApprovalGroup::create([
-                    'payroll_id' => $payroll->id,
-                    'name' => $groupData['name'] ?? ('Grupo ' . (count($payroll->approvalGroups) + 1)),
-                ]);
+                return $groupData;
+            })
+            ->all();
 
-                // Asignar empleados al grupo
-                $group->employees()->sync($groupData['employee_ids']);
-
-                // Crear niveles para este grupo
-                foreach ($groupData['levels'] as $index => $levelData) {
-                    $level = ExtraHourApprovalLevel::create([
-                        'payroll_id' => $payroll->id,
-                        'approval_group_id' => $group->id,
-                        'level' => $index + 1,
-                        'name' => $levelData['name'] ?? ('Nivel ' . ($index + 1)),
-                    ]);
-
-                    $level->approvers()->sync($levelData['approver_ids']);
-                }
-            }
+        // Upsert por identidad: actualizar los grupos/niveles que siguen
+        // existiendo (por id, o por nombre/número de nivel cuando la petición no
+        // trae ids) y eliminar solo los que desaparecen de la configuración. Las
+        // decisiones ya registradas se conservan; solo se borran las de los
+        // colaboradores que salen de un grupo, las de los niveles eliminados y
+        // las de los grupos eliminados.
+        $stats = DB::transaction(function () use ($groups, $payroll) {
+            return $this->approvals->applyApprovalGroups($payroll, $groups);
         });
 
-        // Re-inicializar el flujo de aprobación de los registros con tiempo extra.
-        // Al reconfigurar grupos, las decisiones se borran por cascade, por lo que
-        // los registros que no tengan una aprobación final legítima (approved_at)
-        // deben volver a pending apuntando al primer nivel del grupo correcto.
-        // Reinicia el flujo de los registros en vuelo (las decisiones previas se
-        // borraron por cascade al recrear los grupos). Esta misma rutina se usa al
-        // copiar configuracion de otra catorcena, que antes NO reinicializaba.
-        $reset = $this->approvals->resetInFlightForPayroll($payroll);
+        // Reubicar SÓLO los registros que quedaron inconsistentes. Los días en
+        // vuelo de los grupos que no cambiaron conservan su nivel y sus
+        // decisiones (antes se reiniciaban TODOS al primer nivel en cada guardado,
+        // como si la configuración se acabara de crear).
+        $normalize = $this->approvals->normalizeWorkflowForPayroll($payroll);
 
         return back()->with('success', sprintf(
-            'Grupos y niveles de autorización guardados correctamente. Días reiniciados al primer nivel: %d%s.',
-            $reset['reset'],
-            $reset['without_group'] > 0 ? ' · ' . $reset['without_group'] . ' sin grupo (sin flujo)' : ''
+            'Grupos y niveles de autorización guardados. Grupos: %d nuevos, %d actualizados, %d eliminados · Niveles: %d nuevos, %d eliminados · Autorizaciones en curso conservadas: %d%s.',
+            $stats['groups_created'],
+            $stats['groups_updated'],
+            $stats['groups_removed'],
+            $stats['levels_created'],
+            $stats['levels_removed'],
+            $normalize['kept'],
+            ($stats['decisions_removed'] > 0 || $normalize['without_group'] > 0)
+                ? ' · ' . $stats['decisions_removed'] . ' decisiones invalidadas, ' . $normalize['without_group'] . ' días sin grupo (sin flujo)'
+                : ''
         ));
     }
 
     /**
-     * Copia la configuraciรณn (costos + grupos) de la nรณmina anterior a la actual.
+     * Copia la configuración (costos + grupos) de la nómina anterior a la actual.
      */
     public function copyFromPrevious(Payroll $payroll)
     {
@@ -287,36 +285,16 @@ class PayrollExtraHoursController extends Controller
                 ]);
             }
 
-            // 2. Copiar grupos de aprobaciรณn con sus niveles y aprobadores
-            $payroll->approvalGroups()->each(function ($g) { $g->delete(); });
+            // 2. Copiar grupos de aprobación con sus niveles y aprobadores.
+            //    Upsert por nombre: los grupos que ya existen con el mismo nombre
+            //    conservan sus niveles, sus decisiones y el avance en vuelo.
+            //    (Antes se borraban todos los grupos y, con ellos por cascade, las
+            //    decisiones de toda la catorcena.)
+            $this->copyApprovalGroupsFrom($previous, $payroll);
 
-            foreach ($previous->approvalGroups()->with(['employees', 'levels.approvers'])->get() as $prevGroup) {
-                $newGroup = ExtraHourApprovalGroup::create([
-                    'payroll_id' => $payroll->id,
-                    'name' => $prevGroup->name,
-                ]);
-
-                // Copiar empleados
-                $newGroup->employees()->sync($prevGroup->employees->pluck('id'));
-
-                // Copiar niveles con aprobadores
-                foreach ($prevGroup->levels as $prevLevel) {
-                    $newLevel = ExtraHourApprovalLevel::create([
-                        'payroll_id' => $payroll->id,
-                        'approval_group_id' => $newGroup->id,
-                        'level' => $prevLevel->level,
-                        'name' => $prevLevel->name,
-                    ]);
-
-                    $newLevel->approvers()->sync($prevLevel->approvers->pluck('id'));
-                }
-            }
-
-            // Las decisiones de los registros en vuelo apuntaban a los niveles que
-            // se acaban de eliminar: hay que devolverlos al primer nivel del grupo
-            // nuevo. Antes, esta copia dejaba TODOS los dias con tiempo extra
-            // "sin flujo de autorización" (nivel NULL) y descuadraba los contadores.
-            $this->approvals->resetInFlightForPayroll($payroll);
+            // Sólo se reubican los registros que quedaron inconsistentes (grupo o
+            // nivel que ya no existe); el avance de los grupos intactos se respeta.
+            $this->approvals->normalizeWorkflowForPayroll($payroll);
         });
 
         return back()->with('success', 'Configuraciรณn copiada de la nรณmina anterior correctamente.');
@@ -348,39 +326,54 @@ class PayrollExtraHoursController extends Controller
                 ]);
             }
 
-            // 2. Copiar grupos de aprobaciรณn con sus niveles y aprobadores
-            $payroll->approvalGroups()->each(function ($g) { $g->delete(); });
+            // 2. Copiar grupos de aprobación con sus niveles y aprobadores.
+            //    Upsert por nombre: los grupos que ya existen con el mismo nombre
+            //    conservan sus niveles, sus decisiones y el avance en vuelo.
+            //    (Antes se borraban todos los grupos y, con ellos por cascade, las
+            //    decisiones de toda la catorcena.)
+            $this->copyApprovalGroupsFrom($next, $payroll);
 
-            foreach ($next->approvalGroups()->with(['employees', 'levels.approvers'])->get() as $nextGroup) {
-                $newGroup = ExtraHourApprovalGroup::create([
-                    'payroll_id' => $payroll->id,
-                    'name' => $nextGroup->name,
-                ]);
-
-                // Copiar empleados
-                $newGroup->employees()->sync($nextGroup->employees->pluck('id'));
-
-                // Copiar niveles con aprobadores
-                foreach ($nextGroup->levels as $nextLevel) {
-                    $newLevel = ExtraHourApprovalLevel::create([
-                        'payroll_id' => $payroll->id,
-                        'approval_group_id' => $newGroup->id,
-                        'level' => $nextLevel->level,
-                        'name' => $nextLevel->name,
-                    ]);
-
-                    $newLevel->approvers()->sync($nextLevel->approvers->pluck('id'));
-                }
-            }
-
-            // Las decisiones de los registros en vuelo apuntaban a los niveles que
-            // se acaban de eliminar: hay que devolverlos al primer nivel del grupo
-            // nuevo. Antes, esta copia dejaba TODOS los dias con tiempo extra
-            // "sin flujo de autorización" (nivel NULL) y descuadraba los contadores.
-            $this->approvals->resetInFlightForPayroll($payroll);
+            // Sólo se reubican los registros que quedaron inconsistentes (grupo o
+            // nivel que ya no existe); el avance de los grupos intactos se respeta.
+            $this->approvals->normalizeWorkflowForPayroll($payroll);
         });
 
         return back()->with('success', 'Configuraciรณn copiada de la nรณmina siguiente correctamente.');
+    }
+
+    /**
+     * Copia los grupos/niveles de una catorcena a otra mediante el upsert por
+     * identidad: los grupos que ya existan en el destino con el mismo nombre
+     * conservan sus niveles, sus decisiones y el avance en vuelo. Antes, copiar
+     * borraba todos los grupos del destino y, por cascade, todas las decisiones
+     * de la catorcena.
+     */
+    private function copyApprovalGroupsFrom(Payroll $source, Payroll $target): void
+    {
+        $payload = $source->approvalGroups()
+            ->with(['employees', 'levels.approvers'])
+            ->orderBy('id')
+            ->get()
+            ->map(fn ($group) => [
+                // Sin ids: pertenecen a la otra catorcena. El emparejamiento se
+                // hace por nombre de grupo y por número de nivel.
+                'id' => null,
+                'name' => $group->name,
+                'employee_ids' => $group->employees->pluck('id')->all(),
+                'levels' => $group->levels
+                    ->sortBy('level')
+                    ->values()
+                    ->map(fn ($level) => [
+                        'id' => null,
+                        'name' => $level->name,
+                        'approver_ids' => $level->approvers->pluck('id')->all(),
+                    ])
+                    ->all(),
+            ])
+            ->values()
+            ->all();
+
+        $this->approvals->applyApprovalGroups($target, $payload);
     }
 
     /**

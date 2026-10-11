@@ -457,6 +457,238 @@ class ExtraHourApprovalService
         ];
     }
 
+    // ─── Reconfiguración de grupos (upsert no destructivo) ───────────────
+
+    /**
+     * Aplica la configuración de grupos/niveles recibida SIN destruir las
+     * autorizaciones ya registradas.
+     *
+     * Regla de negocio:
+     *  - Un grupo/nivel que sigue existiendo (mismo id; o mismo nombre/número de
+     *    nivel cuando la petición no trae ids, p.ej. al copiar de otra catorcena)
+     *    conserva sus decisiones intactas.
+     *  - Los colaboradores que se REMUEVEN de un grupo pierden sus decisiones en
+     *    vuelo de ese grupo (su jerarquía cambió). Las decisiones ya resueltas
+     *    (días aprobados o rechazados) se conservan: reabrirlas alteraría la
+     *    nómina.
+     *  - Los niveles y grupos que desaparecen de la configuración se borran con
+     *    sus decisiones (eliminación deliberada del administrador).
+     *
+     * Antes, guardar/copiar grupos borraba TODOS los niveles y decisiones de la
+     * catorcena (cascade) y reiniciaba todos los días en vuelo al primer nivel.
+     *
+     * @param  array<int, array{id?:int|null,name?:string|null,employee_ids?:array,levels?:array}>  $groups
+     * @return array{groups_created:int,groups_updated:int,groups_removed:int,levels_created:int,levels_removed:int,employees_removed:int,decisions_removed:int}
+     */
+    public function applyApprovalGroups(Payroll $payroll, array $groups): array
+    {
+        $stats = [
+            'groups_created' => 0,
+            'groups_updated' => 0,
+            'groups_removed' => 0,
+            'levels_created' => 0,
+            'levels_removed' => 0,
+            'employees_removed' => 0,
+            'decisions_removed' => 0,
+        ];
+
+        $existing = $payroll->approvalGroups()->with(['levels', 'employees'])->orderBy('id')->get();
+        $byId = $existing->keyBy('id');
+
+        // 1. Emparejar cada grupo entrante con uno existente: primero por id y,
+        //    si la petición no lo trae, por nombre.
+        $claimed = [];   // group_id => true
+        $matched = [];   // índice del payload => ExtraHourApprovalGroup
+
+        foreach ($groups as $index => $groupData) {
+            $id = isset($groupData['id']) ? (int) $groupData['id'] : 0;
+            if ($id && $byId->has($id)) {
+                $claimed[$id] = true;
+                $matched[$index] = $byId->get($id);
+            }
+        }
+
+        foreach ($groups as $index => $groupData) {
+            if (isset($matched[$index])) {
+                continue;
+            }
+
+            $name = trim((string) ($groupData['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $candidate = $existing->first(function (ExtraHourApprovalGroup $group) use ($name, $claimed) {
+                return !array_key_exists((int) $group->id, $claimed)
+                    && trim((string) $group->name) === $name;
+            });
+
+            if ($candidate) {
+                $claimed[(int) $candidate->id] = true;
+                $matched[$index] = $candidate;
+            }
+        }
+
+        // 2. Eliminar los grupos que la configuración ya no incluye.
+        foreach ($existing as $group) {
+            if (array_key_exists((int) $group->id, $claimed)) {
+                continue;
+            }
+
+            $levelIds = $group->levels->pluck('id')->all();
+            if ($levelIds) {
+                $stats['decisions_removed'] += (int) ExtraHourApprovalDecision::whereIn('approval_level_id', $levelIds)->delete();
+            }
+
+            $group->delete(); // cascade: niveles, pivote de empleados y decisiones
+            $stats['groups_removed']++;
+        }
+
+        // 3. Crear o actualizar cada grupo (con sus empleados y niveles).
+        foreach ($groups as $index => $groupData) {
+            $group = $matched[$index] ?? null;
+
+            if ($group) {
+                $group->update([
+                    'name' => array_key_exists('name', $groupData) ? $groupData['name'] : $group->name,
+                ]);
+                $stats['groups_updated']++;
+            } else {
+                $group = ExtraHourApprovalGroup::create([
+                    'payroll_id' => $payroll->id,
+                    'name' => $groupData['name'] ?? null,
+                ]);
+                $stats['groups_created']++;
+            }
+
+            $employees = $this->syncGroupEmployees($payroll, $group, $groupData['employee_ids'] ?? []);
+            $stats['employees_removed'] += $employees['removed'];
+            $stats['decisions_removed'] += $employees['decisions_removed'];
+
+            $levels = $this->syncGroupLevels($payroll, $group, $groupData['levels'] ?? []);
+            $stats['levels_created'] += $levels['created'];
+            $stats['levels_removed'] += $levels['removed'];
+            $stats['decisions_removed'] += $levels['decisions_removed'];
+        }
+
+        return $stats;
+    }
+
+    /**
+     * Reubica los registros de tiempo extra tras reconfigurar los grupos, sin
+     * reiniciar los que siguen siendo válidos.
+     *
+     *  - Días ya resueltos (aprobados o rechazados) → intactos.
+     *  - Días en vuelo cuyo nivel actual sigue existiendo en su grupo → intactos
+     *    (éste es el caso que antes se reiniciaba en cada guardado, incluso
+     *    cuando el grupo del colaborador no había cambiado).
+     *  - El resto se recalcula a partir de las decisiones que sobrevivieron
+     *    (primer nivel sin aprobar) o queda "sin flujo" si el colaborador ya no
+     *    pertenece a ningún grupo.
+     *
+     * @return array{kept:int,recomputed:int,without_group:int,skipped_final:int}
+     */
+    public function normalizeWorkflowForPayroll(Payroll $payroll): array
+    {
+        $rows = PayrollUser::where('payroll_id', $payroll->id)
+            ->where(function ($q) {
+                $q->where('extra_hours', '>', 0)->orWhere('extra_minutes', '>', 0);
+            })
+            ->orderBy('id')
+            ->get();
+
+        $groupsByEmployee = $this->groupsByEmployee($payroll);
+        $levelsByGroup = [];
+
+        $kept = 0;
+        $recomputed = 0;
+        $withoutGroup = 0;
+        $skippedFinal = 0;
+
+        foreach ($rows as $row) {
+            // Días ya resueltos: una aprobación o un rechazo registrado no se
+            // reabre nunca (reabrirlo cambiaría el monto de la nómina).
+            if (in_array($row->extra_hour_status, ['approved', 'rejected'], true)) {
+                $skippedFinal++;
+                continue;
+            }
+
+            $group = $groupsByEmployee[(int) $row->user_id] ?? null;
+
+            if (!$group) {
+                // Colaborador fuera de todo grupo: día sin flujo de autorización.
+                $row->updateQuietly([
+                    'extra_hour_status' => 'pending',
+                    'current_approval_level_id' => null,
+                    'approved_extra_hours' => null,
+                    'approved_extra_minutes' => null,
+                    'approved_by' => null,
+                    'approved_at' => null,
+                    'proposed_extra_hours' => null,
+                    'proposed_extra_minutes' => null,
+                ]);
+                $withoutGroup++;
+                continue;
+            }
+
+            $levels = $levelsByGroup[$group->id] ??= $group->levels()->orderBy('level')->get();
+            $currentLevelId = (int) $row->current_approval_level_id;
+
+            $isLevelStillValid = $currentLevelId > 0
+                && $row->extra_hour_status === 'pending'
+                && $levels->contains(fn ($level) => (int) $level->id === $currentLevelId);
+
+            if ($isLevelStillValid) {
+                $kept++;
+                continue;
+            }
+
+            // El nivel actual desapareció (o el día quedó huérfano): se reubica a
+            // partir de las decisiones vigentes.
+            $this->recalculateState($row);
+            $this->closeIfAllLevelsApproved($row);
+            $recomputed++;
+        }
+
+        return [
+            'kept' => $kept,
+            'recomputed' => $recomputed,
+            'without_group' => $withoutGroup,
+            'skipped_final' => $skippedFinal,
+        ];
+    }
+
+    /**
+     * Si tras recalcular las decisiones vigentes el día quedó aprobado pero sin
+     * los campos de cierre (p.ej. al eliminar el último nivel pendiente), los
+     * completa con la última decisión aprobada. Sin esto, el día quedaría
+     * "approved" con `approved_at` NULL (registro huérfano).
+     */
+    private function closeIfAllLevelsApproved(PayrollUser $payrollUser): void
+    {
+        $fresh = $payrollUser->fresh();
+
+        if (!$fresh || $fresh->extra_hour_status !== 'approved' || $fresh->approved_at !== null) {
+            return;
+        }
+
+        $lastApproved = ExtraHourApprovalDecision::where('payroll_user_id', $fresh->id)
+            ->where('status', 'approved')
+            ->orderByDesc('decided_at')
+            ->first();
+
+        if (!$lastApproved) {
+            return;
+        }
+
+        $fresh->update([
+            'approved_extra_hours' => $fresh->approved_extra_hours ?? $lastApproved->proposed_extra_hours ?? $fresh->extra_hours,
+            'approved_extra_minutes' => $fresh->approved_extra_minutes ?? $lastApproved->proposed_extra_minutes ?? $fresh->extra_minutes,
+            'approved_by' => $fresh->approved_by ?? $lastApproved->approver_id,
+            'approved_at' => $lastApproved->decided_at ?? now(),
+        ]);
+    }
+
     private function recalculateState(PayrollUser $payrollUser): void
     {
         $group = $this->findGroupForUser($payrollUser);
@@ -560,6 +792,182 @@ class ExtraHourApprovalService
     }
 
     /**
+     * Sincroniza los empleados de un grupo. Los colaboradores que salen pierden
+     * sus decisiones EN VUELO de este grupo (nunca las ya cerradas: reabrirlas
+     * alteraría la nómina).
+     *
+     * @param  array<int, int|string>  $employeeIds
+     * @return array{added:int,removed:int,decisions_removed:int}
+     */
+    private function syncGroupEmployees(Payroll $payroll, ExtraHourApprovalGroup $group, array $employeeIds): array
+    {
+        $before = $group->employees()->pluck('users.id')->map(fn ($id) => (int) $id)->all();
+        $after = array_values(array_unique(array_map('intval', $employeeIds)));
+        $removed = array_values(array_diff($before, $after));
+
+        $decisionsRemoved = 0;
+
+        if ($removed) {
+            $levelIds = $group->levels()->pluck('id')->all();
+
+            if ($levelIds) {
+                $decisionsRemoved = (int) ExtraHourApprovalDecision::query()
+                    ->whereIn('approval_level_id', $levelIds)
+                    ->whereHas('payrollUser', function ($q) use ($payroll, $removed) {
+                        $q->where('payroll_id', $payroll->id)
+                            ->whereIn('user_id', $removed)
+                            // Sólo decisiones EN VUELO: un día ya aprobado o
+                            // rechazado no se reabre.
+                            ->whereIn('extra_hour_status', ['pending', 'none']);
+                    })
+                    ->delete();
+            }
+        }
+
+        $group->employees()->sync($after);
+
+        return [
+            'added' => count(array_diff($after, $before)),
+            'removed' => count($removed),
+            'decisions_removed' => $decisionsRemoved,
+        ];
+    }
+
+    /**
+     * Sincroniza los niveles de un grupo conservando (por id o, si la petición
+     * no trae ids, por número de nivel) los que siguen existiendo.
+     *
+     *  - Nivel conservado → se le actualiza nombre y aprobadores (sus
+     *    decisiones se mantienen).
+     *  - Nivel eliminado → se borra con sus decisiones (acción deliberada).
+     *  - Nivel nuevo → se agrega al final (número libre más alto + 1).
+     *
+     * @param  array<int, array{id?:int|null,name?:string|null,approver_ids?:array}>  $levels
+     * @return array{created:int,updated:int,removed:int,decisions_removed:int}
+     */
+    private function syncGroupLevels(Payroll $payroll, ExtraHourApprovalGroup $group, array $levels): array
+    {
+        $existing = $group->levels()->orderBy('level')->get();
+        $byId = $existing->keyBy('id');
+
+        $claimed = [];   // level_id => true
+        $matched = [];   // índice del payload => ExtraHourApprovalLevel
+
+        // a) Emparejar por id explícito.
+        foreach ($levels as $index => $levelData) {
+            $id = isset($levelData['id']) ? (int) $levelData['id'] : 0;
+            if ($id && $byId->has($id)) {
+                $claimed[$id] = true;
+                $matched[$index] = $byId->get($id);
+            }
+        }
+
+        // b) Emparejar por número de nivel (payloads sin ids: copias de otra
+        //    catorcena o clientes antiguos).
+        foreach ($levels as $index => $levelData) {
+            if (isset($matched[$index])) {
+                continue;
+            }
+
+            $number = $index + 1;
+            $candidate = $existing->first(function (ExtraHourApprovalLevel $level) use ($number, $claimed) {
+                return !array_key_exists((int) $level->id, $claimed) && (int) $level->level === $number;
+            });
+
+            if ($candidate) {
+                $claimed[(int) $candidate->id] = true;
+                $matched[$index] = $candidate;
+            }
+        }
+
+        // c) Eliminar los niveles que la configuración ya no incluye.
+        $removed = 0;
+        $decisionsRemoved = 0;
+
+        foreach ($existing as $level) {
+            if (array_key_exists((int) $level->id, $claimed)) {
+                continue;
+            }
+
+            $decisionsRemoved += (int) ExtraHourApprovalDecision::where('approval_level_id', $level->id)->delete();
+            $level->delete();
+            $removed++;
+        }
+
+        // d) Actualizar los conservados y crear los nuevos.
+        $maxLevel = (int) ($existing->max('level') ?? 0);
+        $created = 0;
+        $updated = 0;
+
+        foreach ($levels as $index => $levelData) {
+            $approverIds = array_values(array_unique(array_map('intval', $levelData['approver_ids'] ?? [])));
+            $level = $matched[$index] ?? null;
+
+            if ($level) {
+                $level->update([
+                    'name' => $levelData['name'] ?? $level->name ?? ('Nivel ' . ($index + 1)),
+                ]);
+                $level->approvers()->sync($approverIds);
+                $updated++;
+                continue;
+            }
+
+            $level = ExtraHourApprovalLevel::create([
+                'payroll_id' => $payroll->id,
+                'approval_group_id' => $group->id,
+                'level' => ++$maxLevel,
+                'name' => $levelData['name'] ?? ('Nivel ' . ($index + 1)),
+            ]);
+            $level->approvers()->sync($approverIds);
+            $created++;
+        }
+
+        // e) Compactar la numeración si quedó con huecos (p.ej. al borrar un nivel
+        //    intermedio), sin arriesgar el índice único (approval_group_id, level).
+        $this->compactGroupLevelNumbers($group);
+
+        return [
+            'created' => $created,
+            'updated' => $updated,
+            'removed' => $removed,
+            'decisions_removed' => $decisionsRemoved,
+        ];
+    }
+
+    /**
+     * Renumera 1..N los niveles del grupo cuando la numeración quedó con huecos.
+     *
+     * Sólo se aplica si los números actuales ya están en orden ascendente (el
+     * único escenario que produce la UI: alta al final y baja en cualquier
+     * posición). En ese caso reasignar en orden ascendente nunca choca con el
+     * índice único (approval_group_id, level). Si el orden no es ascendente (no
+     * ocurre desde la UI) se respeta la numeración existente: el pipeline usa
+     * `orderBy('level')` en todos lados, así que sigue siendo correcto.
+     */
+    private function compactGroupLevelNumbers(ExtraHourApprovalGroup $group): void
+    {
+        $levels = $group->levels()->orderBy('level')->get();
+        $numbers = $levels->pluck('level')->map(fn ($level) => (int) $level)->all();
+        $sorted = $numbers;
+        sort($sorted);
+
+        if ($numbers === $sorted && $numbers === range(1, count($numbers))) {
+            return; // ya está 1..N
+        }
+
+        if ($numbers !== $sorted) {
+            return; // numeración fuera de orden: no se toca
+        }
+
+        foreach ($levels as $index => $level) {
+            $target = $index + 1;
+            if ((int) $level->level !== $target) {
+                $level->updateQuietly(['level' => $target]);
+            }
+        }
+    }
+
+    /**
      * Determina si el actor es aprobador de algún nivel del grupo del empleado.
      *
      * Si el colaborador no tiene grupo NO hay jerarquía que invocar: sólo se
@@ -580,13 +988,14 @@ class ExtraHourApprovalService
     }
 
     /**
-     * Reinicia el flujo de los registros EN VUELO de una catorcena.
+     * Reinicia (forzando) el flujo de los registros EN VUELO de una catorcena:
+     * devuelve TODOS los días sin cierre al primer nivel de su grupo.
      *
-     * Se usa cada vez que se reconfiguran los grupos (guardar o copiar): al
-     * recrearse los niveles, las decisiones previas se borran por cascade y el
-     * nivel actual queda en NULL, así que los registros deben volver al primer
-     * nivel de su grupo nuevo. No toca aprobaciones finales legítimas
-     * (estado final + approved_at) ni inventa decisiones.
+     * Ya NO se usa al guardar o copiar grupos: esas operaciones aplican un upsert
+     * por identidad y sólo reubican los registros que quedaron inconsistentes
+     * (ver normalizeWorkflowForPayroll()). Se mantiene como herramienta de
+     * reparación manual; no toca aprobaciones finales legítimas (estado final +
+     * approved_at) ni inventa decisiones.
      *
      * @return array{reset:int,skipped_final:int,without_group:int}
      */
