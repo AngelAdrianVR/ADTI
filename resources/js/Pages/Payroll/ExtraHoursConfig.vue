@@ -134,6 +134,7 @@ const saveCosts = () => {
     costsForm.post(route('payrolls.extra-hours-costs.save', props.payroll.id), {
         preserveScroll: true,
         onSuccess: () => notify.success('Costos guardados correctamente'),
+        onError: (errors) => notify.error(errors?.error || 'No se pudieron guardar los costos.'),
     });
 };
 
@@ -201,10 +202,16 @@ const saveGroups = () => {
         }
     }
 
+    // Se envían los ids de los grupos/niveles ya guardados para que el backend
+    // los ACTUALICE (upsert por identidad) en lugar de recrearlos: al recrearlos
+    // se borrarían por cascade las decisiones de aprobación ya registradas.
+    // `id: null` = grupo/nivel nuevo.
     groupsForm.groups = groups.value.map(g => ({
+        id: g.id,
         name: g.name,
         employee_ids: g.employeeIds,
         levels: g.levels.map(l => ({
+            id: l.id,
             name: l.name,
             approver_ids: l.approverIds,
         })),
@@ -213,6 +220,7 @@ const saveGroups = () => {
     groupsForm.post(route('payrolls.extra-hours-groups.save', props.payroll.id), {
         preserveScroll: true,
         onSuccess: () => notify.success('Grupos de autorización guardados correctamente'),
+        onError: (errors) => notify.error(errors?.error || 'No se pudieron guardar los grupos. Revisa la configuración.'),
     });
 };
 
@@ -242,6 +250,40 @@ const copyFromNext = () => {
 // ─── Helpers ─────────────────────────────────────────────────────
 const getApproverById = (id) => props.eligibleApprovers.find(a => a.id === id);
 const getEmployeeById = (id) => props.eligibleEmployees.find(e => e.id === id);
+
+// Al agregar un colaborador a un grupo se retira automáticamente de los demás:
+// un empleado sólo puede pertenecer a un grupo de aprobación. Así, para
+// "cambiar de grupo" basta con agregarlo al nuevo, sin borrarlo antes del
+// anterior; el anterior se limpia solo y se avisa al usuario del cambio.
+const onGroupEmployeesChange = (changedIndex, selectedIds) => {
+    const selected = new Set(selectedIds || []);
+    const moved = [];
+
+    groups.value.forEach((group, index) => {
+        if (index === changedIndex) return;
+
+        const removed = group.employeeIds.filter((id) => selected.has(id));
+        if (removed.length === 0) return;
+
+        group.employeeIds = group.employeeIds.filter((id) => !selected.has(id));
+        removed.forEach((id) => moved.push({
+            name: getEmployeeById(id)?.name,
+            from: group.name,
+        }));
+    });
+
+    if (moved.length === 0) return;
+
+    const target = groups.value[changedIndex]?.name || `Grupo ${changedIndex + 1}`;
+    const detalle = moved
+        .map((m) => `"${m.name || 'Empleado'}" (se quitó de "${m.from || 'grupo anterior'}")`)
+        .join(', ');
+    notify.info({
+        title: 'Empleado reasignado',
+        message: `Al agregarlo a "${target}" se quitó automáticamente de su grupo anterior: ${detalle}.`,
+        duration: 6000,
+    });
+};
 
 const formatExtraTime = (minutes) => {
     const h = Math.floor(minutes / 60);
@@ -649,6 +691,7 @@ const setSectionRef = (sectionId) => (el) => {
                                                 placeholder="Selecciona los empleados de este grupo"
                                                 class="w-full"
                                                 size="small"
+                                                @change="(ids) => onGroupEmployeesChange(gi, ids)"
                                             >
                                                 <el-option
                                                     v-for="emp in eligibleEmployees"
