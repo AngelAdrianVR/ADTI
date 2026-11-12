@@ -33,7 +33,13 @@ Manages biweekly payroll periods and daily attendance records. Each payroll has 
    - Manual platform input (`POST /payroll-users/set-attendance`)
    - Manual editing (`PUT /payroll-users/update-attendance`)
 3. **Closing** — `php artisan payrolls:close` (Artisan command) sets `is_active=false`. Only one payroll is active at a time.
+   - Implementado en `App\Services\PayrollRolloverService::closeAndOpenNext()` (también usado por el auto-roll de BioTime).
+   - Crea la catorcena siguiente (`start_date = anterior + 14 días`, `biweekly + 1`), copia **grupos + niveles + aprobadores** de tiempo extra y desactiva la anterior.
+   - **Re-liga asistencias huérfanas**: los `payroll_user` cuya `date` cae dentro de la ventana de 14 días del período nuevo pero quedaron guardados en otro `payroll_id` se mueven aquí y su `current_approval_level_id` se remapea al nivel equivalente (grupo + número de nivel). También remapea `extra_hour_approval_decisions.approval_level_id`. Esto evita el síntoma histórico: la catorcena nueva se veía vacía y pintaba "Falta injustificada" en días trabajados (pasó con la catorcena 53 y los días 10-12 de noviembre).
+   - Reparación puntual / auditoría: `php artisan payrolls:reassign-orphans {payroll?} [--apply]` (dry-run por defecto) usa `App\Services\PayrollAttendanceReassignment` para reportar y mover esos registros de cualquier catorcena.
 4. **Reporting** — Pre-payroll template and receipt views for printing/PDF.
+
+> ⚠️ Los costos de hora extra **no** se copian al cerrar; hay que usar "Copiar configuración" en la pantalla de tiempo extra del período nuevo.
 
 ---
 

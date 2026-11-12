@@ -15,7 +15,9 @@ Integrates with an external biometric time-clock system (BioTime) via HTTP API e
 | `app/Http/Controllers/PayrollUserController.php` | `processBioTimeTransaction()` — main processing endpoint |
 | `app/Http/Controllers/BioTimeTransactionsController.php` | `getTotalProcessedCount()` — transaction counter |
 | `app/Models/BioTimeTransactions.php` | Transaction log: `date`, `quantity` |
-| `app/Console/Commands/` | `payrolls:close`, `extra-hours:backfill-status` Artisan commands |
+| `app/Console/Commands/` | `payrolls:close`, `payrolls:reassign-orphans`, `extra-hours:backfill-status` Artisan commands |
+| `app/Services/PayrollRolloverService.php` | Payroll closing / auto-roll (punch after the active window) |
+| `app/Services/PayrollAttendanceReassignment.php` | Moves `payroll_user` rows to the payroll whose 14-day window owns their date |
 
 ---
 
@@ -35,7 +37,11 @@ Integrates with an external biometric time-clock system (BioTime) via HTTP API e
 1. Looks up user by `users.code = emp_code` **AND** `is_active = true`. Returns silently if not found.
    - Logs: `"No se encontró al empleado con código {code}"`
 2. Parses the `time` parameter (replaces `+` with space first).
-3. Determines payroll by finding one whose 14-day window contains the punch date.
+3. Determines payroll by finding one whose 14-day window contains the punch date — `App\Services\PayrollRolloverService::ensurePeriodForDate()`:
+   - **Window match** → that payroll receives the day.
+   - **AUTO-ROLL (NEW Aug 2026)**: if the punch date is **after the last day of the active payroll** (the `payrolls:close` cron did not run), the next payroll(s) are opened automatically, reusing the closing logic (`App\Services\PayrollRolloverService::closeAndOpenNext()`): copies the extra-hour approval hierarchy, deactivates the old payroll, sweeps orphan `payroll_user` rows into the new window and remaps their approval level. Runs inside a transaction with `lockForUpdate` so concurrent punches cannot create duplicate payrolls (max 26 periods per punch, ~1 year, as a guard against absurd clock dates).
+     - Logs: `"Auto-roll de catorcena: checada recibida después del fin de la catorcena activa"`.
+   - **Fallback (unchanged)**: if the date is *before* the active payroll start (night-shift punch closing a previous day's shift) or there is no active payroll, the active payroll is used and a warning is logged (`"Checada fuera de la ventana de la catorcena activa; se usa la catorcena activa como respaldo"`).
 4. Determines if this is a **check-in** or **check-out**:
    - Open entry (check-in exists, no check-out, < 18 hrs) → possibly closing a night shift.
    - No existing record for this user+date → creates new record with `check_in`.
