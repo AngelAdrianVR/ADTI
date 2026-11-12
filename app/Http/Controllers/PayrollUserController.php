@@ -7,6 +7,8 @@ use App\Models\Payroll;
 use App\Models\PayrollUser;
 use App\Models\PayrollComment;
 use App\Models\User;
+use App\Services\PayrollAttendanceReassignment;
+use App\Services\PayrollRolloverService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -18,16 +20,59 @@ class PayrollUserController extends Controller
         //
     }
 
+    /**
+     * Catorcena a la que pertenece una fecha (la que contiene la fecha), con
+     * respaldo al payroll_id que manda la interfaz.
+     *
+     * Se usa en las capturas manuales para que el día quede ligado a la
+     * catorcena correcta aunque la pantalla esté mostrando un período viejo o
+     * el cierre programado no haya corrido todavía.
+     */
+    private function resolvePayrollIdForDate($date, $fallbackPayrollId = null): ?int
+    {
+        $fallback = $fallbackPayrollId ? (int) $fallbackPayrollId : null;
+
+        if (empty($date)) {
+            return $fallback;
+        }
+
+        return app(PayrollRolloverService::class)->findByDate($date)?->id ?? $fallback;
+    }
+
+    /**
+     * Si el día se mueve a otra catorcena, su nivel de aprobación debe apuntar
+     * al nivel equivalente (mismo grupo + mismo número) del período destino;
+     * si no hay equivalente se conserva el original para no perder el rastro.
+     */
+    private function remapLevelForPayroll(?int $levelId, ?int $payrollId): ?int
+    {
+        if (!$levelId || !$payrollId) {
+            return $levelId;
+        }
+
+        $target = Payroll::find($payrollId);
+
+        if (!$target) {
+            return $levelId;
+        }
+
+        $map = app(PayrollAttendanceReassignment::class)->resolveLevelMap($target, [$levelId]);
+
+        return $map[$levelId] ?? $levelId;
+    }
+
     public function store(Request $request)
     {
         // Método para crear asistencia manual (desde NoAttendanceCard)
+        $payrollId = $this->resolvePayrollIdForDate($request->date, $request->payroll_id);
+
         $payrollUser = PayrollUser::firstOrCreate(
             [
                 'date' => $request->date,
                 'user_id' => $request->user_id
             ],
             [
-                'payroll_id' => $request->payroll_id,
+                'payroll_id' => $payrollId,
                 'check_in' => $request->check_in,
                 'check_out' => $request->check_out,
                 'incidence' => 'Día normal',
@@ -38,6 +83,8 @@ class PayrollUserController extends Controller
         // Si ya existía pero estaba vacío (ej. día futuro), actualizamos
         if (!$payrollUser->wasRecentlyCreated) {
             $payrollUser->update([
+                'payroll_id' => $payrollId,
+                'current_approval_level_id' => $this->remapLevelForPayroll($payrollUser->current_approval_level_id, $payrollId),
                 'check_in' => $request->check_in,
                 'check_out' => $request->check_out,
                 'incidence' => 'Día normal',
@@ -51,6 +98,8 @@ class PayrollUserController extends Controller
 
     public function update(Request $request)
     {
+        $payrollId = $this->resolvePayrollIdForDate($request->date, $request->payroll_id);
+
         // Si el administrador deja los campos de entrada y salida vacíos
         if (empty($request->check_in) && empty($request->check_out)) {
             $existing = PayrollUser::where('user_id', $request->user_id)
@@ -64,6 +113,8 @@ class PayrollUserController extends Controller
                     $existing->delete();
                 } else {
                     $existing->update([
+                        'payroll_id' => $payrollId,
+                        'current_approval_level_id' => $this->remapLevelForPayroll($existing->current_approval_level_id, $payrollId),
                         'check_in' => null,
                         'check_out' => null,
                         'break_start' => null,
@@ -78,13 +129,20 @@ class PayrollUserController extends Controller
         }
 
         // Si se enviaron horas, actualizamos o creamos el registro
+        $existing = PayrollUser::where('user_id', $request->user_id)
+            ->where('date', $request->date)
+            ->first();
+
         $payrollUser = PayrollUser::updateOrCreate(
             [
                 'user_id' => $request->user_id,
                 'date' => $request->date,
             ],
             [
-                'payroll_id' => $request->payroll_id,
+                'payroll_id' => $payrollId,
+                'current_approval_level_id' => $existing
+                    ? $this->remapLevelForPayroll($existing->current_approval_level_id, $payrollId)
+                    : null,
                 'check_in' => $request->check_in,
                 'check_out' => $request->check_out,
                 'incidence' => 'Día normal', // Al poner horas, deja de ser falta/descanso
@@ -169,6 +227,8 @@ class PayrollUserController extends Controller
 
     public function setIncidence(Request $request)
     {
+        $payrollId = $this->resolvePayrollIdForDate($request->date, $request->payroll_id);
+
         // Busca o crea un registro en la tabla PayrollUser basado en el 'date' y el 'user_id'
         $payrollUser = PayrollUser::firstOrCreate(
             [
@@ -176,7 +236,7 @@ class PayrollUserController extends Controller
                 'user_id' => $request->user_id
             ],
             [
-                'payroll_id' => $request->payroll_id,
+                'payroll_id' => $payrollId,
                 'incidence' => $request->incidence,
                 // 'additionals' => ,
             ]
@@ -202,12 +262,16 @@ class PayrollUserController extends Controller
                 $user->save();
             }
             $payrollUser->incidence = $request->incidence;
+            $payrollUser->payroll_id = $payrollId ?? $payrollUser->payroll_id;
+            $payrollUser->current_approval_level_id = $this->remapLevelForPayroll($payrollUser->current_approval_level_id, $payrollUser->payroll_id);
             $payrollUser->save();
         }
     }
 
     public function setAttendance(Request $request)
     {
+        $payrollId = $this->resolvePayrollIdForDate($request->date, $request->payroll_id);
+
         // Busca o crea un registro en la tabla PayrollUser basado en el 'date' y el 'user_id'
         $payrollUser = PayrollUser::firstOrCreate(
             [
@@ -217,7 +281,7 @@ class PayrollUserController extends Controller
             [
                 'check_in' => $request->check_in,
                 'check_out' => $request->check_out,
-                'payroll_id' => $request->payroll_id,
+                'payroll_id' => $payrollId,
                 // 'additionals' => ,
             ]
         );
@@ -226,6 +290,8 @@ class PayrollUserController extends Controller
         if (!$payrollUser->wasRecentlyCreated) {
             $payrollUser->check_in = $request->check_in;
             $payrollUser->check_out = $request->check_out;
+            $payrollUser->payroll_id = $payrollId ?? $payrollUser->payroll_id;
+            $payrollUser->current_approval_level_id = $this->remapLevelForPayroll($payrollUser->current_approval_level_id, $payrollUser->payroll_id);
             if ($payrollUser->incidence == 'Vacaciones') { //si originalmente eran vacaciones
                 $user = User::find($request->user_id);
                 $props = $user->org_props;
@@ -256,22 +322,19 @@ class PayrollUserController extends Controller
             $punchDateStr = $punchDateTime->toDateString(); // Obtener la FECHA del punch
             $punchTimeStr = $punchDateTime->format('H:i'); // Obtener la HORA del punch
 
-            // --- CORRECCIÓN DE CONSULTA ---
-            // Buscar el período de nómina que CONTENGA esta fecha.
-            // Ya que no hay 'end_date', calculamos el fin sumando 13 días a start_date (para un período de 14 días).
-            $currentPayroll = Payroll::where('start_date', '<=', $punchDateStr)
-                ->whereRaw('? <= DATE_ADD(start_date, INTERVAL 13 DAY)', [$punchDateStr])
-                ->first();
+            // --- RESOLUCIÓN DE LA CATORCENA DESTINO ---
+            // Se busca el período de 14 días que CONTIENE la fecha del punch.
+            // Si la checada ya cayó fuera de la catorcena activa (porque el cron
+            // `payrolls:close` no corrió), se abre(n) automáticamente la(s)
+            // siguiente(s) con la misma lógica del cierre (AUTO-ROLL) en lugar de
+            // estampar el día en la catorcena vencida.
+            $currentPayroll = app(PayrollRolloverService::class)->ensurePeriodForDate($punchDateTime);
 
-            // Fallback a la nómina activa si no se encuentra un período (lógica original)
             if (!$currentPayroll) {
-                $currentPayroll = Payroll::firstWhere('is_active', true);
-                if (!$currentPayroll) {
-                    Log::warning("No se encontró nómina activa o coincidente para el empleado {$emp_code} en la fecha {$punchDateStr}.");
-                    return; // Salir si no hay nómina
-                }
+                Log::warning("No se encontró nómina activa o coincidente para el empleado {$emp_code} en la fecha {$punchDateStr}.");
+                return; // Salir si no hay nómina
             }
-            // --- FIN DE CORRECCIÓN DE CONSULTA ---
+            // --- FIN DE LA RESOLUCIÓN ---
 
             // --- LÓGICA DE TURNOS ABIERTOS (SOPORTE NOCTURNO) ---
             $existingEntry = null;
